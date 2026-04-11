@@ -551,7 +551,7 @@ function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, 
 	// Find the row first (need current status_timestamps + response_json).
 	$row = $db->get_row(
 		nxtcc_rest_sql_with_table_tokens(
-			'SELECT id, status_timestamps, response_json
+			'SELECT id, user_mailid, business_account_id, phone_number_id, contact_id, status, status_timestamps, response_json
 		   FROM {history}
 		  WHERE meta_message_id = %s
 		  LIMIT 1',
@@ -574,8 +574,9 @@ function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, 
 		$ts_mysql = current_time( 'mysql', 1 );
 	}
 
-	$existing_ts = isset( $row->status_timestamps ) ? (string) $row->status_timestamps : '';
-	$merged_ts   = nxtcc_rest_merge_status_timestamp( $existing_ts, $new_status, $ts_mysql );
+	$existing_ts     = isset( $row->status_timestamps ) ? (string) $row->status_timestamps : '';
+	$merged_ts       = nxtcc_rest_merge_status_timestamp( $existing_ts, $new_status, $ts_mysql );
+	$previous_status = isset( $row->status ) ? sanitize_key( (string) $row->status ) : '';
 
 	// Append status object into response_json in a safe way.
 	$resp_blob = array(
@@ -638,6 +639,28 @@ function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, 
 		$db->t_message_history(),
 		$update,
 		array( 'id' => $id )
+	);
+
+	/**
+	 * Fires after a webhook status updates a message-history row.
+	 *
+	 * @param array<string, mixed> $event Status update event payload.
+	 */
+	do_action(
+		'nxtcc_message_history_status_updated',
+		array(
+			'history_id'          => $id,
+			'user_mailid'         => isset( $row->user_mailid ) ? sanitize_email( (string) $row->user_mailid ) : '',
+			'business_account_id' => isset( $row->business_account_id ) ? sanitize_text_field( (string) $row->business_account_id ) : '',
+			'phone_number_id'     => isset( $row->phone_number_id ) ? sanitize_text_field( (string) $row->phone_number_id ) : '',
+			'contact_id'          => isset( $row->contact_id ) ? (int) $row->contact_id : 0,
+			'meta_message_id'     => $wamid,
+			'previous_status'     => $previous_status,
+			'status'              => $new_status,
+			'status_at'           => $ts_mysql,
+			'error_message'       => $err_msg,
+			'webhook_status'      => $status_obj,
+		)
 	);
 }
 
@@ -1044,8 +1067,9 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 				$json_ts = wp_json_encode( $status_ts );
 				$json_m  = wp_json_encode( $m );
 
-				// Insert inbound message into your schema.
-				$db->insert(
+				// Persist the inbound message first so downstream listeners can trust the row id.
+				$received_at = current_time( 'mysql', 1 );
+				$inserted    = $db->insert(
 					$db->t_message_history(),
 					array(
 						'user_mailid'          => $user_mailid,
@@ -1059,10 +1083,35 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 						'status_timestamps'    => is_string( $json_ts ) ? $json_ts : '',
 						'meta_message_id'      => $meta_message_id,
 						'response_json'        => is_string( $json_m ) ? $json_m : '',
-						'created_at'           => current_time( 'mysql', 1 ),
+						'created_at'           => $received_at,
 						'is_read'              => 0,
 					)
 				);
+
+				if ( $inserted ) {
+					/**
+					 * Fires after an inbound webhook message is persisted to message history.
+					 *
+					 * @param array<string, mixed> $event Inbound message event payload.
+					 */
+					do_action(
+						'nxtcc_inbound_message_persisted',
+						array(
+							'history_id'           => $db->insert_id(),
+							'user_mailid'          => $user_mailid,
+							'business_account_id'  => $business_account_id,
+							'phone_number_id'      => $phone_number_id,
+							'contact_id'           => is_int( $contact_id ) ? $contact_id : 0,
+							'display_phone_number' => $display_phone_number,
+							'meta_message_id'      => $meta_message_id,
+							'from_wa_id'           => $from_wa,
+							'message_type'         => $type,
+							'message_content'      => $message_content,
+							'received_at'          => $received_at,
+							'received_unix'        => $wa_ts > 0 ? $wa_ts : time(),
+						)
+					);
+				}
 
 				if ( function_exists( 'nxtcc_invalidate_tenant_caches' ) ) {
 					nxtcc_invalidate_tenant_caches( $business_account_id, $phone_number_id );

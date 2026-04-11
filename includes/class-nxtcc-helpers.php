@@ -627,7 +627,12 @@ final class NXTCC_Helpers {
 		$body_parameters = array();
 		foreach ( $params as $key => $value ) {
 			if ( 0 === strpos( (string) $key, 'body_var_' ) ) {
-				$body_parameters[] = array(
+				$index = (int) preg_replace( '/[^0-9]/', '', (string) $key );
+				if ( $index <= 0 ) {
+					continue;
+				}
+
+				$body_parameters[ $index ] = array(
 					'type' => 'text',
 					'text' => sanitize_text_field( (string) $value ),
 				);
@@ -635,9 +640,10 @@ final class NXTCC_Helpers {
 		}
 
 		if ( ! empty( $body_parameters ) ) {
+			ksort( $body_parameters, SORT_NUMERIC );
 			$components[] = array(
 				'type'       => 'body',
-				'parameters' => $body_parameters,
+				'parameters' => array_values( $body_parameters ),
 			);
 		}
 
@@ -707,7 +713,19 @@ final class NXTCC_Helpers {
 		$fields = array();
 
 		foreach ( (array) $components as $component ) {
-			if ( ( $component['type'] ?? '' ) === 'body' && ! empty( $component['text'] ) ) {
+			$component_type = strtoupper( (string) ( $component['type'] ?? '' ) );
+
+			if ( 'HEADER' === $component_type && 'IMAGE' === strtoupper( (string) ( $component['format'] ?? '' ) ) ) {
+				$fields[] = array(
+					'type'      => 'image',
+					'name'      => 'header_image',
+					'label'     => 'Header Image',
+					'value'     => '',
+					'is_static' => false,
+				);
+			}
+
+			if ( 'BODY' === $component_type && ! empty( $component['text'] ) ) {
 				$matches = array();
 				$found   = preg_match_all( '/\{\{(\d+)\}\}/', (string) $component['text'], $matches );
 
@@ -724,31 +742,79 @@ final class NXTCC_Helpers {
 				}
 			}
 
-			if ( ( $component['type'] ?? '' ) === 'button' && ( $component['sub_type'] ?? '' ) === 'url' ) {
-				$is_static = true;
+			if ( 'BUTTONS' === $component_type && ! empty( $component['buttons'] ) && is_array( $component['buttons'] ) ) {
+				foreach ( array_values( $component['buttons'] ) as $index => $button ) {
+					$button_type = strtoupper( (string) ( $button['type'] ?? '' ) );
 
-				if ( ! empty( $component['parameters'] ) ) {
-					foreach ( (array) $component['parameters'] as $param ) {
-						if ( ( $param['type'] ?? '' ) === 'text' ) {
-							$is_static = false;
-							break;
-						}
+					if ( 'URL' === $button_type ) {
+						$url_placeholder = (string) ( $button['url'] ?? '' );
+						$is_static       = ! preg_match( '/\{\{\d+\}\}/', $url_placeholder );
+						$fields[]        = array(
+							'type'      => 'url',
+							'name'      => $is_static ? 'button_url_' . (string) ( $index + 1 ) : 'button_url_var_' . (string) ( $index + 1 ),
+							'label'     => 'Button URL ' . (string) ( $index + 1 ),
+							'value'     => $is_static ? $url_placeholder : '',
+							'is_static' => $is_static,
+						);
+					} elseif ( 'COPY_CODE' === $button_type ) {
+						$fields[] = array(
+							'type'      => 'text',
+							'name'      => 'button_code_var_' . (string) ( $index + 1 ),
+							'label'     => 'Button Code ' . (string) ( $index + 1 ),
+							'value'     => '',
+							'is_static' => false,
+						);
 					}
 				}
+			}
 
-				$idx = (int) ( $component['index'] ?? 0 );
+			if ( 'BUTTON' === $component_type ) {
+				$button_sub_type = strtoupper( (string) ( $component['sub_type'] ?? '' ) );
+				$button_index    = (int) ( $component['index'] ?? 0 );
 
-				$fields[] = array(
-					'type'      => 'url',
-					'name'      => 'button_url_' . (string) $idx,
-					'label'     => 'Button URL ' . (string) ( $idx + 1 ),
-					'value'     => $is_static ? (string) ( $component['url'] ?? '' ) : '',
-					'is_static' => $is_static,
-				);
+				if ( 'URL' === $button_sub_type ) {
+					$is_static = true;
+
+					if ( ! empty( $component['parameters'] ) ) {
+						foreach ( (array) $component['parameters'] as $param ) {
+							if ( 'TEXT' === strtoupper( (string) ( $param['type'] ?? '' ) ) ) {
+								$is_static = false;
+								break;
+							}
+						}
+					}
+
+					$fields[] = array(
+						'type'      => 'url',
+						'name'      => $is_static ? 'button_url_' . (string) $button_index : 'button_url_var_' . (string) $button_index,
+						'label'     => 'Button URL ' . (string) ( $button_index + 1 ),
+						'value'     => $is_static ? (string) ( $component['url'] ?? '' ) : '',
+						'is_static' => $is_static,
+					);
+				} elseif ( 'COPY_CODE' === $button_sub_type ) {
+					$fields[] = array(
+						'type'      => 'text',
+						'name'      => 'button_code_var_' . (string) ( $button_index + 1 ),
+						'label'     => 'Button Code ' . (string) ( $button_index + 1 ),
+						'value'     => '',
+						'is_static' => false,
+					);
+				}
 			}
 		}
 
-		return $fields;
+		$unique = array();
+
+		foreach ( $fields as $field ) {
+			$field_name = isset( $field['name'] ) ? (string) $field['name'] : '';
+			if ( '' === $field_name || isset( $unique[ $field_name ] ) ) {
+				continue;
+			}
+
+			$unique[ $field_name ] = $field;
+		}
+
+		return array_values( $unique );
 	}
 
 	/**

@@ -364,6 +364,11 @@ if ( ! function_exists( 'nxtcc__wipe_site_data' ) ) {
 			$site_prefix . 'nxtcc_webhook_events_raw',
 			$site_prefix . 'nxtcc_broadcast_runs',
 			$site_prefix . 'nxtcc_licenses',
+			$site_prefix . 'nxtcc_workflows',
+			$site_prefix . 'nxtcc_workflow_versions',
+			$site_prefix . 'nxtcc_workflow_events',
+			$site_prefix . 'nxtcc_workflow_runs',
+			$site_prefix . 'nxtcc_workflow_run_steps',
 		);
 
 		$tables_free = array(

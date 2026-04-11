@@ -95,9 +95,9 @@ $nxtcc_addons = array(
 			<div class="nxtcc-apps-topbar-logo">
 				<?php if ( $nxtcc_default_icon_url ) : ?>
 					<img
-						src="<?php echo esc_url( $nxtcc_default_icon_url ); ?>"
-						alt="<?php esc_attr_e( 'NXT Cloud Chat', 'nxt-cloud-chat' ); ?>"
-					/>
+					src="<?php echo esc_url( trailingslashit( NXTCC_PLUGIN_URL ) . 'admin/assets/vendor/images/nxtwebsite.png' ); ?>"
+					alt="<?php esc_attr_e( 'NXTWEBSITE', 'nxt-cloud-chat' ); ?>"
+				/>
 				<?php else : ?>
 					<span class="nxtcc-apps-topbar-logo-letter">N</span>
 				<?php endif; ?>

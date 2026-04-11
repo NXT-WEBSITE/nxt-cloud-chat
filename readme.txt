@@ -4,11 +4,11 @@ Tags: whatsapp, whatsapp cloud api, whatsapp chat, whatsapp login, woocommerce
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.1
+Stable tag: 1.0.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-WhatsApp Cloud API plugin for WordPress with chat, notifications, contacts, groups, message history, and WhatsApp OTP login.
+WordPress WhatsApp Cloud API plugin with chat, notifications, contacts, OTP login, and Pro features for WooCommerce, bulk messaging, and templates.
 
 == Description ==
 
@@ -17,6 +17,8 @@ NXT Cloud Chat is a WhatsApp Cloud API plugin for WordPress. It helps you connec
 The plugin also includes a WhatsApp login and authentication widget for WordPress users. Visitors can sign in using their phone number and a one-time password delivered through WhatsApp, while their accounts remain standard WordPress users.
 
 If you are looking for a WordPress WhatsApp plugin that combines WhatsApp Cloud API messaging with WhatsApp OTP login, NXT Cloud Chat is designed for that workflow.
+
+For businesses that need more growth and sales features, the optional Pro add-on extends NXT Cloud Chat with WooCommerce automations, workflow-based messaging, bulk WhatsApp campaigns, advanced template messaging, CTA buttons, and customer engagement flows.
 
 Key goals:
 
@@ -111,6 +113,17 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 * Admin actions protected with nonces and capability checks.
 * Installed Plugins screen links for documentation, community support, reviews, and feature suggestions.
 
+= Available with the Optional Pro Add-on =
+
+* WooCommerce WhatsApp notifications for order created, order paid, and order status changes.
+* Workflow automation builder for incoming messages, user login events, and WooCommerce triggers.
+* Bulk WhatsApp messaging and broadcast campaigns for promotions, updates, and follow-ups.
+* Advanced template messaging with image headers, CTA buttons, coupon codes, and dynamic placeholders.
+* WhatsApp marketing and utility templates for customer engagement, reminders, and sales flows.
+* Order-related template sends for payment reminders, order updates, and commerce messaging.
+* Customer segmentation and campaign messaging built on contacts, groups, and templates.
+* WhatsApp automation flows for support, lead capture, ecommerce, and post-purchase follow-up.
+
 = Developer Friendly =
 
 * Core code and optional add-ons kept separate.
@@ -145,7 +158,7 @@ This works alongside the standard WordPress login screen and can also be used on
 3. Go to **NXT Cloud Chat -> Settings** in the WordPress admin.
 4. Enter:
    * **App ID**
-   * **App Secret (Webhook Signature)**
+   * **App Secret**
    * **Access Token**
    * **Phone Number ID**
    * **Business Account ID**
@@ -191,10 +204,10 @@ Yes. The plugin calls the official WhatsApp Cloud API using your access token, s
 Yes. You must create and configure a WhatsApp Cloud API app in your Meta developer account to obtain:
 
 * App ID
+* App Secret
 * Business Account ID
 * Phone Number ID
 * Access Token
-* App Secret (for webhook signature verification)
 
 The plugin assumes you already have these values.
 
@@ -213,6 +226,10 @@ Yes. The recommended method is to create a page and place the `[nxtcc_login_what
 === Does this support the WooCommerce login page? ===
 
 Yes. You can enable a WhatsApp login button on the WooCommerce My Account login form, and you can also enable the same style of button on the default WordPress login page.
+
+=== Are WooCommerce automations, workflows, template CTA buttons, and bulk messaging available? ===
+
+Yes. Those advanced capabilities are available through the optional `NXT Cloud Chat Pro` add-on. Pro is designed for stores and businesses that need WooCommerce notifications, WhatsApp workflows, advanced template campaigns, and bulk broadcast messaging from WordPress.
 
 === Does the plugin store WhatsApp messages? ===
 
@@ -238,11 +255,18 @@ Use this with care in production environments.
 3. Chat Window management interface.
 4. Contacts management interface.
 5. Groups management interface.
-6. Message history and conversation overview.
-7. Login authentication management interface.
-8. WhatsApp login widget embedded on a WordPress page.
+6. Login authentication management interface.
+7. WhatsApp login widget embedded on a WordPress page.
+8. WhatsApp login buttons for the default WordPress login page and WooCommerce My Account login page.
+9. Bulk WhatsApp messaging and campaign screen for sending messages to multiple contacts (Pro).
+10. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
 
 == Changelog ==
+
+= 1.0.2 =
+* Added the stable runtime compatibility contract and bridge wrappers used by the Pro workflow engine.
+* Added additive inbound-message, message-status, and authentication lifecycle hooks for internal integrations.
+* Improved release compatibility for the Pro add-on workflow runtime.
 
 = 1.0.1 =
 * Added WhatsApp login button support for the default WordPress login page and WooCommerce login page.
@@ -256,4 +280,3 @@ Use this with care in production environments.
 * Chat Window, Contacts, Groups, Message History, and Dashboard.
 * Webhook handling with verify-token helper.
 * WhatsApp-based login/authentication widget for WordPress users.
-

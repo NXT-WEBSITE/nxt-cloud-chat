@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       Integrates WhatsApp Cloud API with WordPress to enable real-time messaging, automated notifications, customer communication, contact management, and secure WhatsApp-based user authentication and login.
- * Version:           1.0.1
+ * Version:           1.0.2
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.0.1' );
+	define( 'NXTCC_VERSION', '1.0.2' );
 }
 
 /**
@@ -176,6 +176,7 @@ require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-auth-handler.php';
 
 require_once NXTCC_PLUGIN_DIR . 'includes/routes.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-send-message.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-runtime-contract.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-message-history-repo.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-unread.php';
 

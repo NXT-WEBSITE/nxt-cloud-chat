@@ -1061,6 +1061,66 @@ function nxtcc_auth_log_history( array $settings, string $tpl_name, string $tpl_
 	);
 }
 
+if ( ! function_exists( 'nxtcc_auth_build_event_context' ) ) {
+	/**
+	 * Build a small normalized event context for auth lifecycle hooks.
+	 *
+	 * @param string     $session_id Session id.
+	 * @param string     $phone_e164 Phone number.
+	 * @param array|null $settings   Optional active settings row.
+	 * @param array      $extra      Additional sanitized context.
+	 * @return array<string, mixed>
+	 */
+	function nxtcc_auth_build_event_context(
+		string $session_id,
+		string $phone_e164,
+		?array $settings = null,
+		array $extra = array()
+	): array {
+		$context = array(
+			'session_id'          => sanitize_text_field( $session_id ),
+			'phone_e164'          => sanitize_text_field( $phone_e164 ),
+			'current_user_id'     => (int) get_current_user_id(),
+			'connection_owner'    => is_array( $settings ) ? sanitize_email( (string) ( $settings['user_mailid'] ?? '' ) ) : '',
+			'business_account_id' => is_array( $settings ) ? sanitize_text_field( (string) ( $settings['business_account_id'] ?? '' ) ) : '',
+			'phone_number_id'     => is_array( $settings ) ? sanitize_text_field( (string) ( $settings['phone_number_id'] ?? '' ) ) : '',
+		);
+
+		if ( ! empty( $extra ) ) {
+			$context = array_merge( $context, $extra );
+		}
+
+		return $context;
+	}
+}
+
+if ( ! function_exists( 'nxtcc_auth_emit_otp_failed' ) ) {
+	/**
+	 * Emit a normalized OTP failure event.
+	 *
+	 * @param string $stage   Failure stage.
+	 * @param string $reason  Failure reason.
+	 * @param array  $context Failure context.
+	 * @return void
+	 */
+	function nxtcc_auth_emit_otp_failed( string $stage, string $reason, array $context ): void {
+		do_action( 'nxtcc_auth_otp_failed', sanitize_key( $stage ), sanitize_key( $reason ), $context );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_auth_emit_login_failed' ) ) {
+	/**
+	 * Emit a normalized authentication-login failure event.
+	 *
+	 * @param string $reason  Failure reason.
+	 * @param array  $context Failure context.
+	 * @return void
+	 */
+	function nxtcc_auth_emit_login_failed( string $reason, array $context ): void {
+		do_action( 'nxtcc_auth_login_failed', sanitize_key( $reason ), $context );
+	}
+}
+
 /**
  * REST: request/resend OTP for a session + phone.
  *
@@ -1086,10 +1146,13 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 		$body = array();
 	}
 
-	$session_id = sanitize_text_field( (string) ( $body['session_id'] ?? '' ) );
-	$phone_e164 = '+' . (string) preg_replace( '/\D+/', '', (string) ( $body['phone_e164'] ?? '' ) );
+	$session_id  = sanitize_text_field( (string) ( $body['session_id'] ?? '' ) );
+	$phone_e164  = '+' . (string) preg_replace( '/\D+/', '', (string) ( $body['phone_e164'] ?? '' ) );
+	$otp_context = nxtcc_auth_build_event_context( $session_id, $phone_e164 );
 
 	if ( '' === $session_id || strlen( $phone_e164 ) < 7 ) {
+		nxtcc_auth_emit_otp_failed( 'request', 'invalid_parameters', $otp_context );
+
 		return new WP_REST_Response(
 			array(
 				'status'  => 'error',
@@ -1105,6 +1168,17 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 		$owner_id = ( $binding && isset( $binding->user_id ) ) ? (int) $binding->user_id : 0;
 
 		if ( $owner_id && $owner_id !== $current_uid ) {
+			nxtcc_auth_emit_otp_failed(
+				'request',
+				'phone_in_use',
+				array_merge(
+					$otp_context,
+					array(
+						'owner_user_id' => $owner_id,
+					)
+				)
+			);
+
 			return new WP_REST_Response(
 				array(
 					'status'  => 'error',
@@ -1144,6 +1218,17 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 		$iso = is_string( $iso ) ? strtoupper( $iso ) : '';
 
 		if ( '' !== $iso && ! in_array( $iso, $allow, true ) ) {
+			nxtcc_auth_emit_otp_failed(
+				'request',
+				'country_not_allowed',
+				array_merge(
+					$otp_context,
+					array(
+						'country_iso2' => $iso,
+					)
+				)
+			);
+
 			return new WP_REST_Response(
 				array(
 					'status'  => 'error',
@@ -1156,6 +1241,17 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 	}
 
 	if ( nxtcc_auth_on_cooldown( $phone_e164, $session_id ) ) {
+		nxtcc_auth_emit_otp_failed(
+			'request',
+			'cooldown_active',
+			array_merge(
+				$otp_context,
+				array(
+					'retry_after' => $cooldown,
+				)
+			)
+		);
+
 		return new WP_REST_Response(
 			array(
 				'status'      => 'error',
@@ -1168,6 +1264,8 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 
 	$settings = nxtcc_auth_get_active_settings_row();
 	if ( ! $settings || ! nxtcc_auth_has_connection( $settings ) ) {
+		nxtcc_auth_emit_otp_failed( 'request', 'connection_not_configured', $otp_context );
+
 		return new WP_REST_Response(
 			array(
 				'status'  => 'error',
@@ -1179,6 +1277,12 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 
 	$pick = nxtcc_auth_pick_template_pair( $settings );
 	if ( is_wp_error( $pick ) ) {
+		nxtcc_auth_emit_otp_failed(
+			'request',
+			'template_unavailable',
+			nxtcc_auth_build_event_context( $session_id, $phone_e164, $settings )
+		);
+
 		return new WP_REST_Response(
 			array(
 				'status'  => 'error',
@@ -1190,11 +1294,43 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 
 	list( $tpl_name, $tpl_lang ) = $pick;
 
-	$code = nxtcc_auth_generate_otp_numeric( $otp_len );
-	nxtcc_auth_upsert_otp( $session_id, $phone_e164, $code, $ttl );
+	$otp_context = nxtcc_auth_build_event_context(
+		$session_id,
+		$phone_e164,
+		$settings,
+		array(
+			'expires_in'        => $ttl,
+			'retry_after'       => $cooldown,
+			'otp_length'        => $otp_len,
+			'template_name'     => (string) $tpl_name,
+			'template_language' => (string) $tpl_lang,
+		)
+	);
+
+	/**
+	 * Fires when an OTP request has passed validation and is about to be sent.
+	 *
+	 * @param array<string, mixed> $context Request context.
+	 */
+	do_action( 'nxtcc_auth_otp_requested', $otp_context );
+
+	$code   = nxtcc_auth_generate_otp_numeric( $otp_len );
+	$otp_id = nxtcc_auth_upsert_otp( $session_id, $phone_e164, $code, $ttl );
 
 	$send = nxtcc_auth_send_whatsapp_copy_code( $settings, $phone_e164, (string) $tpl_name, (string) $tpl_lang, $code );
 	if ( empty( $send['ok'] ) ) {
+		nxtcc_auth_emit_otp_failed(
+			'request',
+			'send_failed',
+			array_merge(
+				$otp_context,
+				array(
+					'otp_id'          => $otp_id,
+					'transport_error' => isset( $send['error'] ) ? sanitize_text_field( (string) $send['error'] ) : '',
+				)
+			)
+		);
+
 		return new WP_REST_Response(
 			array(
 				'status'  => 'error',
@@ -1206,6 +1342,22 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 
 	nxtcc_auth_log_history( $settings, (string) $tpl_name, (string) $tpl_lang, (string) ( $send['wamid'] ?? '' ) );
 	nxtcc_auth_set_cooldown( $phone_e164, $session_id, $cooldown );
+
+	/**
+	 * Fires after an OTP message is sent successfully through WhatsApp.
+	 *
+	 * @param array<string, mixed> $context Send context.
+	 */
+	do_action(
+		'nxtcc_auth_otp_sent',
+		array_merge(
+			$otp_context,
+			array(
+				'otp_id'          => $otp_id,
+				'meta_message_id' => isset( $send['wamid'] ) ? sanitize_text_field( (string) $send['wamid'] ) : '',
+			)
+		)
+	);
 
 	return new WP_REST_Response(
 		array(
@@ -1242,11 +1394,15 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 		$body = array();
 	}
 
-	$session_id = sanitize_text_field( (string) ( $body['session_id'] ?? '' ) );
-	$phone_e164 = '+' . (string) preg_replace( '/\D+/', '', (string) ( $body['phone_e164'] ?? '' ) );
-	$code       = (string) preg_replace( '/\D+/', '', (string) ( $body['code'] ?? '' ) );
+	$session_id    = sanitize_text_field( (string) ( $body['session_id'] ?? '' ) );
+	$phone_e164    = '+' . (string) preg_replace( '/\D+/', '', (string) ( $body['phone_e164'] ?? '' ) );
+	$code          = (string) preg_replace( '/\D+/', '', (string) ( $body['code'] ?? '' ) );
+	$login_context = nxtcc_auth_build_event_context( $session_id, $phone_e164 );
 
 	if ( '' === $session_id || strlen( $phone_e164 ) < 7 || '' === $code ) {
+		nxtcc_auth_emit_otp_failed( 'verify', 'invalid_parameters', $login_context );
+		nxtcc_auth_emit_login_failed( 'invalid_parameters', $login_context );
+
 		return new WP_REST_Response(
 			array(
 				'status'  => 'error',
@@ -1258,6 +1414,9 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 
 	$row = NXTCC_Auth_DAO::otp_find_latest( $session_id, $phone_e164 );
 	if ( ! $row || ( $row['status'] ?? '' ) !== 'active' ) {
+		nxtcc_auth_emit_otp_failed( 'verify', 'invalid_or_expired_code', $login_context );
+		nxtcc_auth_emit_login_failed( 'invalid_or_expired_code', $login_context );
+
 		return new WP_REST_Response(
 			array(
 				'status'  => 'error',
@@ -1268,6 +1427,9 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 	}
 
 	if ( strtotime( (string) $row['expires_at'] ) < time() ) {
+		nxtcc_auth_emit_otp_failed( 'verify', 'code_expired', $login_context );
+		nxtcc_auth_emit_login_failed( 'code_expired', $login_context );
+
 		return new WP_REST_Response(
 			array(
 				'status'  => 'error',
@@ -1282,6 +1444,18 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 
 	if ( $attempts >= $max_att ) {
 		NXTCC_Auth_DAO::otp_update_by_id( (int) $row['id'], array( 'status' => 'blocked' ) );
+		nxtcc_auth_emit_otp_failed(
+			'verify',
+			'too_many_attempts',
+			array_merge(
+				$login_context,
+				array(
+					'otp_id'       => (int) $row['id'],
+					'max_attempts' => $max_att,
+				)
+			)
+		);
+		nxtcc_auth_emit_login_failed( 'too_many_attempts', $login_context );
 
 		return new WP_REST_Response(
 			array(
@@ -1300,6 +1474,18 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 				'attempts' => $attempts + 1,
 			)
 		);
+		nxtcc_auth_emit_otp_failed(
+			'verify',
+			'incorrect_code',
+			array_merge(
+				$login_context,
+				array(
+					'otp_id'        => (int) $row['id'],
+					'attempts_used' => $attempts + 1,
+				)
+			)
+		);
+		nxtcc_auth_emit_login_failed( 'incorrect_code', $login_context );
 
 		return new WP_REST_Response(
 			array(
@@ -1312,9 +1498,10 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 
 	NXTCC_Auth_DAO::otp_update_by_id( (int) $row['id'], array( 'status' => 'verified' ) );
 
-	$binding       = NXTCC_Auth_DAO::binding_find_by_phone( $phone_e164 );
-	$current_uid   = (int) get_current_user_id();
-	$user_to_login = 0;
+	$binding         = NXTCC_Auth_DAO::binding_find_by_phone( $phone_e164 );
+	$current_uid     = (int) get_current_user_id();
+	$user_to_login   = 0;
+	$login_user_type = 'existing';
 
 	if ( $binding && isset( $binding->user_id ) && (int) $binding->user_id > 0 ) {
 		$user_to_login = (int) $binding->user_id;
@@ -1361,6 +1548,16 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 		);
 
 		if ( is_wp_error( $new_uid ) ) {
+			nxtcc_auth_emit_login_failed(
+				'account_creation_failed',
+				array_merge(
+					$login_context,
+					array(
+						'wp_error_code' => sanitize_key( (string) $new_uid->get_error_code() ),
+					)
+				)
+			);
+
 			return new WP_REST_Response(
 				array(
 					'status'  => 'error',
@@ -1371,7 +1568,8 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 		}
 
 		NXTCC_Auth_DAO::binding_replace( (int) $new_uid, $phone_e164 );
-		$user_to_login = (int) $new_uid;
+		$user_to_login   = (int) $new_uid;
+		$login_user_type = 'new';
 	}
 
 	$settings = nxtcc_auth_get_active_settings_row();
@@ -1400,6 +1598,39 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 			do_action( 'nxtcc_wp_login', $ud->user_login, $ud );
 		}
 	}
+
+	if ( $user_to_login <= 0 ) {
+		nxtcc_auth_emit_login_failed( 'user_resolution_failed', $login_context );
+
+		return new WP_REST_Response(
+			array(
+				'status'  => 'error',
+				'message' => 'Could not complete login.',
+			),
+			500
+		);
+	}
+
+	/**
+	 * Fires after the WhatsApp OTP flow resolves a logged-in WordPress user.
+	 *
+	 * @param int                  $user_id     Logged-in user id.
+	 * @param string               $phone_e164  Verified phone number.
+	 * @param array<string, mixed> $context     Login context.
+	 */
+	do_action(
+		'nxtcc_auth_login_succeeded',
+		$user_to_login,
+		$phone_e164,
+		array_merge(
+			$ctx,
+			array(
+				'session_id'      => $session_id,
+				'current_user_id' => (int) get_current_user_id(),
+				'login_user_type' => $login_user_type,
+			)
+		)
+	);
 
 	if ( $user_to_login > 0 ) {
 		delete_user_meta( $user_to_login, '_nxtcc_fm_login_date' );
