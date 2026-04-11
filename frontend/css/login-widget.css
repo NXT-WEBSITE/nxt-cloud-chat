@@ -1,0 +1,98 @@
+/* Card */
+.nxtcc-auth-card{
+	border:1px solid #e5e7eb;border-radius:16px;background:#fff;max-width:560px;margin:auto;
+	box-shadow:0 1px 2px rgba(0,0,0,.04)
+}
+
+/* Header */
+.nxtcc-auth-head{
+	display:flex;align-items:center;color:#0A7C66;justify-content:space-between;
+	padding:1rem 1.25rem;border-bottom:1px solid #eef2f7
+}
+.nxtcc-auth-title{
+	font-weight:600;
+	/* subtle style: compact caps + tracking */
+	font-variant: all-small-caps;
+	letter-spacing: .03em;
+}
+
+/* Body */
+.nxtcc-auth-body{padding:1.25rem}
+.nxtcc-label{font-size:.9rem;text-align:left;font-weight:500;margin-bottom:.4rem;display:block}
+
+/* --- Phone row layout fix --- */
+.nxtcc-row{display:flex;align-items:center;gap:.5rem}
+.nxtcc-auth-body .nxtcc-country,
+.nxtcc-auth-body .nxtcc-phone{box-sizing:border-box;height:44px;line-height:normal}
+
+/* Country code select: fixed, compact width */
+.nxtcc-country{
+	border:1px solid #d1d5db;border-radius:12px;padding:.7rem .5rem;
+	flex:0 0 120px;width:120px;max-width:80px;min-width:20px;
+	-webkit-appearance:auto;appearance:auto;background:#fff;
+}
+
+/* Phone input: flex to fill */
+.nxtcc-phone{
+	border:1px solid #d1d5db;border-radius:12px;padding:.7rem .9rem;
+	flex:1 1 auto;min-width:0;width:100%;
+}
+
+.nxtcc-help{font-size:.78rem;text-align:left;color:#6b7280;margin-top:.4rem}
+.nxtcc-actions{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-top:.75rem}
+
+/* Buttons */
+.nxtcc-btn-send,
+.nxtcc-btn-verify{
+	background:#075E54;color:#fff;border:none;border-radius:12px;padding:.7rem 1rem;cursor:pointer;line-height:1
+}
+.nxtcc-btn-send[disabled]{opacity:.6;cursor:not-allowed}
+.nxtcc-btn-change{
+	background:#fff;color:#111827;border:1px solid #d1d5db;border-radius:12px;padding:.7rem 1rem;cursor:pointer
+}
+
+/* Alt link: smaller & subtle */
+.nxtcc-link-alt{
+	color:#065f46;text-decoration:underline;font-size:.78rem;line-height:1
+}
+
+/* OTP */
+.nxtcc-otp-inputs{display:flex;gap:.4rem;margin:.75rem 0}
+.nxtcc-otp-box{
+	width:48px;height:48px;border:1px solid #d1d5db;border-radius:12px;text-align:center;font-size:1.1rem
+}
+.nxtcc-otp-row{display:flex;justify-content:space-between;align-items:center;font-size:.85rem}
+.nxtcc-error{
+	margin-top:.5rem;background:#fef2f2;border:1px solid #fee2e2;color:#991b1b;border-radius:10px;padding:.5rem
+}
+
+/* Footer */
+.nxtcc-auth-foot{
+	display:flex;justify-content:space-between;align-items:center;gap:1rem;background:#f9fafb;border-top:1px solid #eef2f7;
+	padding:.75rem 1.25rem;font-size:.75rem;color:#6b7280
+}
+.nxtcc-branding a{color:#065f46}
+
+/* Responsive tweak */
+@media (max-width:420px){
+	.nxtcc-country{flex-basis:100px;width:100px}
+	.nxtcc-row{gap:.4rem}
+}
+
+/* Spinner shown on the "Send code on WhatsApp" button while loading */
+.nxtcc-btn-send.is-loading {
+	position: relative;
+	pointer-events: none;
+}
+.nxtcc-btn-send .nxtcc-spinner {
+	display: inline-block;width: 1em;height: 1em;margin-left: .5em;
+	border: 2px solid currentColor;border-top-color: transparent;border-radius: 50%;
+	vertical-align: -0.2em;animation: nxtcc-spin .6s linear infinite;
+}
+@keyframes nxtcc-spin { to { transform: rotate(360deg); } }
+
+/* Optional: a subtle visual cue when input is valid */
+.nxtcc-auth-widget.nxtcc-phone-valid .nxtcc-phone {
+	outline: none;box-shadow: 0 0 0 2px rgba(16, 185, 129, .25);
+}
+

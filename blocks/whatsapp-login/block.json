@@ -1,0 +1,10 @@
+{
+	"apiVersion": 3,
+	"name": "nxtcc/whatsapp-login",
+	"title": "NXTCC: WhatsApp Login",
+	"category": "widgets",
+	"icon": "smartphone",
+	"description": "Adds the NXT Cloud Chat WhatsApp login widget.",
+	"textdomain": "nxt-cloud-chat",
+	"supports": { "html": false }
+}

@@ -1,0 +1,1186 @@
+[
+	{
+		"country_name": "Afghanistan",
+		"iso2": "AF",
+		"dial_code": "+93",
+		"example_format": "0701 234567"
+	},
+	{
+		"country_name": "Albania",
+		"iso2": "AL",
+		"dial_code": "+355",
+		"example_format": "069 123 4567"
+	},
+	{
+		"country_name": "Algeria",
+		"iso2": "DZ",
+		"dial_code": "+213",
+		"example_format": "0550 123456"
+	},
+	{
+		"country_name": "Andorra",
+		"iso2": "AD",
+		"dial_code": "+376",
+		"example_format": "312345"
+	},
+	{
+		"country_name": "Angola",
+		"iso2": "AO",
+		"dial_code": "+244",
+		"example_format": "922 123 456"
+	},
+	{
+		"country_name": "Antigua and Barbuda",
+		"iso2": "AG",
+		"dial_code": "+1",
+		"example_format": "(268) 480-1234"
+	},
+	{
+		"country_name": "Argentina",
+		"iso2": "AR",
+		"dial_code": "+54",
+		"example_format": "11 1234-5678"
+	},
+	{
+		"country_name": "Armenia",
+		"iso2": "AM",
+		"dial_code": "+374",
+		"example_format": "091 123456"
+	},
+	{
+		"country_name": "Australia",
+		"iso2": "AU",
+		"dial_code": "+61",
+		"example_format": "0412 345 678"
+	},
+	{
+		"country_name": "Austria",
+		"iso2": "AT",
+		"dial_code": "+43",
+		"example_format": "0664 1234567"
+	},
+	{
+		"country_name": "Azerbaijan",
+		"iso2": "AZ",
+		"dial_code": "+994",
+		"example_format": "050 123 45 67"
+	},
+
+	{
+		"country_name": "Bahamas",
+		"iso2": "BS",
+		"dial_code": "+1",
+		"example_format": "(242) 357-1234"
+	},
+	{
+		"country_name": "Bahrain",
+		"iso2": "BH",
+		"dial_code": "+973",
+		"example_format": "3600 1234"
+	},
+	{
+		"country_name": "Bangladesh",
+		"iso2": "BD",
+		"dial_code": "+880",
+		"example_format": "01712 345678"
+	},
+	{
+		"country_name": "Barbados",
+		"iso2": "BB",
+		"dial_code": "+1",
+		"example_format": "(246) 232-1234"
+	},
+	{
+		"country_name": "Belarus",
+		"iso2": "BY",
+		"dial_code": "+375",
+		"example_format": "29 123-45-67"
+	},
+	{
+		"country_name": "Belgium",
+		"iso2": "BE",
+		"dial_code": "+32",
+		"example_format": "0471 12 34 56"
+	},
+	{
+		"country_name": "Belize",
+		"iso2": "BZ",
+		"dial_code": "+501",
+		"example_format": "612-3456"
+	},
+	{
+		"country_name": "Benin",
+		"iso2": "BJ",
+		"dial_code": "+229",
+		"example_format": "97 12 34 56"
+	},
+	{
+		"country_name": "Bhutan",
+		"iso2": "BT",
+		"dial_code": "+975",
+		"example_format": "17 123456"
+	},
+	{
+		"country_name": "Bolivia",
+		"iso2": "BO",
+		"dial_code": "+591",
+		"example_format": "7123 4567"
+	},
+	{
+		"country_name": "Bosnia and Herzegovina",
+		"iso2": "BA",
+		"dial_code": "+387",
+		"example_format": "061 123 456"
+	},
+	{
+		"country_name": "Botswana",
+		"iso2": "BW",
+		"dial_code": "+267",
+		"example_format": "71 234 567"
+	},
+	{
+		"country_name": "Brazil",
+		"iso2": "BR",
+		"dial_code": "+55",
+		"example_format": "(11) 91234-5678"
+	},
+	{
+		"country_name": "Brunei",
+		"iso2": "BN",
+		"dial_code": "+673",
+		"example_format": "7123456"
+	},
+	{
+		"country_name": "Bulgaria",
+		"iso2": "BG",
+		"dial_code": "+359",
+		"example_format": "087 123 4567"
+	},
+	{
+		"country_name": "Burkina Faso",
+		"iso2": "BF",
+		"dial_code": "+226",
+		"example_format": "70 12 34 56"
+	},
+	{
+		"country_name": "Burundi",
+		"iso2": "BI",
+		"dial_code": "+257",
+		"example_format": "79 123 456"
+	},
+
+	{
+		"country_name": "Cabo Verde",
+		"iso2": "CV",
+		"dial_code": "+238",
+		"example_format": "991 12 34"
+	},
+	{
+		"country_name": "Cambodia",
+		"iso2": "KH",
+		"dial_code": "+855",
+		"example_format": "012 345 678"
+	},
+	{
+		"country_name": "Cameroon",
+		"iso2": "CM",
+		"dial_code": "+237",
+		"example_format": "650 123 456"
+	},
+	{
+		"country_name": "Canada",
+		"iso2": "CA",
+		"dial_code": "+1",
+		"example_format": "(416) 123-4567"
+	},
+	{
+		"country_name": "Central African Republic",
+		"iso2": "CF",
+		"dial_code": "+236",
+		"example_format": "70 01 23 45"
+	},
+	{
+		"country_name": "Chad",
+		"iso2": "TD",
+		"dial_code": "+235",
+		"example_format": "65 01 23 45"
+	},
+	{
+		"country_name": "Chile",
+		"iso2": "CL",
+		"dial_code": "+56",
+		"example_format": "9 1234 5678"
+	},
+	{
+		"country_name": "China",
+		"iso2": "CN",
+		"dial_code": "+86",
+		"example_format": "138 1234 5678"
+	},
+	{
+		"country_name": "Colombia",
+		"iso2": "CO",
+		"dial_code": "+57",
+		"example_format": "300 123 4567"
+	},
+	{
+		"country_name": "Comoros",
+		"iso2": "KM",
+		"dial_code": "+269",
+		"example_format": "321 23 456"
+	},
+	{
+		"country_name": "Congo (Republic)",
+		"iso2": "CG",
+		"dial_code": "+242",
+		"example_format": "06 123 4567"
+	},
+	{
+		"country_name": "Congo (DRC)",
+		"iso2": "CD",
+		"dial_code": "+243",
+		"example_format": "081 234 5678"
+	},
+
+	{
+		"country_name": "Costa Rica",
+		"iso2": "CR",
+		"dial_code": "+506",
+		"example_format": "8888 1234"
+	},
+	{
+		"country_name": "Côte d'Ivoire",
+		"iso2": "CI",
+		"dial_code": "+225",
+		"example_format": "01 23 45 67"
+	},
+	{
+		"country_name": "Croatia",
+		"iso2": "HR",
+		"dial_code": "+385",
+		"example_format": "091 123 4567"
+	},
+	{
+		"country_name": "Cuba",
+		"iso2": "CU",
+		"dial_code": "+53",
+		"example_format": ""
+	},
+
+	{
+		"country_name": "Cyprus",
+		"iso2": "CY",
+		"dial_code": "+357",
+		"example_format": "99 123456"
+	},
+	{
+		"country_name": "Czech Republic",
+		"iso2": "CZ",
+		"dial_code": "+420",
+		"example_format": "601 123 456"
+	},
+	{
+		"country_name": "Denmark",
+		"iso2": "DK",
+		"dial_code": "+45",
+		"example_format": "12 34 56 78"
+	},
+	{
+		"country_name": "Djibouti",
+		"iso2": "DJ",
+		"dial_code": "+253",
+		"example_format": "77 12 34 56"
+	},
+	{
+		"country_name": "Dominica",
+		"iso2": "DM",
+		"dial_code": "+1",
+		"example_format": "(767) 275-1234"
+	},
+	{
+		"country_name": "Dominican Republic",
+		"iso2": "DO",
+		"dial_code": "+1",
+		"example_format": "(809) 555-1234"
+	},
+
+	{
+		"country_name": "Ecuador",
+		"iso2": "EC",
+		"dial_code": "+593",
+		"example_format": "09 123 4567"
+	},
+	{
+		"country_name": "Egypt",
+		"iso2": "EG",
+		"dial_code": "+20",
+		"example_format": "0100 1234567"
+	},
+	{
+		"country_name": "El Salvador",
+		"iso2": "SV",
+		"dial_code": "+503",
+		"example_format": "7012 3456"
+	},
+	{
+		"country_name": "Equatorial Guinea",
+		"iso2": "GQ",
+		"dial_code": "+240",
+		"example_format": "222 123456"
+	},
+	{
+		"country_name": "Eritrea",
+		"iso2": "ER",
+		"dial_code": "+291",
+		"example_format": "7 123 456"
+	},
+	{
+		"country_name": "Estonia",
+		"iso2": "EE",
+		"dial_code": "+372",
+		"example_format": "5123 4567"
+	},
+	{
+		"country_name": "Eswatini",
+		"iso2": "SZ",
+		"dial_code": "+268",
+		"example_format": "7612 3456"
+	},
+	{
+		"country_name": "Ethiopia",
+		"iso2": "ET",
+		"dial_code": "+251",
+		"example_format": "0912 345678"
+	},
+
+	{
+		"country_name": "Fiji",
+		"iso2": "FJ",
+		"dial_code": "+679",
+		"example_format": "990 1234"
+	},
+	{
+		"country_name": "Finland",
+		"iso2": "FI",
+		"dial_code": "+358",
+		"example_format": "041 1234567"
+	},
+	{
+		"country_name": "France",
+		"iso2": "FR",
+		"dial_code": "+33",
+		"example_format": "06 12 34 56 78"
+	},
+	{
+		"country_name": "Gabon",
+		"iso2": "GA",
+		"dial_code": "+241",
+		"example_format": "01 23 45 67"
+	},
+	{
+		"country_name": "Gambia",
+		"iso2": "GM",
+		"dial_code": "+220",
+		"example_format": "302 1234"
+	},
+	{
+		"country_name": "Georgia",
+		"iso2": "GE",
+		"dial_code": "+995",
+		"example_format": "555 12 34 56"
+	},
+	{
+		"country_name": "Germany",
+		"iso2": "DE",
+		"dial_code": "+49",
+		"example_format": "0151 23456789"
+	},
+	{
+		"country_name": "Ghana",
+		"iso2": "GH",
+		"dial_code": "+233",
+		"example_format": "024 123 4567"
+	},
+	{
+		"country_name": "Greece",
+		"iso2": "GR",
+		"dial_code": "+30",
+		"example_format": "69 1234 5678"
+	},
+	{
+		"country_name": "Grenada",
+		"iso2": "GD",
+		"dial_code": "+1",
+		"example_format": "(473) 444-1234"
+	},
+	{
+		"country_name": "Guatemala",
+		"iso2": "GT",
+		"dial_code": "+502",
+		"example_format": "4123 4567"
+	},
+	{
+		"country_name": "Guinea",
+		"iso2": "GN",
+		"dial_code": "+224",
+		"example_format": "620 12 34 56"
+	},
+	{
+		"country_name": "Guinea-Bissau",
+		"iso2": "GW",
+		"dial_code": "+245",
+		"example_format": "655 12 345"
+	},
+	{
+		"country_name": "Guyana",
+		"iso2": "GY",
+		"dial_code": "+592",
+		"example_format": "600-1234"
+	},
+
+	{
+		"country_name": "Haiti",
+		"iso2": "HT",
+		"dial_code": "+509",
+		"example_format": "34 12 34 56"
+	},
+	{
+		"country_name": "Honduras",
+		"iso2": "HN",
+		"dial_code": "+504",
+		"example_format": "9999 1234"
+	},
+	{
+		"country_name": "Hungary",
+		"iso2": "HU",
+		"dial_code": "+36",
+		"example_format": "20 123 4567"
+	},
+	{
+		"country_name": "Iceland",
+		"iso2": "IS",
+		"dial_code": "+354",
+		"example_format": "611 1234"
+	},
+	{
+		"country_name": "India",
+		"iso2": "IN",
+		"dial_code": "+91",
+		"example_format": "98765 43210"
+	},
+	{
+		"country_name": "Indonesia",
+		"iso2": "ID",
+		"dial_code": "+62",
+		"example_format": "0812-3456-7890"
+	},
+	{
+		"country_name": "Iran",
+		"iso2": "IR",
+		"dial_code": "+98",
+		"example_format": ""
+	},
+	{
+		"country_name": "Iraq",
+		"iso2": "IQ",
+		"dial_code": "+964",
+		"example_format": "0770 123 4567"
+	},
+	{
+		"country_name": "Ireland",
+		"iso2": "IE",
+		"dial_code": "+353",
+		"example_format": "083 123 4567"
+	},
+	{
+		"country_name": "Israel",
+		"iso2": "IL",
+		"dial_code": "+972",
+		"example_format": "050-1234567"
+	},
+	{
+		"country_name": "Italy",
+		"iso2": "IT",
+		"dial_code": "+39",
+		"example_format": "347 123 4567"
+	},
+	{
+		"country_name": "Jamaica",
+		"iso2": "JM",
+		"dial_code": "+1",
+		"example_format": "(876) 555-1234"
+	},
+	{
+		"country_name": "Japan",
+		"iso2": "JP",
+		"dial_code": "+81",
+		"example_format": "090-1234-5678"
+	},
+	{
+		"country_name": "Jordan",
+		"iso2": "JO",
+		"dial_code": "+962",
+		"example_format": "079 1234567"
+	},
+
+	{
+		"country_name": "Kazakhstan",
+		"iso2": "KZ",
+		"dial_code": "+7",
+		"example_format": "701 123 4567"
+	},
+	{
+		"country_name": "Kenya",
+		"iso2": "KE",
+		"dial_code": "+254",
+		"example_format": "0712 345678"
+	},
+	{
+		"country_name": "Kiribati",
+		"iso2": "KI",
+		"dial_code": "+686",
+		"example_format": "7301234"
+	},
+	{
+		"country_name": "Kuwait",
+		"iso2": "KW",
+		"dial_code": "+965",
+		"example_format": "51234567"
+	},
+	{
+		"country_name": "Kyrgyzstan",
+		"iso2": "KG",
+		"dial_code": "+996",
+		"example_format": "0555 123 456"
+	},
+	{
+		"country_name": "Laos",
+		"iso2": "LA",
+		"dial_code": "+856",
+		"example_format": "020 55 123456"
+	},
+	{
+		"country_name": "Latvia",
+		"iso2": "LV",
+		"dial_code": "+371",
+		"example_format": "291 23 456"
+	},
+	{
+		"country_name": "Lebanon",
+		"iso2": "LB",
+		"dial_code": "+961",
+		"example_format": "03 123456"
+	},
+	{
+		"country_name": "Lesotho",
+		"iso2": "LS",
+		"dial_code": "+266",
+		"example_format": "61 123 456"
+	},
+	{
+		"country_name": "Liberia",
+		"iso2": "LR",
+		"dial_code": "+231",
+		"example_format": "0770 123456"
+	},
+	{
+		"country_name": "Libya",
+		"iso2": "LY",
+		"dial_code": "+218",
+		"example_format": "091 1234567"
+	},
+	{
+		"country_name": "Liechtenstein",
+		"iso2": "LI",
+		"dial_code": "+423",
+		"example_format": "660 1234"
+	},
+	{
+		"country_name": "Lithuania",
+		"iso2": "LT",
+		"dial_code": "+370",
+		"example_format": "612 34567"
+	},
+	{
+		"country_name": "Luxembourg",
+		"iso2": "LU",
+		"dial_code": "+352",
+		"example_format": "621 234 567"
+	},
+
+	{
+		"country_name": "Madagascar",
+		"iso2": "MG",
+		"dial_code": "+261",
+		"example_format": "032 12 345 67"
+	},
+	{
+		"country_name": "Malawi",
+		"iso2": "MW",
+		"dial_code": "+265",
+		"example_format": "0991 234 567"
+	},
+	{
+		"country_name": "Malaysia",
+		"iso2": "MY",
+		"dial_code": "+60",
+		"example_format": "012-3456789"
+	},
+	{
+		"country_name": "Maldives",
+		"iso2": "MV",
+		"dial_code": "+960",
+		"example_format": "771-2345"
+	},
+	{
+		"country_name": "Mali",
+		"iso2": "ML",
+		"dial_code": "+223",
+		"example_format": "60 12 34 56"
+	},
+	{
+		"country_name": "Malta",
+		"iso2": "MT",
+		"dial_code": "+356",
+		"example_format": "7923 4567"
+	},
+	{
+		"country_name": "Marshall Islands",
+		"iso2": "MH",
+		"dial_code": "+692",
+		"example_format": "625-1234"
+	},
+	{
+		"country_name": "Mauritania",
+		"iso2": "MR",
+		"dial_code": "+222",
+		"example_format": "22 12 34 56"
+	},
+	{
+		"country_name": "Mauritius",
+		"iso2": "MU",
+		"dial_code": "+230",
+		"example_format": "525 1234"
+	},
+	{
+		"country_name": "Mexico",
+		"iso2": "MX",
+		"dial_code": "+52",
+		"example_format": "55 1234 5678"
+	},
+	{
+		"country_name": "Micronesia",
+		"iso2": "FM",
+		"dial_code": "+691",
+		"example_format": "350-1234"
+	},
+	{
+		"country_name": "Moldova",
+		"iso2": "MD",
+		"dial_code": "+373",
+		"example_format": "0600 12345"
+	},
+	{
+		"country_name": "Monaco",
+		"iso2": "MC",
+		"dial_code": "+377",
+		"example_format": "06 12 34 56 7"
+	},
+	{
+		"country_name": "Mongolia",
+		"iso2": "MN",
+		"dial_code": "+976",
+		"example_format": "9911 2345"
+	},
+	{
+		"country_name": "Montenegro",
+		"iso2": "ME",
+		"dial_code": "+382",
+		"example_format": "067 123 456"
+	},
+	{
+		"country_name": "Morocco",
+		"iso2": "MA",
+		"dial_code": "+212",
+		"example_format": "06 12 34 56 78"
+	},
+	{
+		"country_name": "Mozambique",
+		"iso2": "MZ",
+		"dial_code": "+258",
+		"example_format": "82 123 4567"
+	},
+	{
+		"country_name": "Myanmar",
+		"iso2": "MM",
+		"dial_code": "+95",
+		"example_format": "09 450 123456"
+	},
+
+	{
+		"country_name": "Namibia",
+		"iso2": "NA",
+		"dial_code": "+264",
+		"example_format": "081 123 4567"
+	},
+	{
+		"country_name": "Nauru",
+		"iso2": "NR",
+		"dial_code": "+674",
+		"example_format": "555 1234"
+	},
+	{
+		"country_name": "Nepal",
+		"iso2": "NP",
+		"dial_code": "+977",
+		"example_format": "980-1234567"
+	},
+	{
+		"country_name": "Netherlands",
+		"iso2": "NL",
+		"dial_code": "+31",
+		"example_format": "06 12345678"
+	},
+	{
+		"country_name": "New Zealand",
+		"iso2": "NZ",
+		"dial_code": "+64",
+		"example_format": "021 123 4567"
+	},
+	{
+		"country_name": "Nicaragua",
+		"iso2": "NI",
+		"dial_code": "+505",
+		"example_format": "8123 4567"
+	},
+	{
+		"country_name": "Niger",
+		"iso2": "NE",
+		"dial_code": "+227",
+		"example_format": "93 01 23 45"
+	},
+	{
+		"country_name": "Nigeria",
+		"iso2": "NG",
+		"dial_code": "+234",
+		"example_format": "0812 345 6789"
+	},
+	{
+		"country_name": "North Korea",
+		"iso2": "KP",
+		"dial_code": "+850",
+		"example_format": ""
+	},
+	{
+		"country_name": "North Macedonia",
+		"iso2": "MK",
+		"dial_code": "+389",
+		"example_format": "071 123 456"
+	},
+	{
+		"country_name": "Norway",
+		"iso2": "NO",
+		"dial_code": "+47",
+		"example_format": "412 34 567"
+	},
+
+	{
+		"country_name": "Oman",
+		"iso2": "OM",
+		"dial_code": "+968",
+		"example_format": "9 123 4567"
+	},
+	{
+		"country_name": "Pakistan",
+		"iso2": "PK",
+		"dial_code": "+92",
+		"example_format": "0300 1234567"
+	},
+	{
+		"country_name": "Palau",
+		"iso2": "PW",
+		"dial_code": "+680",
+		"example_format": "777-1234"
+	},
+	{
+		"country_name": "Panama",
+		"iso2": "PA",
+		"dial_code": "+507",
+		"example_format": "6123-4567"
+	},
+	{
+		"country_name": "Papua New Guinea",
+		"iso2": "PG",
+		"dial_code": "+675",
+		"example_format": "7123 4567"
+	},
+	{
+		"country_name": "Paraguay",
+		"iso2": "PY",
+		"dial_code": "+595",
+		"example_format": "0981 123456"
+	},
+	{
+		"country_name": "Peru",
+		"iso2": "PE",
+		"dial_code": "+51",
+		"example_format": "912 345 678"
+	},
+	{
+		"country_name": "Philippines",
+		"iso2": "PH",
+		"dial_code": "+63",
+		"example_format": "0917 123 4567"
+	},
+	{
+		"country_name": "Poland",
+		"iso2": "PL",
+		"dial_code": "+48",
+		"example_format": "512 345 678"
+	},
+	{
+		"country_name": "Portugal",
+		"iso2": "PT",
+		"dial_code": "+351",
+		"example_format": "912 345 678"
+	},
+
+	{
+		"country_name": "Qatar",
+		"iso2": "QA",
+		"dial_code": "+974",
+		"example_format": "3312 3456"
+	},
+	{
+		"country_name": "Romania",
+		"iso2": "RO",
+		"dial_code": "+40",
+		"example_format": "0712 345 678"
+	},
+	{
+		"country_name": "Russia",
+		"iso2": "RU",
+		"dial_code": "+7",
+		"example_format": "8 (912) 123-45-67"
+	},
+	{
+		"country_name": "Rwanda",
+		"iso2": "RW",
+		"dial_code": "+250",
+		"example_format": "0788 123 456"
+	},
+
+	{
+		"country_name": "Saint Kitts and Nevis",
+		"iso2": "KN",
+		"dial_code": "+1",
+		"example_format": "(869) 465-1234"
+	},
+	{
+		"country_name": "Saint Lucia",
+		"iso2": "LC",
+		"dial_code": "+1",
+		"example_format": "(758) 458-1234"
+	},
+	{
+		"country_name": "Saint Vincent and the Grenadines",
+		"iso2": "VC",
+		"dial_code": "+1",
+		"example_format": "(784) 456-1234"
+	},
+	{
+		"country_name": "Samoa",
+		"iso2": "WS",
+		"dial_code": "+685",
+		"example_format": "737 1234"
+	},
+	{
+		"country_name": "San Marino",
+		"iso2": "SM",
+		"dial_code": "+378",
+		"example_format": "333 123456"
+	},
+	{
+		"country_name": "Sao Tome and Principe",
+		"iso2": "ST",
+		"dial_code": "+239",
+		"example_format": "912 12 34"
+	},
+	{
+		"country_name": "Saudi Arabia",
+		"iso2": "SA",
+		"dial_code": "+966",
+		"example_format": "05 1234 5678"
+	},
+	{
+		"country_name": "Senegal",
+		"iso2": "SN",
+		"dial_code": "+221",
+		"example_format": "77 123 45 67"
+	},
+	{
+		"country_name": "Serbia",
+		"iso2": "RS",
+		"dial_code": "+381",
+		"example_format": "064 1234567"
+	},
+	{
+		"country_name": "Seychelles",
+		"iso2": "SC",
+		"dial_code": "+248",
+		"example_format": "2 512345"
+	},
+	{
+		"country_name": "Sierra Leone",
+		"iso2": "SL",
+		"dial_code": "+232",
+		"example_format": "076 123456"
+	},
+	{
+		"country_name": "Singapore",
+		"iso2": "SG",
+		"dial_code": "+65",
+		"example_format": "9123 4567"
+	},
+	{
+		"country_name": "Slovakia",
+		"iso2": "SK",
+		"dial_code": "+421",
+		"example_format": "0912 345 678"
+	},
+	{
+		"country_name": "Slovenia",
+		"iso2": "SI",
+		"dial_code": "+386",
+		"example_format": "031 123 456"
+	},
+	{
+		"country_name": "Solomon Islands",
+		"iso2": "SB",
+		"dial_code": "+677",
+		"example_format": "7401234"
+	},
+	{
+		"country_name": "Somalia",
+		"iso2": "SO",
+		"dial_code": "+252",
+		"example_format": "61 1234567"
+	},
+	{
+		"country_name": "South Africa",
+		"iso2": "ZA",
+		"dial_code": "+27",
+		"example_format": "082 123 4567"
+	},
+	{
+		"country_name": "South Korea",
+		"iso2": "KR",
+		"dial_code": "+82",
+		"example_format": "010-1234-5678"
+	},
+	{
+		"country_name": "South Sudan",
+		"iso2": "SS",
+		"dial_code": "+211",
+		"example_format": "0912 345678"
+	},
+	{
+		"country_name": "Spain",
+		"iso2": "ES",
+		"dial_code": "+34",
+		"example_format": "612 34 56 78"
+	},
+	{
+		"country_name": "Sri Lanka",
+		"iso2": "LK",
+		"dial_code": "+94",
+		"example_format": "071 234 5678"
+	},
+	{
+		"country_name": "Sudan",
+		"iso2": "SD",
+		"dial_code": "+249",
+		"example_format": "091 123 4567"
+	},
+	{
+		"country_name": "Suriname",
+		"iso2": "SR",
+		"dial_code": "+597",
+		"example_format": "741-2345"
+	},
+	{
+		"country_name": "Sweden",
+		"iso2": "SE",
+		"dial_code": "+46",
+		"example_format": "070-123 45 67"
+	},
+	{
+		"country_name": "Switzerland",
+		"iso2": "CH",
+		"dial_code": "+41",
+		"example_format": "079 123 45 67"
+	},
+	{
+		"country_name": "Syria",
+		"iso2": "SY",
+		"dial_code": "+963",
+		"example_format": ""
+	},
+
+	{
+		"country_name": "Taiwan",
+		"iso2": "TW",
+		"dial_code": "+886",
+		"example_format": "0912-345-678"
+	},
+	{
+		"country_name": "Tajikistan",
+		"iso2": "TJ",
+		"dial_code": "+992",
+		"example_format": "900 123 456"
+	},
+	{
+		"country_name": "Tanzania",
+		"iso2": "TZ",
+		"dial_code": "+255",
+		"example_format": "0712 345678"
+	},
+	{
+		"country_name": "Thailand",
+		"iso2": "TH",
+		"dial_code": "+66",
+		"example_format": "081 234 5678"
+	},
+	{
+		"country_name": "Timor-Leste",
+		"iso2": "TL",
+		"dial_code": "+670",
+		"example_format": "77 1234"
+	},
+	{
+		"country_name": "Togo",
+		"iso2": "TG",
+		"dial_code": "+228",
+		"example_format": "90 12 34 56"
+	},
+	{
+		"country_name": "Tonga",
+		"iso2": "TO",
+		"dial_code": "+676",
+		"example_format": "7712345"
+	},
+	{
+		"country_name": "Trinidad and Tobago",
+		"iso2": "TT",
+		"dial_code": "+1",
+		"example_format": "(868) 123-4567"
+	},
+	{
+		"country_name": "Tunisia",
+		"iso2": "TN",
+		"dial_code": "+216",
+		"example_format": "20 123 456"
+	},
+	{
+		"country_name": "Turkey",
+		"iso2": "TR",
+		"dial_code": "+90",
+		"example_format": "0500 123 4567"
+	},
+	{
+		"country_name": "Turkmenistan",
+		"iso2": "TM",
+		"dial_code": "+993",
+		"example_format": "62 123456"
+	},
+	{
+		"country_name": "Tuvalu",
+		"iso2": "TV",
+		"dial_code": "+688",
+		"example_format": "90 123"
+	},
+	{
+		"country_name": "Uganda",
+		"iso2": "UG",
+		"dial_code": "+256",
+		"example_format": "0712 345678"
+	},
+	{
+		"country_name": "Ukraine",
+		"iso2": "UA",
+		"dial_code": "+380",
+		"example_format": "067 123 4567"
+	},
+	{
+		"country_name": "United Arab Emirates",
+		"iso2": "AE",
+		"dial_code": "+971",
+		"example_format": "050 123 4567"
+	},
+	{
+		"country_name": "United Kingdom",
+		"iso2": "GB",
+		"dial_code": "+44",
+		"example_format": "07123 456789"
+	},
+	{
+		"country_name": "United States",
+		"iso2": "US",
+		"dial_code": "+1",
+		"example_format": "(555) 123-4567"
+	},
+	{
+		"country_name": "Uruguay",
+		"iso2": "UY",
+		"dial_code": "+598",
+		"example_format": "091 123 456"
+	},
+	{
+		"country_name": "Uzbekistan",
+		"iso2": "UZ",
+		"dial_code": "+998",
+		"example_format": "90 123 45 67"
+	},
+	{
+		"country_name": "Vanuatu",
+		"iso2": "VU",
+		"dial_code": "+678",
+		"example_format": "591 2345"
+	},
+	{
+		"country_name": "Vatican City",
+		"iso2": "VA",
+		"dial_code": "+379",
+		"example_format": "066987"
+	},
+	{
+		"country_name": "Venezuela",
+		"iso2": "VE",
+		"dial_code": "+58",
+		"example_format": "0414-1234567"
+	},
+	{
+		"country_name": "Vietnam",
+		"iso2": "VN",
+		"dial_code": "+84",
+		"example_format": "091 234 5678"
+	},
+	{
+		"country_name": "Yemen",
+		"iso2": "YE",
+		"dial_code": "+967",
+		"example_format": "712 345 678"
+	},
+	{
+		"country_name": "Zambia",
+		"iso2": "ZM",
+		"dial_code": "+260",
+		"example_format": "097 123 4567"
+	},
+	{
+		"country_name": "Zimbabwe",
+		"iso2": "ZW",
+		"dial_code": "+263",
+		"example_format": "0712 123 456"
+	}
+]

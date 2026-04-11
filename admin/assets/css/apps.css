@@ -1,0 +1,227 @@
+/* Top header bar (Elementor-like) */
+.nxtcc-apps-topbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 14px 0 10px;
+	border-bottom: 1px solid #e5e7eb;
+	margin-bottom: 20px;
+}
+
+.nxtcc-apps-topbar-left {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.nxtcc-apps-topbar-logo {
+	width: 28px;
+	height: 28px;
+	border-radius: 999px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+
+.nxtcc-apps-topbar-logo img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.nxtcc-apps-topbar-logo-letter {
+	color: #ffffff;
+	font-weight: 700;
+	font-size: 16px;
+}
+
+.nxtcc-apps-topbar-title {
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.nxtcc-apps-topbar-right .nxtcc-topbar-link {
+	font-size: 13px;
+	font-weight: 500;
+	text-decoration: none;
+	padding: 6px 12px;
+	border-radius: 999px;
+	border: 1px solid #d1d5db;
+	color: #111827;
+	background: #f9fafb;
+}
+
+.nxtcc-apps-topbar-right .nxtcc-topbar-link:hover {
+	background: #075E54;
+	color: #ffffff;
+	border-color: #075E54;
+}
+
+/* Main layout */
+.nxtcc-apps-page {
+	max-width: 1200px;
+}
+
+/* Center title & description */
+.nxtcc-apps-title {
+	font-size: 26px;
+	margin: 18px 0 6px;
+	text-align: center;
+}
+
+.nxtcc-apps-subtitle {
+	font-size: 14px;
+	max-width: 680px;
+	margin: 0 auto 24px;
+	color: #555d66;
+	text-align: center;
+}
+
+/* Grid */
+.nxtcc-apps-grid {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0,1fr));
+	gap: 24px;
+}
+
+@media (max-width: 1200px) {
+	.nxtcc-apps-grid {
+		grid-template-columns: repeat(2, minmax(0,1fr));
+	}
+}
+
+@media (max-width: 782px) {
+	.nxtcc-apps-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Card */
+.nxtcc-app-card {
+	background: #ffffff;
+	border-radius: 8px;
+	border: 1px solid #e5e5e5;
+	box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+	transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
+	cursor: pointer;
+}
+
+.nxtcc-app-card-inner {
+	padding: 20px 20px 18px;
+	display: flex;
+	flex-direction: column;
+	height: 90%;
+}
+
+.nxtcc-app-card:hover {
+	border-color: #075E54;
+	box-shadow: 0 8px 18px rgba(0,0,0,0.09);
+	transform: translateY(-2px);
+}
+
+/* Icon + badge */
+.nxtcc-app-icon-wrap {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	margin-bottom: 16px;
+}
+
+.nxtcc-app-icon {
+	width: 52px;
+	height: 52px;
+	border-radius: 16px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+
+.nxtcc-app-icon-img {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.nxtcc-app-icon-letter {
+	color: #ff6f61;
+	font-weight: 700;
+	font-size: 24px;
+}
+
+.nxtcc-app-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 10px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 600;
+	background: #f1f5f9;
+	color: #111827;
+}
+
+.nxtcc-app-badge-pro {
+	background: #2bb24c1c;
+	color: #2bb24c;
+}
+
+/* Content */
+.nxtcc-app-name {
+	font-size: 16px;
+	margin: 0 0 2px;
+}
+
+.nxtcc-app-author {
+	font-size: 12px;
+	color: #6b7280;
+	margin-bottom: 10px;
+}
+
+.nxtcc-app-desc {
+	font-size: 13px;
+	color: #4b5563;
+	margin-bottom: 18px;
+}
+
+/* Footer */
+.nxtcc-app-footer {
+	margin-top: auto;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+}
+
+/* Learn More link – #075E54 */
+.nxtcc-app-cta-secondary {
+	font-size: 12px;
+	text-decoration: none;
+	color: #075E54;
+	font-weight: 500;
+}
+
+.nxtcc-app-cta-secondary:hover {
+	text-decoration: underline;
+	color: #075E54;
+}
+
+/* Primary button: #075E54 */
+.nxtcc-app-cta-primary {
+	padding: 1px 16px !important;
+	border-radius: 3px !important;
+	font-size: 13px !important;
+	background: #075E54 !important;
+	border-color: #075E54 !important;
+	color: #ffffff !important;
+}
+
+.nxtcc-app-cta-primary:hover,
+.nxtcc-app-cta-primary:focus {
+	background: #ffffff !important;
+	color: #075E54 !important;
+	border-color: #075E54 !important;
+}
+
+
+

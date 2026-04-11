@@ -1,0 +1,211 @@
+/* Layout */
+.nxtcc-auth-wrap .nxtcc-auth-card{
+	border:1px solid #e5e7eb;
+	border-radius:12px;
+	background:#fff;
+	max-width:980px;
+	margin-top:12px;
+	box-shadow:0 1px 2px rgba(0,0,0,.04);
+}
+
+/* Card header — WhatsApp green */
+.nxtcc-auth-head{
+	display:flex;
+	align-items:center;
+	justify-content:space-between;
+	padding:.9rem 1.1rem;
+	background:#0A7C66;          /* brand green */
+	color:#fff;                   /* ensure contrast */
+	border-top-left-radius:12px;  /* blend with card radius */
+	border-top-right-radius:12px;
+}
+.nxtcc-auth-title{
+	font-weight:600;
+	color:#fff;                   /* ensure title is white on green */
+}
+
+/* Body */
+.nxtcc-auth-body{padding:1.1rem}
+.nxtcc-field{margin-bottom:1rem}
+.nxtcc-label{font-weight:600;display:block;margin-bottom:.35rem}
+.nxtcc-row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+
+/* Inputs */
+.nxtcc-select,.nxtcc-input{
+	min-width:260px;
+	max-width:100%;
+	padding:.45rem .6rem;
+	border:1px solid #d1d5db;
+	border-radius:8px;
+	background:#fff;
+}
+.nxtcc-select:focus,.nxtcc-input:focus{
+	outline:2px solid #0A7C66;
+	outline-offset:1px;
+}
+
+/* Help text */
+.nxtcc-help{
+	font-size:12.5px;
+	color:#6b7280;
+	margin-top:.3rem;
+	display:inline-block;
+}
+
+/* Action row */
+.nxtcc-actions{margin-top:14px}
+
+/* Grid for two-up settings blocks */
+.nxtcc-grid{
+	display:grid;
+	grid-template-columns:1fr 1fr;
+	gap:14px;
+}
+@media (max-width:900px){
+	.nxtcc-grid{grid-template-columns:1fr}
+}
+
+/* Flash states */
+.nxtcc-ok{color:#065f46}
+.nxtcc-err{color:#b91c1c}
+
+/* Error style used by JS notify() on help lines */
+.nxtcc-error{color:#b91c1c !important}
+
+/* Save button — WhatsApp green */
+.nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary{
+	background:#075E54;
+	border-color:#075E54;
+	color:#fff;
+	box-shadow:none;
+}
+.nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary:hover,
+.nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary:focus{
+	background:#064e46;
+	border-color:#064e46;
+	color:#fff;
+}
+.nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary:active{
+	background:#05443d;
+	border-color:#05443d;
+	color:#fff;
+}
+
+/* PRO badge */
+.nxtcc-pro-badge{
+	display:inline-block;
+	background:#0A7C66; /* matches header green */
+	color:#fff;
+	font-size:10px;
+	font-weight:600;
+	padding:2px 6px;
+	border-radius:4px;
+	margin-left:6px;
+	vertical-align:middle;
+}
+
+/* Minimal toggle switch (used for Grace Period) */
+.nxtcc-switch{
+	position:relative;
+	display:inline-block;
+	width:44px;
+	height:24px;
+}
+.nxtcc-switch input{
+	opacity:0;
+	width:0;
+	height:0;
+}
+.nxtcc-slider{
+	position:absolute;
+	cursor:pointer;
+	top:0; left:0; right:0; bottom:0;
+	background:#e5e7eb;
+	transition:.2s;
+	border-radius:999px;
+	box-shadow:inset 0 0 0 1px #d1d5db;
+}
+.nxtcc-slider:before{
+	position:absolute;
+	content:"";
+	height:18px; width:18px;
+	left:3px; top:3px;
+	background:#fff;
+	transition:.2s;
+	border-radius:50%;
+	box-shadow:0 1px 2px rgba(0,0,0,.15);
+}
+.nxtcc-switch input:checked + .nxtcc-slider{
+	background:#075E54;
+	box-shadow:inset 0 0 0 1px #075E54;
+}
+.nxtcc-switch input:checked + .nxtcc-slider:before{
+	transform:translateX(20px);
+}
+
+/* ===== Default Profile (owner) row ===== */
+#nxtcc-auth-owner{
+	min-width:280px; /* a touch wider than template select */
+}
+.nxtcc-owner-note{
+	font-size:12.5px;
+	color:#6b7280;
+	margin-left:.25rem;
+}
+
+/* ===== Allowed Countries (Admin) ===== */
+#nxtcc-allowed-countries .nxtcc-ac-utils{
+	justify-content:flex-end;
+	width:100%;
+}
+#nxtcc-allowed-countries .nxtcc-ac-link{
+	font-size:12.5px; color:#0A7C66; text-decoration:underline;
+}
+#nxtcc-allowed-countries .nxtcc-ac-sep{color:#9ca3af; font-size:12.5px}
+#nxtcc-allowed-countries .nxtcc-ac-count{
+	margin-left:.5rem; color:#6b7280; font-size:12.5px;
+}
+#nxtcc-allowed-countries #nxtcc-ac-search{ margin-top:.4rem; width:100% }
+
+#nxtcc-allowed-countries .nxtcc-ac-list{
+	margin-top:.5rem; border:1px solid #e5e7eb; border-radius:10px;
+	overflow-y:auto;
+	/* 4 rows visible: row height ~40px + tiny borders */
+	max-height:168px;
+}
+#nxtcc-allowed-countries .nxtcc-ac-item{
+	display:flex; align-items:center; gap:.6rem;
+	padding:.45rem .6rem; cursor:pointer;
+}
+#nxtcc-allowed-countries .nxtcc-ac-item:hover{
+	background:#f9fafb;
+}
+#nxtcc-allowed-countries .nxtcc-ac-item input[type="checkbox"]{
+	margin:0;
+}
+#nxtcc-allowed-countries .nxtcc-ac-dial{
+	font-weight:600; min-width:54px;
+}
+#nxtcc-allowed-countries .nxtcc-ac-name{
+	color:#111827;
+}
+
+/* Inline status messages */
+#nxtcc-auth-msg,
+#nxtcc-save-msg,
+#nxtcc-sync-msg{
+	margin-top:.35rem;
+	font-size:12.5px;
+	color:#6b7280;
+}
+
+/* Disable states */
+#nxtcc-generate-default[disabled],
+#nxtcc-auth-save[disabled],
+#nxtcc-sync-verified[disabled]{
+	opacity:.6;
+	cursor:not-allowed;
+}
+
+
+

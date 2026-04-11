@@ -1,0 +1,21 @@
+/* Green bubble badge for admin menu item */
+#adminmenu .nxtcc-badge {
+	display: inline-block;
+	min-width: 8px;
+	padding: 0 6px;
+	margin-left: 6px;
+	border-radius: 999px;
+	font-size: 11px;
+	line-height: 18px;
+	text-align: center;
+	font-weight: 600;
+	background: #25D366; /* WhatsApp green */
+	color: #fff;
+	vertical-align: middle;
+}
+#adminmenu .nxtcc-badge.is-hidden {
+	display: none !important;
+}
+
+
+

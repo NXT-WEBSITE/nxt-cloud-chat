@@ -1,0 +1,40 @@
+/* Top-level NXT Cloud Chat menu icon: 20px and centered */
+#toplevel_page_nxt-cloud-chat .wp-menu-image {
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+}
+
+/* Force the SVG to the proper dimensions */
+#toplevel_page_nxt-cloud-chat .wp-menu-image img {
+	width: 20px !important;
+	height: 20px !important;
+	max-width: 20px !important;
+	max-height: 20px !important;
+	object-fit: contain !important;
+	display: block;
+	margin: 0 auto !important;
+	padding: 0 !important;
+}
+
+
+/* Elementor-like Upgrade button in submenu */
+#adminmenu .wp-submenu a[href*="page=nxtcc-upgrade"] {
+	display: block;
+	margin: 8px 12px 12px;
+	border-radius: 4px;
+	background: #2bb24c;
+	color: #ffffff !important;
+	font-weight: 600;
+	text-align: center;
+	box-sizing: border-box;
+}
+
+#adminmenu .wp-submenu a[href*="page=nxtcc-upgrade"]:hover,
+#adminmenu .wp-submenu a[href*="page=nxtcc-upgrade"]:focus {
+	background: #ffffff;
+	color: #2bb24c !important;
+}
+
+
+

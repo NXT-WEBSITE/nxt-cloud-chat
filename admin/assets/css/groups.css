@@ -1,0 +1,489 @@
+/* =========================================================
+	NXTCC Groups (Admin) — Scoped design tokens (no global bleed)
+	========================================================= */
+
+.nxtcc-groups-widget {
+	--nxtcc-bg:           #ece5dd;
+	--nxtcc-brand:        #075e54;
+	--nxtcc-accent:       #25d366;
+	--nxtcc-brand-2:      #128c7e;
+	--nxtcc-text:         #111111;
+	--nxtcc-text-muted:   #667085;
+	--nxtcc-border:       #e0e5e9;
+	--nxtcc-shadow:       0 2px 20px rgba(7, 94, 84, 0.07);
+	--nxtcc-shadow-soft:  0 2px 14px rgba(7, 94, 84, 0.09);
+	--nxtcc-focus-ring:   0 0 0 3px rgba(18, 140, 126, 0.14);
+	--nxtcc-focus-accent: 0 0 0 3px rgba(37, 211, 102, 0.12);
+	--nxtcc-row-alt:      #f7fffa;
+	--nxtcc-danger:       #b00020;
+	--nxtcc-danger-bg:    #fff5f5;
+	--nxtcc-danger-bd:    #ffd6d6;
+	--nxtcc-lock:         #778c86;
+	--nxtcc-muted-green1: #bcd7d0;
+	--nxtcc-muted-green2: #98c5bb;
+	--nxtcc-muted-green3: #31554f;
+
+	font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+	background: var(--nxtcc-bg);
+	padding: 24px 8px 32px;
+	border-radius: 15px;
+	max-width: 100%;
+	box-shadow: var(--nxtcc-shadow);
+	color: var(--nxtcc-text);
+}
+
+/* Notices (moved from inline styles in view) */
+.nxtcc-banner-warning {
+	margin: 10px 0;
+	padding: 10px 12px;
+	background: #fff7ed;
+	border: 1px solid #fed7aa;
+	border-radius: 6px;
+	color: #7c2d12;
+}
+
+.nxtcc-groups-note {
+	margin: 10px 0;
+	padding: 10px 12px;
+	color: #183b33;
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 6px;
+}
+
+.nxtcc-lock {
+	margin: 0 4px;
+}
+
+/* Toolbar */
+.nxtcc-groups-toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 14px;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.nxtcc-groups-toolbar-left,
+.nxtcc-groups-toolbar-right {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+/* Buttons */
+.nxtcc-groups-btn,
+.nxtcc-groups-btn-green {
+	font: 500 15px/1.2 inherit;
+	padding: 7px 18px;
+	min-height: 36px;
+	border-radius: 6px;
+	border: 2px solid var(--nxtcc-brand);
+	background: var(--nxtcc-brand);
+	color: #ffffff;
+	transition: background 0.17s, color 0.17s, box-shadow 0.17s, transform 0.02s, opacity 0.17s;
+	box-shadow: 0 1.5px 7px rgba(7, 94, 84, 0.09);
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+}
+
+.nxtcc-groups-btn:hover,
+.nxtcc-groups-btn-green:hover {
+	background: #ffffff;
+	color: var(--nxtcc-brand);
+	border-color: var(--nxtcc-brand);
+}
+
+.nxtcc-groups-btn:active {
+	transform: translateY(0.5px);
+}
+
+.nxtcc-groups-btn:disabled,
+.nxtcc-groups-btn.is-disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+	box-shadow: none;
+	background: var(--nxtcc-muted-green1);
+	border-color: var(--nxtcc-muted-green2);
+	color: var(--nxtcc-muted-green3);
+}
+
+.nxtcc-groups-btn-icon {
+	font-size: 18px;
+	margin-right: 4px;
+}
+
+/* Search */
+.nxtcc-groups-search-input {
+	border: 2px solid var(--nxtcc-accent);
+	border-radius: 8px;
+	padding: 8px 16px;
+	font-size: 16px;
+	background: #ffffff;
+	color: #222222;
+	min-width: 180px;
+	height: 36px;
+	transition: border 0.15s, box-shadow 0.15s;
+}
+
+.nxtcc-groups-search-input:focus {
+	border-color: var(--nxtcc-brand-2);
+	box-shadow: var(--nxtcc-focus-ring);
+	outline: none;
+}
+
+/* Bulk bar */
+#nxtcc-groups-bulk-actions.nxtcc-groups-bulk-wrap {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 6px 0 18px;
+}
+
+.nxtcc-groups-select {
+	border: 2px solid var(--nxtcc-accent);
+	border-radius: 8px;
+	padding: 6px 10px;
+	font-size: 14.5px;
+	background: #ffffff;
+	color: #222222;
+	height: 36px;
+	min-width: 160px;
+	transition: border 0.15s, box-shadow 0.15s;
+}
+
+.nxtcc-groups-select:focus {
+	border-color: var(--nxtcc-brand-2);
+	box-shadow: var(--nxtcc-focus-ring);
+	outline: none;
+}
+
+/* Table wrapper */
+.nxtcc-groups-table-wrap {
+	background: #ffffff;
+	border-radius: 15px;
+	box-shadow: var(--nxtcc-shadow-soft);
+	padding: 0 0 8px;
+	overflow-x: auto;
+	max-width: 100%;
+}
+
+.nxtcc-groups-table {
+	border-collapse: separate;
+	border-spacing: 0;
+	width: 100%;
+	min-width: 700px;
+	font-size: 15px;
+	background: #ffffff;
+}
+
+.nxtcc-groups-table th,
+.nxtcc-groups-table td {
+	padding: 9px 11px;
+	text-align: left;
+	vertical-align: middle;
+	background: inherit;
+	border-bottom: 1.5px solid var(--nxtcc-border);
+}
+
+.nxtcc-groups-table thead th.checkbox-col,
+.nxtcc-groups-table tbody td.checkbox-col {
+	width: 42px;
+	text-align: center;
+}
+
+.nxtcc-groups-table th {
+	background: var(--nxtcc-brand);
+	color: #ffffff;
+	font-weight: 600;
+	position: sticky;
+	top: 0;
+	z-index: 3;
+	user-select: none;
+}
+
+.nxtcc-groups-table th.sortable {
+	cursor: pointer;
+}
+
+.nxtcc-groups-table th.sortable::after {
+	content: "▾";
+	font-size: 12px;
+	opacity: 0.7;
+	margin-left: 6px;
+	transform: rotate(180deg);
+	display: inline-block;
+}
+
+.nxtcc-groups-table th.sortable.is-desc::after {
+	transform: rotate(0deg);
+}
+
+.nxtcc-groups-table th.sortable.is-asc::after {
+	transform: rotate(180deg);
+}
+
+.nxtcc-groups-table td.actions-col,
+.nxtcc-groups-table th.actions-col {
+	text-align: right;
+	min-width: 110px;
+	max-width: 160px;
+	white-space: nowrap;
+}
+
+.nxtcc-groups-table tbody tr:nth-child(odd) {
+	background: var(--nxtcc-row-alt);
+}
+
+.nxtcc-groups-table tbody tr:nth-child(even) {
+	background: #ffffff;
+}
+
+.nxtcc-groups-table tbody tr:hover {
+	background: #ffffff;
+	color: var(--nxtcc-text);
+	box-shadow: 0 1.5px 11px rgba(7, 94, 84, 0.05);
+	z-index: 2;
+}
+
+/* Loading cell (moved from inline styles in view) */
+.nxtcc-groups-loading-cell {
+	text-align: center;
+	color: var(--nxtcc-text-muted);
+}
+
+/* Verified/locked row tweaks */
+.nxtcc-lock-badge {
+	font-size: 12px;
+	color: var(--nxtcc-lock);
+	vertical-align: middle;
+}
+
+tr[data-is_verified="1"] .nxtcc-group-name-text {
+	font-weight: 600;
+}
+
+.nxtcc-groups-table input[type="checkbox"]:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+/* Checkbox focus (keyboard users) */
+.nxtcc-groups-table input[type="checkbox"]:focus-visible {
+	outline: none;
+	box-shadow: var(--nxtcc-focus-ring);
+	border-radius: 3px;
+}
+
+/* Legacy inline actions (kept) */
+.nxtcc-groups-action {
+	color: var(--nxtcc-brand);
+	cursor: pointer;
+	font-weight: 500;
+}
+
+.nxtcc-groups-action:hover {
+	text-decoration: underline;
+}
+
+.nxtcc-groups-action-divider {
+	color: #9bb6ad;
+	margin: 0 6px;
+}
+
+/* Modal */
+.nxtcc-groups-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 99999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(41, 50, 65, 0.22);
+}
+
+.nxtcc-groups-modal-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+}
+
+.nxtcc-groups-modal-content {
+	position: relative;
+	z-index: 2;
+	background: #ffffff;
+	border-radius: 12px;
+	box-shadow: 0 5px 24px rgba(7, 94, 84, 0.13);
+	min-width: 310px;
+	max-width: 97vw;
+	width: 355px;
+	padding-bottom: 10px;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+}
+
+.nxtcc-groups-modal-header {
+	background: var(--nxtcc-brand);
+	color: #ffffff;
+	border-top-left-radius: 12px;
+	border-top-right-radius: 12px;
+	padding: 10px 16px 7px;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.nxtcc-groups-modal-header h2 {
+	color: #ffffff;
+	font-size: 16.5px;
+	font-weight: 600;
+	margin: 0;
+}
+
+/* Close button in header should be readable on dark background */
+.nxtcc-groups-modal-close {
+	background: var(--nxtcc-brand);
+	color: #ffffff;
+	border: none;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+	opacity: 0.9;
+	transition: opacity 0.13s, transform 0.02s;
+	padding: 0 7px;
+}
+
+.nxtcc-groups-modal-close:hover {
+	opacity: 1;
+}
+
+.nxtcc-groups-modal-close:active {
+	transform: scale(0.98);
+}
+
+.nxtcc-groups-modal-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 7px 22px 0;
+}
+
+.nxtcc-groups-form-row {
+	margin: 10px 18px 0;
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	flex-wrap: wrap;
+}
+
+.nxtcc-groups-form-row label {
+	min-width: 85px;
+	font-size: 14.5px;
+	color: var(--nxtcc-brand);
+	font-weight: 500;
+}
+
+.nxtcc-groups-form-row input[type="text"] {
+	flex: 1 1 120px;
+	padding: 5.5px 8px;
+	font-size: 14px;
+	border-radius: 4px;
+	border: 1px solid #c2e7d9;
+	background: #ffffff;
+	color: var(--nxtcc-text);
+	min-width: 60px;
+	transition: border 0.15s, box-shadow 0.15s;
+}
+
+.nxtcc-groups-form-row input[type="text"]:hover {
+	border-color: var(--nxtcc-accent);
+}
+
+.nxtcc-groups-form-row input[type="text"]:focus {
+	border-color: var(--nxtcc-accent);
+	outline: none;
+	box-shadow: var(--nxtcc-focus-accent);
+}
+
+.nxtcc-groups-form-row input[type="text"]:disabled {
+	background: #f4f8f7;
+	color: #6b7d78;
+	cursor: not-allowed;
+}
+
+/* Verified hint (JS toggles visibility) */
+.nxtcc-verified-hint {
+	display: none;
+	margin: 8px 18px 0;
+	font-size: 13px;
+	color: var(--nxtcc-danger);
+	background: var(--nxtcc-danger-bg);
+	border: 1px solid var(--nxtcc-danger-bd);
+	padding: 6px 8px;
+	border-radius: 6px;
+}
+
+/* Required field */
+.nxtcc-groups-required {
+	color: #d40b2a;
+	font-weight: 700;
+	margin-left: 3px;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+	.nxtcc-groups-widget {
+		padding: 6px 2vw;
+	}
+
+	.nxtcc-groups-modal-content {
+		min-width: 92vw;
+		width: 98vw;
+	}
+
+	.nxtcc-groups-form-row label {
+		min-width: 60px;
+		font-size: 13px;
+	}
+
+	.nxtcc-groups-table {
+		min-width: 620px;
+	}
+
+	.nxtcc-groups-btn,
+	.nxtcc-groups-btn-green {
+		font-size: 14px;
+		min-height: 32px;
+	}
+
+	#nxtcc-groups-bulk-actions.nxtcc-groups-bulk-wrap {
+		width: 100%;
+		justify-content: flex-start;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+}
+
+/* Accessibility focus */
+.nxtcc-groups-btn:focus-visible,
+.nxtcc-groups-search-input:focus-visible,
+.nxtcc-groups-select:focus-visible,
+.nxtcc-groups-modal-close:focus-visible {
+	outline: none;
+	box-shadow: var(--nxtcc-focus-ring);
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+	.nxtcc-groups-btn,
+	.nxtcc-groups-modal-close,
+	.nxtcc-groups-search-input,
+	.nxtcc-groups-select,
+	.nxtcc-groups-table tbody tr:hover {
+		transition: none;
+	}
+}

@@ -1,0 +1,166 @@
+/* Root */
+.nxtcc-dashboard-widget {
+	font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+	background: #ECE5DD;
+	padding: 24px 8px 32px 8px;
+	border-radius: 15px;
+	max-width: 100%;
+	box-shadow: 0 2px 20px rgba(7,94,84,0.07);
+}
+
+/* Cards grid – only Connection + Upgrade */
+.nxtcc-dashboard-cards {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(260px, 1fr));
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+@media (max-width: 900px) {
+	.nxtcc-dashboard-cards {
+	grid-template-columns: 1fr;
+	}
+}
+
+/* Card */
+.nxtcc-card {
+	background: #fff;
+	border-radius: 12px;
+	box-shadow: 0 2px 14px rgba(7,94,84,0.09);
+	padding-bottom: 8px;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Card header (title in white) */
+.nxtcc-card-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	background: #075E54;
+	padding: 10px 12px;
+	border-top-left-radius: 12px;
+	border-top-right-radius: 12px;
+}
+.nxtcc-card-head h2 {
+	color: #fff;
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 1.2;
+}
+
+/* Card body */
+.nxtcc-card-body {
+	padding: 10px 12px;
+}
+
+/* Badge */
+.nxtcc-badge {
+	display: inline-block;
+	padding: 4px 10px;
+	border-radius: 14px;
+	font-size: 12.5px;
+	font-weight: 600;
+}
+.nxtcc-badge-neutral { background: #E8EEF3; color: #334; }
+.nxtcc-badge-ok      { background: #C7F2D8; color: #084F2E; }
+.nxtcc-badge-warn    { background: #FFF3CD; color: #664D03; }
+.nxtcc-badge-fail    { background: #F8D7DA; color: #842029; }
+
+/* Lists inside cards */
+.nxtcc-list {
+	margin: 6px 0 0 15px;
+	list-style: disc;
+}
+.nxtcc-list a {
+	color: #075E54;
+	text-decoration: none;
+	font-weight: 600;
+}
+.nxtcc-list a:hover {
+	text-decoration: underline;
+}
+.nxtcc-muted {
+	font-size: 13px;
+	color: #546;
+	margin-top: 6px;
+}
+
+/* Header actions (refresh button) */
+.nxtcc-card-actions {
+	margin-left: auto;
+	margin-right: 8px;
+}
+.nxtcc-icon-btn {
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	padding: 4px 6px;
+	line-height: 1;
+	color: #fff;
+}
+.nxtcc-icon-btn:hover {
+	opacity: .85;
+}
+.nxtcc-icon-btn:focus {
+	outline: 2px solid rgba(255,255,255,0.6);
+	outline-offset: 2px;
+}
+.nxtcc-icon-btn .fa {
+	font-size: 14px;
+}
+.nxtcc-icon-btn.is-rotating .fa {
+	animation: nxtcc-spin 0.6s linear infinite;
+}
+
+@keyframes nxtcc-spin {
+	from { transform: rotate(0deg); }
+	to   { transform: rotate(360deg); }
+}
+
+/* Upgrade card */
+.nxtcc-card-upgrade .nxtcc-card-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nxtcc-upgrade-intro {
+	margin: 0 0 4px;
+	font-size: 13px;
+	color: #2b3a3a;
+}
+
+.nxtcc-upgrade-features {
+	margin: 0 0 8px 18px;
+	padding: 0;
+	list-style: disc;
+	font-size: 13px;
+	color: #374151;
+}
+
+.nxtcc-upgrade-cta-wrap {
+	margin: 6px 0 0;
+}
+
+.nxtcc-upgrade-btn {
+	padding: 6px 16px !important;
+	border-radius: 6px !important;
+	font-size: 13px !important;
+	background: #075E54 !important;
+	border-color: #075E54 !important;
+	color: #ffffff !important;
+	font-weight: 600 !important;
+	text-decoration: none !important;
+}
+
+.nxtcc-upgrade-btn:hover,
+.nxtcc-upgrade-btn:focus {
+	background: #ffffff !important;
+	color: #075E54 !important;
+	border-color: #075E54 !important;
+}
+
+
+
