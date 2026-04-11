@@ -1,26 +1,29 @@
 ﻿=== NXT Cloud Chat ===
 Contributors: nxtwebsite
-Tags: whatsapp, whatsapp cloud api, chat, notifications, whatsapp login
+Tags: whatsapp, whatsapp cloud api, whatsapp chat, whatsapp login, woocommerce
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Connect WhatsApp Cloud API to WordPress for messaging, notifications, contact tools and WhatsApp-based login.
+WhatsApp Cloud API plugin for WordPress with chat, notifications, contacts, groups, message history, and WhatsApp OTP login.
 
 == Description ==
 
-NXT Cloud Chat connects your WordPress site to the official WhatsApp Cloud API so you can manage contacts, send structured notifications, and handle conversations from the WordPress admin.
+NXT Cloud Chat is a WhatsApp Cloud API plugin for WordPress. It helps you connect your WordPress site to the official WhatsApp Business Platform so you can manage WhatsApp chat, send notifications, organize contacts, and review message history from the WordPress admin.
 
-The plugin also provides a WhatsApp-based login and authentication widget for WordPress users. Visitors can sign in using their phone number and a one-time code delivered through WhatsApp, while their accounts remain normal WordPress users.
+The plugin also includes a WhatsApp login and authentication widget for WordPress users. Visitors can sign in using their phone number and a one-time password delivered through WhatsApp, while their accounts remain standard WordPress users.
+
+If you are looking for a WordPress WhatsApp plugin that combines WhatsApp Cloud API messaging with WhatsApp OTP login, NXT Cloud Chat is designed for that workflow.
 
 Key goals:
 
-* Keep all sensitive tokens stored on the server (not printed into page HTML or JS).
-* Make WhatsApp Cloud API usage more "WordPress-like" via familiar screens.
-* Provide a WhatsApp login/authentication flow alongside the existing WordPress login system.
+* Keep your WhatsApp configuration and authentication data self-hosted in your WordPress database and under your site's control.
+* Make WhatsApp Cloud API usage more WordPress-like through familiar admin screens.
+* Provide WhatsApp chat, contact management, and template-based notifications in one plugin.
+* Provide a WhatsApp login/authentication flow alongside the existing WordPress login system and WooCommerce login experience.
 * Offer a clean foundation that can be extended by developers or by an optional add-on.
 
 == External Services ==
@@ -64,32 +67,35 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 
 = WhatsApp Cloud API Integration =
 
+* Connect WordPress to the official WhatsApp Cloud API.
 * Store your WhatsApp access token on the server (no token printed into client-side JS).
-* Single-tenant configuration: App ID, Business Account ID, Phone Number ID.
-* Connection diagnostics to verify credentials and send a test template message.
-* Webhook callback URL helper with copy-ready URL, verify-token generator, and App Secret based webhook signature verification.
+* Configure App ID, App Secret, Business Account ID, Phone Number ID, and Access Token.
+* Use connection diagnostics to verify credentials and send a test template message.
+* Use the webhook callback URL helper with verify-token generation and App Secret based webhook signature verification.
 
 = Contact & Group Management =
 
-* Store WhatsApp contacts (phone, country, name, custom fields).
+* Store WhatsApp contacts with phone, country, name, and custom fields.
 * Track subscription status and unsubscribe reasons.
-* Organize contacts into groups for easier targeting (e.g. "VIP Customers", "Leads").
-* Schema prepared to support more advanced segmentation in future.
+* Organize contacts into groups for easier targeting, such as leads, members, or customers.
+* Use group-based organization to support better WhatsApp messaging workflows inside WordPress.
 
 = Chat Window & History =
 
-* Dedicated "Chat Window" screen to browse recent WhatsApp conversations.
-* Shows inbound and outbound messages with timestamps and basic contact details.
-* Media attachments (images, documents, etc.) can be downloaded via a secure media proxy.
-* Message history stored in a dedicated table with status fields and metadata for future reporting.
+* Dedicated Chat Window screen to browse recent WhatsApp conversations.
+* Review inbound and outbound WhatsApp messages with timestamps and contact details.
+* Download media attachments such as images and documents through a secure media proxy.
+* Store message history in dedicated tables with status fields and metadata for reporting and debugging.
 
 = WhatsApp Login & Authentication =
 
 * Front-end WhatsApp login widget via `[nxtcc_login_whatsapp]` shortcode.
-* OTP-based authentication over WhatsApp using phone numbers (e.g. `+1XXXXXXXXXX`).
+* WhatsApp OTP login using phone numbers such as `+1XXXXXXXXXX`.
 * Separate tables for OTP lifecycle and verified bindings to WordPress users.
 * Optional force-migration page that can guide users from password login to WhatsApp login.
-* Admin screen to configure OTP length, resend cooldown, allowed countries, and branding behavior.
+* Optional login buttons on the default WordPress login page and WooCommerce My Account login page.
+* Customizable login button text, colors, separator text, and corner style.
+* Admin screen to configure OTP length, resend cooldown, allowed countries, branding behavior, login button appearance, and login-page placement.
 
 = Admin Experience =
 
@@ -103,6 +109,7 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
   * Settings (Cloud API credentials and diagnostics)
   * Upgrade (integration info for optional extensions)
 * Admin actions protected with nonces and capability checks.
+* Installed Plugins screen links for documentation, community support, reviews, and feature suggestions.
 
 = Developer Friendly =
 
@@ -116,7 +123,7 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 NXT Cloud Chat includes a WhatsApp-based login/authentication flow for WordPress:
 
 * Shortcode: `[nxtcc_login_whatsapp]`
-* When placed on a page, this renders a login widget where users:
+* When placed on a page, this renders a WhatsApp login widget where users:
   1. Choose their country and enter their phone number.
   2. Receive a one-time code over WhatsApp (via your Cloud API account).
   3. Enter the code to verify, creating or binding a WordPress user account.
@@ -125,9 +132,11 @@ NXT Cloud Chat includes a WhatsApp-based login/authentication flow for WordPress
   * OTP length.
   * Resend cooldown.
   * Allowed countries for login.
+  * WordPress and WooCommerce login-page button placement.
+  * Custom login button text, colors, separator text, and corner style.
   * Whether to show or hide branding.
 
-This works alongside the standard WordPress login screen and can also be used on a dedicated "WhatsApp Login" page.
+This works alongside the standard WordPress login screen and can also be used on a dedicated WhatsApp Login page.
 
 == Installation ==
 
@@ -197,6 +206,14 @@ No. NXT Cloud Chat is an independent WordPress plugin that integrates with the o
 
 Yes. You can focus on the WhatsApp login/authentication features by configuring the WhatsApp Cloud API and placing the `[nxtcc_login_whatsapp]` shortcode on a dedicated page. Use of additional messaging tools is optional.
 
+=== Can I use the WhatsApp login widget on normal WordPress pages or page builders? ===
+
+Yes. The recommended method is to create a page and place the `[nxtcc_login_whatsapp]` shortcode on it. That page can then be used as your dedicated WhatsApp login page and linked from your site login flow.
+
+=== Does this support the WooCommerce login page? ===
+
+Yes. You can enable a WhatsApp login button on the WooCommerce My Account login form, and you can also enable the same style of button on the default WordPress login page.
+
 === Does the plugin store WhatsApp messages? ===
 
 The plugin stores message metadata and content in custom tables (for history and debugging) within your WordPress database. If you have specific data retention requirements, you can implement your own cleanup policies via custom code or database tools.
@@ -226,6 +243,12 @@ Use this with care in production environments.
 8. WhatsApp login widget embedded on a WordPress page.
 
 == Changelog ==
+
+= 1.0.1 =
+* Added WhatsApp login button support for the default WordPress login page and WooCommerce login page.
+* Added customizable login button appearance controls.
+* Improved dedicated login page and login widget behavior.
+* Refined readme content and listing metadata.
 
 = 1.0.0 =
 * Initial public release of NXT Cloud Chat.

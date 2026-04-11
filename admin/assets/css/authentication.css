@@ -8,7 +8,7 @@
 	box-shadow:0 1px 2px rgba(0,0,0,.04);
 }
 
-/* Card header — WhatsApp green */
+/* Card header - WhatsApp green */
 .nxtcc-auth-head{
 	display:flex;
 	align-items:center;
@@ -38,6 +38,7 @@
 	border:1px solid #d1d5db;
 	border-radius:8px;
 	background:#fff;
+	box-sizing:border-box;
 }
 .nxtcc-select:focus,.nxtcc-input:focus{
 	outline:2px solid #0A7C66;
@@ -58,11 +59,93 @@
 /* Grid for two-up settings blocks */
 .nxtcc-grid{
 	display:grid;
-	grid-template-columns:1fr 1fr;
+	grid-template-columns:repeat(2,minmax(0,50%));
 	gap:14px;
+}
+.nxtcc-grid > *{
+	min-width:0;
+}
+.nxtcc-stack{
+	display:flex;
+	flex-direction:column;
+}
+.nxtcc-stack > .nxtcc-field:last-child{
+	margin-bottom:0;
+}
+.nxtcc-grid-tight{
+	gap:10px;
+}
+.nxtcc-grid-tight > *{
+	min-width:0;
+}
+.nxtcc-grid-tight .nxtcc-input,
+.nxtcc-grid-tight .nxtcc-select{
+	width:100%;
+	min-width:0;
 }
 @media (max-width:900px){
 	.nxtcc-grid{grid-template-columns:1fr}
+}
+
+.nxtcc-check-block{
+	display:block;
+	margin-top:.75rem;
+}
+
+.nxtcc-ui-disabled{
+	opacity:.6;
+}
+
+.nxtcc-color{
+	width:72px;
+	height:40px;
+	padding:2px;
+	border:1px solid #d1d5db;
+	border-radius:8px;
+	background:#fff;
+}
+
+.nxtcc-auth-preview-wrap{
+	margin-top:.75rem;
+}
+
+.nxtcc-auth-preview{
+	border:1px solid #e5e7eb;
+	border-radius:10px;
+	background:#f9fafb;
+	padding:1rem;
+}
+
+.nxtcc-auth-preview-separator{
+	display:flex;
+	align-items:center;
+	gap:.75rem;
+	margin-bottom:.85rem;
+	color:#6b7280;
+	font-size:12.5px;
+	text-transform:uppercase;
+	letter-spacing:.04em;
+}
+
+.nxtcc-auth-preview-separator:before,
+.nxtcc-auth-preview-separator:after{
+	content:"";
+	flex:1 1 auto;
+	height:1px;
+	background:#d1d5db;
+}
+
+.nxtcc-auth-preview-btn{
+	width:100%;
+	min-height:44px;
+	border:0;
+	border-radius:999px;
+	font-weight:600;
+	cursor:default;
+}
+
+.nxtcc-auth-preview-btn.is-rectangle{
+	border-radius:8px;
 }
 
 /* Flash states */
@@ -72,7 +155,7 @@
 /* Error style used by JS notify() on help lines */
 .nxtcc-error{color:#b91c1c !important}
 
-/* Save button — WhatsApp green */
+/* Save button - WhatsApp green */
 .nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary{
 	background:#075E54;
 	border-color:#075E54;

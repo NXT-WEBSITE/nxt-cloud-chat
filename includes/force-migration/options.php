@@ -24,6 +24,7 @@ function nxtcc_fm_get_options(): array {
 		'force_path'        => '/nxt-whatsapp-login/',
 		'grace_enabled'     => 0,
 		'grace_days'        => 7,
+		'redirect_wp_login' => 0,
 		// Explicit opt-in only: do not show frontend attribution by default.
 		'widget_branding'   => 0,
 		'allowed_countries' => array(),
@@ -89,6 +90,7 @@ function nxtcc_fm_update_options( array $incoming ): bool {
 		'show_password',
 		'force_migrate',
 		'grace_enabled',
+		'redirect_wp_login',
 		'widget_branding',
 	);
 

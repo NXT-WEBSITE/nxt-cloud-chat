@@ -66,12 +66,14 @@ class NXTCC_Login_WhatsApp_Widget extends WP_Widget {
 
 		/*
 		 * Render the login widget markup.
-		 * The renderer is expected to return HTML; output is restricted to safe tags.
+		 * The renderer returns trusted plugin-generated form markup, including
+		 * select/input/button elements that wp_kses_post() would strip.
 		 */
 		if ( function_exists( 'nxtcc_render_login_whatsapp' ) ) {
 			$html = nxtcc_render_login_whatsapp( array() );
 			if ( is_string( $html ) && '' !== $html ) {
-				echo wp_kses_post( $html );
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Trusted plugin-generated widget markup.
+				echo $html;
 			}
 		}
 

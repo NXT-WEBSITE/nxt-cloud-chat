@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       Integrates WhatsApp Cloud API with WordPress to enable real-time messaging, automated notifications, customer communication, contact management, and secure WhatsApp-based user authentication and login.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.0.0' );
+	define( 'NXTCC_VERSION', '1.0.1' );
 }
 
 /**
@@ -59,6 +59,55 @@ if ( ! defined( 'NXTCC_PLUGIN_URL' ) ) {
 if ( ! defined( 'NXTCC_PLUGIN_BASENAME' ) ) {
 	define( 'NXTCC_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 }
+
+/**
+ * Add support and product links to the Installed Plugins screen.
+ *
+ * @param string[] $plugin_meta Existing plugin row meta links.
+ * @param string   $plugin_file Plugin basename being rendered.
+ * @return string[]
+ */
+function nxtcc_add_plugin_row_meta( array $plugin_meta, string $plugin_file ): array {
+	if ( NXTCC_PLUGIN_BASENAME !== $plugin_file ) {
+		return $plugin_meta;
+	}
+
+	$meta_links = array(
+		'user-guide'        => array(
+			'label' => __( 'User guide', 'nxt-cloud-chat' ),
+			'url'   => 'https://nxtcloudchat.com/user-guide/',
+		),
+		'community-support' => array(
+			'label' => __( 'Community support', 'nxt-cloud-chat' ),
+			'url'   => 'https://wordpress.org/support/plugin/nxt-cloud-chat/',
+		),
+		'rate-plugin'       => array(
+			'label' => __( 'Rate NXT Cloud Chat', 'nxt-cloud-chat' ),
+			'url'   => 'https://wordpress.org/support/plugin/nxt-cloud-chat/reviews/#new-post',
+		),
+		'suggest-feature'   => array(
+			'label' => __( 'Suggest a Feature', 'nxt-cloud-chat' ),
+			'url'   => 'https://nxtwebsite.com/wordpress/nxt-cloud-chat/feature-suggestion/',
+		),
+	);
+
+	foreach ( $meta_links as $meta_link ) {
+		$url = isset( $meta_link['url'] ) ? esc_url_raw( (string) $meta_link['url'] ) : '';
+		if ( '' === $url ) {
+			continue;
+		}
+
+		$label         = isset( $meta_link['label'] ) ? (string) $meta_link['label'] : '';
+		$plugin_meta[] = sprintf(
+			'<a href="%1$s" target="_blank" rel="noopener noreferrer">%2$s</a>',
+			esc_url( $url ),
+			esc_html( $label )
+		);
+	}
+
+	return $plugin_meta;
+}
+add_filter( 'plugin_row_meta', 'nxtcc_add_plugin_row_meta', 10, 2 );
 
 /**
  * Detect whether the Pro add-on is active.
@@ -511,6 +560,31 @@ add_action(
 	}
 );
 
+/**
+ * Get canonical defaults for authentication UI options.
+ *
+ * @return array<string,mixed>
+ */
+function nxtcc_auth_get_ui_defaults(): array {
+	return array(
+		'otp_len'                 => 6,
+		'resend_cooldown'         => 30,
+		'terms_url'               => '',
+		'privacy_url'             => '',
+		'auto_sync'               => 0,
+		'auth_template'           => '',
+		'default_tenant_key'      => '',
+		'login_page_url'          => '',
+		'login_button_wp'         => 0,
+		'login_button_wc'         => 0,
+		'login_button_text'       => 'Login with WhatsApp',
+		'login_button_separator'  => 'or',
+		'login_button_bg'         => '#25D366',
+		'login_button_text_color' => '#FFFFFF',
+		'login_button_corner'     => 'rounded',
+	);
+}
+
 
 /**
  * Authentication admin page assets (options/policy hydration).
@@ -560,20 +634,8 @@ add_action(
 			true
 		);
 
-		$raw_opts = get_option( 'nxtcc_auth_options', array() );
-		if ( ! is_array( $raw_opts ) ) {
-			$raw_opts = array();
-		}
-
-		$opts = array(
-			'otp_len'            => isset( $raw_opts['otp_len'] ) ? (int) $raw_opts['otp_len'] : 6,
-			'resend_cooldown'    => isset( $raw_opts['resend_cooldown'] ) ? (int) $raw_opts['resend_cooldown'] : 30,
-			'terms_url'          => isset( $raw_opts['terms_url'] ) ? (string) $raw_opts['terms_url'] : '',
-			'privacy_url'        => isset( $raw_opts['privacy_url'] ) ? (string) $raw_opts['privacy_url'] : '',
-			'auto_sync'          => ! empty( $raw_opts['auto_sync'] ) ? 1 : 0,
-			'auth_template'      => isset( $raw_opts['auth_template'] ) ? (string) $raw_opts['auth_template'] : '',
-			'default_tenant_key' => isset( $raw_opts['default_tenant_key'] ) ? (string) $raw_opts['default_tenant_key'] : '',
-		);
+		$defaults = nxtcc_auth_get_ui_defaults();
+		$opts     = nxtcc_auth_get_ui_options();
 
 		$raw_policy = array();
 		if ( function_exists( 'nxtcc_fm_get_options' ) ) {
@@ -599,6 +661,7 @@ add_action(
 			'force_path'        => $force_path,
 			'grace_enabled'     => ! empty( $raw_policy['grace_enabled'] ) ? 1 : 0,
 			'grace_days'        => isset( $raw_policy['grace_days'] ) ? max( 1, min( 90, (int) $raw_policy['grace_days'] ) ) : 7,
+			'redirect_wp_login' => ! empty( $raw_policy['redirect_wp_login'] ) ? 1 : 0,
 			'widget_branding'   => ! empty( $raw_policy['widget_branding'] ) ? 1 : 0,
 			'allowed_countries' => array_values(
 				array_unique(
@@ -618,12 +681,341 @@ add_action(
 				'nonce'         => wp_create_nonce( 'nxtcc_auth_admin' ),
 				'countryJson'   => NXTCC_PLUGIN_URL . 'languages/nxtcc-country-codes.json',
 				'savedTemplate' => $opts['auth_template'],
+				'defaults'      => $defaults,
 				'opts'          => $opts,
 				'policy'        => $policy,
+				'wooActive'     => class_exists( 'WooCommerce' ) ? 1 : 0,
 			)
 		);
 	}
 );
+
+/**
+ * Get normalized authentication UI options.
+ *
+ * @return array<string,mixed>
+ */
+function nxtcc_auth_get_ui_options(): array {
+	$defaults = nxtcc_auth_get_ui_defaults();
+	$raw_opts = get_option( 'nxtcc_auth_options', array() );
+	if ( ! is_array( $raw_opts ) ) {
+		$raw_opts = array();
+	}
+
+	$button_text = isset( $raw_opts['login_button_text'] ) ? sanitize_text_field( (string) $raw_opts['login_button_text'] ) : (string) $defaults['login_button_text'];
+	if ( '' === $button_text ) {
+		$button_text = (string) $defaults['login_button_text'];
+	}
+
+	$separator_text = isset( $raw_opts['login_button_separator'] ) ? sanitize_text_field( (string) $raw_opts['login_button_separator'] ) : (string) $defaults['login_button_separator'];
+	if ( '' === $separator_text ) {
+		$separator_text = (string) $defaults['login_button_separator'];
+	}
+
+	$button_bg = isset( $raw_opts['login_button_bg'] ) ? sanitize_hex_color( (string) $raw_opts['login_button_bg'] ) : '';
+	if ( ! is_string( $button_bg ) || '' === $button_bg ) {
+		$button_bg = (string) $defaults['login_button_bg'];
+	}
+
+	$button_text_color = isset( $raw_opts['login_button_text_color'] ) ? sanitize_hex_color( (string) $raw_opts['login_button_text_color'] ) : '';
+	if ( ! is_string( $button_text_color ) || '' === $button_text_color ) {
+		$button_text_color = (string) $defaults['login_button_text_color'];
+	}
+
+	$button_corner = isset( $raw_opts['login_button_corner'] ) ? sanitize_key( (string) $raw_opts['login_button_corner'] ) : (string) $defaults['login_button_corner'];
+	if ( ! in_array( $button_corner, array( 'rounded', 'rectangle' ), true ) ) {
+		$button_corner = (string) $defaults['login_button_corner'];
+	}
+
+	return array(
+		'otp_len'                 => isset( $raw_opts['otp_len'] ) ? (int) $raw_opts['otp_len'] : (int) $defaults['otp_len'],
+		'resend_cooldown'         => isset( $raw_opts['resend_cooldown'] ) ? (int) $raw_opts['resend_cooldown'] : (int) $defaults['resend_cooldown'],
+		'terms_url'               => isset( $raw_opts['terms_url'] ) ? (string) $raw_opts['terms_url'] : (string) $defaults['terms_url'],
+		'privacy_url'             => isset( $raw_opts['privacy_url'] ) ? (string) $raw_opts['privacy_url'] : (string) $defaults['privacy_url'],
+		'auto_sync'               => ! empty( $raw_opts['auto_sync'] ) ? 1 : (int) $defaults['auto_sync'],
+		'auth_template'           => isset( $raw_opts['auth_template'] ) ? (string) $raw_opts['auth_template'] : (string) $defaults['auth_template'],
+		'default_tenant_key'      => isset( $raw_opts['default_tenant_key'] ) ? (string) $raw_opts['default_tenant_key'] : (string) $defaults['default_tenant_key'],
+		'login_page_url'          => isset( $raw_opts['login_page_url'] ) ? sanitize_text_field( (string) $raw_opts['login_page_url'] ) : (string) $defaults['login_page_url'],
+		'login_button_wp'         => ! empty( $raw_opts['login_button_wp'] ) ? 1 : (int) $defaults['login_button_wp'],
+		'login_button_wc'         => ! empty( $raw_opts['login_button_wc'] ) ? 1 : (int) $defaults['login_button_wc'],
+		'login_button_text'       => $button_text,
+		'login_button_separator'  => $separator_text,
+		'login_button_bg'         => $button_bg,
+		'login_button_text_color' => $button_text_color,
+		'login_button_corner'     => $button_corner,
+	);
+}
+
+/**
+ * Get the public authentication landing URL.
+ *
+ * @return string
+ */
+function nxtcc_auth_get_public_login_url(): string {
+	$opts = nxtcc_auth_get_ui_options();
+
+	$login_page_url = isset( $opts['login_page_url'] ) ? trim( (string) $opts['login_page_url'] ) : '';
+	if ( '' !== $login_page_url ) {
+		$target_url = $login_page_url;
+		if ( 0 !== strpos( $login_page_url, 'http://' ) && 0 !== strpos( $login_page_url, 'https://' ) ) {
+			if ( '/' !== substr( $login_page_url, 0, 1 ) ) {
+				$login_page_url = '/' . $login_page_url;
+			}
+
+			$target_url = (string) home_url( $login_page_url );
+		}
+
+		$target_url = esc_url_raw( $target_url );
+		$home_host  = wp_parse_url( home_url( '/' ), PHP_URL_HOST );
+		$url_host   = wp_parse_url( $target_url, PHP_URL_HOST );
+		$url_path   = wp_parse_url( $target_url, PHP_URL_PATH );
+		$login_path = wp_parse_url( wp_login_url(), PHP_URL_PATH );
+
+		if (
+			is_string( $target_url ) &&
+			'' !== $target_url &&
+			is_string( $home_host ) &&
+			is_string( $url_host ) &&
+			0 === strcasecmp( $home_host, $url_host ) &&
+			is_string( $url_path ) &&
+			is_string( $login_path ) &&
+			untrailingslashit( $url_path ) !== untrailingslashit( $login_path )
+		) {
+			return $target_url;
+		}
+	}
+
+	$policy = function_exists( 'nxtcc_fm_get_options' ) ? nxtcc_fm_get_options() : get_option( 'nxtcc_auth_policy', array() );
+	if ( ! is_array( $policy ) ) {
+		$policy = array();
+	}
+
+	$force_path = isset( $policy['force_path'] ) ? (string) $policy['force_path'] : '/nxt-whatsapp-login/';
+	if ( function_exists( 'nxtcc_fm_normalize_force_path' ) ) {
+		$force_path = nxtcc_fm_normalize_force_path( $force_path );
+	}
+
+	return (string) home_url( $force_path );
+}
+
+/**
+ * Enqueue the shared front-end auth stylesheet.
+ *
+ * @return void
+ */
+function nxtcc_auth_enqueue_frontend_style(): void {
+	if ( wp_style_is( 'nxtcc-login-widget', 'enqueued' ) ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'nxtcc-login-widget',
+		NXTCC_PLUGIN_URL . 'frontend/css/login-widget.css',
+		array(),
+		NXTCC_VERSION
+	);
+}
+
+/**
+ * Render a WhatsApp login entry button for third-party login screens.
+ *
+ * @param string $context Render context (`wp` or `wc`).
+ * @return string
+ */
+function nxtcc_auth_render_login_entry_markup( string $context = 'wp' ): string {
+	$context = sanitize_key( $context );
+	$opts    = nxtcc_auth_get_ui_options();
+
+	if ( 'wc' === $context ) {
+		if ( empty( $opts['login_button_wc'] ) || ! class_exists( 'WooCommerce' ) ) {
+			return '';
+		}
+	} elseif ( empty( $opts['login_button_wp'] ) ) {
+		return '';
+	}
+
+	$button_classes = 'nxtcc-login-entry-btn';
+	if ( 'rectangle' === (string) $opts['login_button_corner'] ) {
+		$button_classes .= ' is-rectangle';
+	}
+
+	$style = sprintf(
+		'--nxtcc-login-btn-bg:%1$s;--nxtcc-login-btn-text:%2$s;',
+		esc_attr( (string) $opts['login_button_bg'] ),
+		esc_attr( (string) $opts['login_button_text_color'] )
+	);
+
+	$url       = nxtcc_auth_get_public_login_url();
+	$separator = (string) $opts['login_button_separator'];
+	$label     = (string) $opts['login_button_text'];
+
+	ob_start();
+	?>
+	<div class="nxtcc-login-entry nxtcc-login-entry-<?php echo esc_attr( $context ); ?>" style="<?php echo esc_attr( $style ); ?>">
+		<div class="nxtcc-login-entry-separator">
+			<span><?php echo esc_html( $separator ); ?></span>
+		</div>
+		<a class="<?php echo esc_attr( $button_classes ); ?>" href="<?php echo esc_url( $url ); ?>">
+			<?php echo esc_html( $label ); ?>
+		</a>
+	</div>
+	<?php
+	return (string) ob_get_clean();
+}
+
+/**
+ * Output the login button on the core WordPress login screen.
+ *
+ * @return void
+ */
+function nxtcc_auth_output_wp_login_button(): void {
+	$action = filter_input( INPUT_GET, 'action', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	$action = is_string( $action ) ? sanitize_key( $action ) : '';
+	if ( '' !== $action && 'login' !== $action ) {
+		return;
+	}
+
+	$markup = nxtcc_auth_render_login_entry_markup( 'wp' );
+	if ( '' === $markup ) {
+		return;
+	}
+
+	nxtcc_auth_enqueue_frontend_style();
+	echo wp_kses(
+		$markup,
+		array(
+			'div'  => array(
+				'class' => true,
+				'style' => true,
+			),
+			'span' => array(
+				'class' => true,
+			),
+			'a'    => array(
+				'class' => true,
+				'href'  => true,
+			),
+		)
+	);
+
+	$script = "(function(){var entry=document.querySelector('.nxtcc-login-entry-wp');var form=document.getElementById('loginform');if(!entry||!form){return;}var submit=form.querySelector('p.submit');if(!submit||submit.nextElementSibling===entry){return;}var parent=submit.parentNode;if(!parent){return;}if(!submit.nextSibling){parent.appendChild(entry);return;}var tail=document.createDocumentFragment();while(submit.nextSibling){tail.appendChild(submit.nextSibling);}parent.appendChild(entry);parent.appendChild(tail);}());";
+
+	if ( function_exists( 'wp_print_inline_script_tag' ) ) {
+		wp_print_inline_script_tag( $script );
+	}
+}
+add_action( 'login_footer', 'nxtcc_auth_output_wp_login_button' );
+
+/**
+ * Output the login button on the WooCommerce login form.
+ *
+ * @return void
+ */
+function nxtcc_auth_output_wc_login_button(): void {
+	$markup = nxtcc_auth_render_login_entry_markup( 'wc' );
+	if ( '' === $markup ) {
+		return;
+	}
+
+	nxtcc_auth_enqueue_frontend_style();
+	echo wp_kses(
+		$markup,
+		array(
+			'div'  => array(
+				'class' => true,
+				'style' => true,
+			),
+			'span' => array(
+				'class' => true,
+			),
+			'a'    => array(
+				'class' => true,
+				'href'  => true,
+			),
+		)
+	);
+}
+add_action( 'woocommerce_login_form_end', 'nxtcc_auth_output_wc_login_button' );
+
+/**
+ * Enqueue login-button styles on login and WooCommerce account screens.
+ *
+ * @return void
+ */
+function nxtcc_auth_enqueue_login_entry_assets(): void {
+	$opts = nxtcc_auth_get_ui_options();
+
+	if ( ! empty( $opts['login_button_wp'] ) ) {
+		nxtcc_auth_enqueue_frontend_style();
+	}
+}
+add_action( 'login_enqueue_scripts', 'nxtcc_auth_enqueue_login_entry_assets' );
+
+/**
+ * Enqueue login-button styles on WooCommerce My Account.
+ *
+ * @return void
+ */
+function nxtcc_auth_enqueue_woocommerce_login_entry_assets(): void {
+	if ( is_admin() || ! class_exists( 'WooCommerce' ) || ! function_exists( 'is_account_page' ) ) {
+		return;
+	}
+
+	if ( ! is_account_page() ) {
+		return;
+	}
+
+	$opts = nxtcc_auth_get_ui_options();
+	if ( empty( $opts['login_button_wc'] ) ) {
+		return;
+	}
+
+	nxtcc_auth_enqueue_frontend_style();
+}
+add_action( 'wp_enqueue_scripts', 'nxtcc_auth_enqueue_woocommerce_login_entry_assets' );
+
+/**
+ * Redirect wp-login.php to the WhatsApp login page when explicitly enabled.
+ *
+ * @return void
+ */
+function nxtcc_auth_maybe_redirect_wp_login(): void {
+	$policy = function_exists( 'nxtcc_fm_get_options' ) ? nxtcc_fm_get_options() : get_option( 'nxtcc_auth_policy', array() );
+	if ( ! is_array( $policy ) ) {
+		$policy = array();
+	}
+
+	if ( ! empty( $policy['show_password'] ) || empty( $policy['redirect_wp_login'] ) ) {
+		return;
+	}
+
+	$method = filter_input( INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	$method = is_string( $method ) ? strtoupper( sanitize_text_field( $method ) ) : 'GET';
+	if ( 'GET' !== $method ) {
+		return;
+	}
+
+	if ( is_user_logged_in() ) {
+		return;
+	}
+
+	$action = filter_input( INPUT_GET, 'action', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	$action = is_string( $action ) ? sanitize_key( $action ) : '';
+	if ( in_array( $action, array( 'logout', 'lostpassword', 'retrievepassword', 'resetpass', 'rp', 'register', 'postpass', 'confirmaction' ), true ) ) {
+		return;
+	}
+
+	$interim = filter_input( INPUT_GET, 'interim-login', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	$reauth  = filter_input( INPUT_GET, 'reauth', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	$check   = filter_input( INPUT_GET, 'checkemail', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	if ( null !== $interim || null !== $reauth || null !== $check ) {
+		return;
+	}
+
+	wp_safe_redirect( nxtcc_auth_get_public_login_url() );
+	exit;
+}
+add_action( 'login_init', 'nxtcc_auth_maybe_redirect_wp_login', 1 );
 
 /**
  * Render the WhatsApp login widget via shortcode.

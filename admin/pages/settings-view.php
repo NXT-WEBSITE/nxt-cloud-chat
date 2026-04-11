@@ -96,7 +96,7 @@ $nxtcc_ajax_nonce = wp_create_nonce( 'nxtcc_admin_ajax' );
 
 			<div class="nxtcc-form-row">
 				<label for="nxtcc_app_secret">
-					<?php echo esc_html__( 'App Secret (Webhook Signature)', 'nxt-cloud-chat' ); ?>
+					<?php echo esc_html__( 'App Secret', 'nxt-cloud-chat' ); ?>
 				</label>
 				<div class="nxtcc-inline-row nxtcc-token-inline">
 					<input

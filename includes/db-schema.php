@@ -130,7 +130,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 ) {$nxtcc_charset_collate};",
 
 			/*
-			---------------------- Group â†’ Contact map -----------------------
+			---------------------- Group -> Contact map -----------------------
 		*/
 
 			/*

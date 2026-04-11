@@ -5,9 +5,8 @@
  * Behavior:
  * - If the request is NOT the force path, do nothing.
  * - If the request is AJAX or REST, do nothing.
- * - If the user is NOT logged in, redirect to home.
  * - If the user is logged in AND WhatsApp verified, redirect to home.
- * - Otherwise, render a bare verification page (no theme header/footer).
+ * - Otherwise, render a bare public login/verification page (no theme header/footer).
  *
  * @package NXTCC
  */
@@ -32,7 +31,7 @@ add_action( 'init', 'nxtcc_fm_page_router_init', 1 );
  * @return void
  */
 function nxtcc_fm_page_enqueue_bare_styles(): void {
-	wp_register_style( 'nxtcc-fm-bare', false, array(), '1.0.0' );
+	wp_register_style( 'nxtcc-fm-bare', false, array(), NXTCC_VERSION );
 	wp_enqueue_style( 'nxtcc-fm-bare' );
 
 	$css = '
@@ -109,27 +108,22 @@ function nxtcc_fm_page_router_maybe_route(): void {
 	$redirect_url     = wp_validate_redirect( $filtered, $default_redirect );
 
 	/*
-	 * Condition 1: user not logged in.
+	 * Logged-in users who are already verified do not need this screen.
 	 */
-	if ( ! is_user_logged_in() ) {
-		wp_safe_redirect( $redirect_url );
-		exit;
+	if ( is_user_logged_in() ) {
+		$is_verified = false;
+		if ( function_exists( 'nxtcc_is_user_whatsapp_verified' ) ) {
+			$is_verified = (bool) nxtcc_is_user_whatsapp_verified( get_current_user_id() );
+		}
+		if ( $is_verified ) {
+			wp_safe_redirect( $redirect_url );
+			exit;
+		}
 	}
 
 	/*
-	 * Condition 2: user logged in AND WhatsApp verified.
-	 */
-	$is_verified = false;
-	if ( function_exists( 'nxtcc_is_user_whatsapp_verified' ) ) {
-		$is_verified = (bool) nxtcc_is_user_whatsapp_verified( get_current_user_id() );
-	}
-	if ( $is_verified ) {
-		wp_safe_redirect( $redirect_url );
-		exit;
-	}
-
-	/*
-	 * Condition 3: logged in but NOT verified.
+	 * For anonymous visitors and logged-in-but-unverified users, render the
+	 * WhatsApp login page directly.
 	 */
 	status_header( 200 );
 	nocache_headers();

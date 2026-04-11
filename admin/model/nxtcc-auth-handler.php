@@ -521,9 +521,10 @@ function nxtcc_ajax_generate_default_template(): void {
  * AJAX: Save OTP widget settings and policy.
  *
  * - Options: otp_len, resend_cooldown, terms_url, privacy_url, auto_sync,
- *   auth_template, default_tenant_key.
+ *   auth_template, default_tenant_key, login page target, login button
+ *   placement/appearance.
  * - Policy: show_password, force_migrate, grace_enabled, widget_branding,
- *   force_path, grace_days, allowed_countries.
+ *   force_path, grace_days, redirect_wp_login, allowed_countries.
  *
  * @return void
  */
@@ -538,12 +539,13 @@ function nxtcc_ajax_save_auth_options(): void {
 	if ( ! is_array( $opts ) ) {
 		$opts = array();
 	}
+	$defaults = nxtcc_auth_get_ui_defaults();
 
-	$otp_len         = isset( $_POST['otp_len'] ) ? (int) sanitize_text_field( wp_unslash( (string) $_POST['otp_len'] ) ) : 6;
+	$otp_len         = isset( $_POST['otp_len'] ) ? (int) sanitize_text_field( wp_unslash( (string) $_POST['otp_len'] ) ) : (int) $defaults['otp_len'];
 	$otp_len         = max( 4, min( 8, $otp_len ) );
 	$opts['otp_len'] = $otp_len;
 
-	$resend_cooldown         = isset( $_POST['resend_cooldown'] ) ? (int) sanitize_text_field( wp_unslash( (string) $_POST['resend_cooldown'] ) ) : 30;
+	$resend_cooldown         = isset( $_POST['resend_cooldown'] ) ? (int) sanitize_text_field( wp_unslash( (string) $_POST['resend_cooldown'] ) ) : (int) $defaults['resend_cooldown'];
 	$resend_cooldown         = max( 10, min( 300, $resend_cooldown ) );
 	$opts['resend_cooldown'] = $resend_cooldown;
 
@@ -556,10 +558,47 @@ function nxtcc_ajax_save_auth_options(): void {
 
 	$opts['auth_template'] = $auth_tpl;
 
+	$opts['login_button_wp'] = ! empty( $_POST['login_button_wp'] ) ? 1 : 0;
+	$opts['login_button_wc'] = ! empty( $_POST['login_button_wc'] ) ? 1 : 0;
+
+	$button_text = isset( $_POST['login_button_text'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['login_button_text'] ) ) : (string) $defaults['login_button_text'];
+	$button_text = trim( $button_text );
+	if ( '' === $button_text ) {
+		$button_text = (string) $defaults['login_button_text'];
+	}
+	$opts['login_button_text'] = $button_text;
+
+	$separator_text = isset( $_POST['login_button_separator'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['login_button_separator'] ) ) : (string) $defaults['login_button_separator'];
+	$separator_text = trim( $separator_text );
+	if ( '' === $separator_text ) {
+		$separator_text = (string) $defaults['login_button_separator'];
+	}
+	$opts['login_button_separator'] = $separator_text;
+
+	$button_bg = isset( $_POST['login_button_bg'] ) ? sanitize_hex_color( wp_unslash( (string) $_POST['login_button_bg'] ) ) : '';
+	if ( ! is_string( $button_bg ) || '' === $button_bg ) {
+		$button_bg = (string) $defaults['login_button_bg'];
+	}
+	$opts['login_button_bg'] = $button_bg;
+
+	$button_text_color = isset( $_POST['login_button_text_color'] ) ? sanitize_hex_color( wp_unslash( (string) $_POST['login_button_text_color'] ) ) : '';
+	if ( ! is_string( $button_text_color ) || '' === $button_text_color ) {
+		$button_text_color = (string) $defaults['login_button_text_color'];
+	}
+	$opts['login_button_text_color'] = $button_text_color;
+
+	$button_corner = isset( $_POST['login_button_corner'] ) ? sanitize_key( wp_unslash( (string) $_POST['login_button_corner'] ) ) : (string) $defaults['login_button_corner'];
+	if ( ! in_array( $button_corner, array( 'rounded', 'rectangle' ), true ) ) {
+		$button_corner = (string) $defaults['login_button_corner'];
+	}
+	$opts['login_button_corner'] = $button_corner;
+
 	if ( isset( $_POST['default_tenant_key'] ) ) {
 		$mail                       = sanitize_email( wp_unslash( (string) $_POST['default_tenant_key'] ) );
 		$opts['default_tenant_key'] = $mail;
 	}
+
+	$opts['login_page_url'] = isset( $_POST['login_page_url'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['login_page_url'] ) ) : '';
 
 	update_option( 'nxtcc_auth_options', $opts );
 
@@ -568,10 +607,11 @@ function nxtcc_ajax_save_auth_options(): void {
 		$policy = array();
 	}
 
-	$policy['show_password']   = ! empty( $_POST['show_password'] ) ? 1 : 0;
-	$policy['force_migrate']   = ! empty( $_POST['force_migrate'] ) ? 1 : 0;
-	$policy['grace_enabled']   = ! empty( $_POST['grace_enabled'] ) ? 1 : 0;
-	$policy['widget_branding'] = ! empty( $_POST['widget_branding'] ) ? 1 : 0;
+	$policy['show_password']     = ! empty( $_POST['show_password'] ) ? 1 : 0;
+	$policy['force_migrate']     = ! empty( $_POST['force_migrate'] ) ? 1 : 0;
+	$policy['grace_enabled']     = ! empty( $_POST['grace_enabled'] ) ? 1 : 0;
+	$policy['redirect_wp_login'] = ! empty( $_POST['redirect_wp_login'] ) ? 1 : 0;
+	$policy['widget_branding']   = ! empty( $_POST['widget_branding'] ) ? 1 : 0;
 
 	$force_path = isset( $_POST['force_path'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['force_path'] ) ) : '/nxt-whatsapp-login/';
 	$force_path = trim( $force_path );
@@ -630,21 +670,14 @@ function nxtcc_ajax_save_auth_options(): void {
 	wp_send_json_success(
 		array(
 			'saved'  => true,
-			'opts'   => array(
-				'otp_len'            => (int) ( $opts['otp_len'] ?? 6 ),
-				'resend_cooldown'    => (int) ( $opts['resend_cooldown'] ?? 30 ),
-				'terms_url'          => (string) ( $opts['terms_url'] ?? '' ),
-				'privacy_url'        => (string) ( $opts['privacy_url'] ?? '' ),
-				'auto_sync'          => (int) ( $opts['auto_sync'] ?? 0 ),
-				'auth_template'      => (string) ( $opts['auth_template'] ?? '' ),
-				'default_tenant_key' => (string) ( $opts['default_tenant_key'] ?? '' ),
-			),
+			'opts'   => nxtcc_auth_get_ui_options(),
 			'policy' => array(
 				'show_password'     => (int) ( $policy['show_password'] ?? 1 ),
 				'force_migrate'     => (int) ( $policy['force_migrate'] ?? 0 ),
 				'force_path'        => (string) ( $policy['force_path'] ?? '/nxt-whatsapp-login/' ),
 				'grace_enabled'     => (int) ( $policy['grace_enabled'] ?? 0 ),
 				'grace_days'        => (int) ( $policy['grace_days'] ?? 7 ),
+				'redirect_wp_login' => (int) ( $policy['redirect_wp_login'] ?? 0 ),
 				'widget_branding'   => (int) ( $policy['widget_branding'] ?? 0 ),
 				'allowed_countries' => array_map( 'strval', (array) ( $policy['allowed_countries'] ?? array() ) ),
 			),

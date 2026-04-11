@@ -52,6 +52,16 @@ $nxtcc_default_icon_url  = file_exists( $nxtcc_default_icon_path )
 $nxtcc_my_account_url = trailingslashit( $nxtcc_author_uri ) . 'my-account/';
 
 /**
+ * Preferred product page for upgrade / learn-more CTAs.
+ *
+ * Falls back to Author URI when the preferred URL is unavailable.
+ */
+$nxtcc_product_url = 'https://nxtwebsite.com/wordpress/nxt-cloud-chat/';
+if ( '' === esc_url_raw( $nxtcc_product_url ) ) {
+	$nxtcc_product_url = $nxtcc_author_uri;
+}
+
+/**
  * Add-ons list.
  *
  * Keys are internal identifiers. Each item may define:
@@ -68,11 +78,11 @@ $nxtcc_addons = array(
 		'description' => __( 'Unlock templates, Bulk messaging, WooCommerce automation, and priority support.', 'nxt-cloud-chat' ),
 		'primary'     => array(
 			'label' => __( 'Upgrade', 'nxt-cloud-chat' ),
-			'url'   => $nxtcc_author_uri,
+			'url'   => $nxtcc_product_url,
 		),
 		'secondary'   => array(
 			'label' => __( 'Learn More', 'nxt-cloud-chat' ),
-			'url'   => $nxtcc_author_uri,
+			'url'   => $nxtcc_product_url,
 		),
 	),
 );

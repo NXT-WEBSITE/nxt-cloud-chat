@@ -112,7 +112,7 @@ if ( function_exists( 'get_file_data' ) && file_exists( $nxtcc_plugin_file ) ) {
 		$nxtcc_plugin_file,
 		array(
 			'Name'      => 'Plugin Name',
-			'AuthorURI' => 'Author URI',
+			'PluginURI' => 'Plugin URI',
 		),
 		'plugin'
 	);
@@ -121,8 +121,8 @@ if ( function_exists( 'get_file_data' ) && file_exists( $nxtcc_plugin_file ) ) {
 		$nxtcc_brand_name = (string) $nxtcc_plugin_data['Name'];
 	}
 
-	if ( ! empty( $nxtcc_plugin_data['AuthorURI'] ) ) {
-		$nxtcc_brand_url = (string) $nxtcc_plugin_data['AuthorURI'];
+	if ( ! empty( $nxtcc_plugin_data['PluginURI'] ) ) {
+		$nxtcc_brand_url = (string) $nxtcc_plugin_data['PluginURI'];
 	}
 }
 ?>
@@ -164,7 +164,7 @@ if ( function_exists( 'get_file_data' ) && file_exists( $nxtcc_plugin_file ) ) {
 				</div>
 
 				<p class="nxtcc-help" id="<?php echo esc_attr( $nxtcc_uid ); ?>-help-phone">
-					<?php esc_html_e( 'We’ll send a one-time passcode via WhatsApp.', 'nxt-cloud-chat' ); ?>
+					<?php esc_html_e( "We'll send a one-time passcode via WhatsApp.", 'nxt-cloud-chat' ); ?>
 				</p>
 
 				<div class="nxtcc-actions">
@@ -217,7 +217,7 @@ if ( function_exists( 'get_file_data' ) && file_exists( $nxtcc_plugin_file ) ) {
 					</button>
 
 					<?php if ( $nxtcc_logged_in ) : ?>
-						<a class="nxtcc-link-alt" href="<?php echo esc_url( $nxtcc_logout_url ); ?>" style="margin-left:auto">
+						<a class="nxtcc-link-alt" href="<?php echo esc_url( $nxtcc_logout_url ); ?>">
 							<?php esc_html_e( 'Logout', 'nxt-cloud-chat' ); ?>
 						</a>
 					<?php endif; ?>
@@ -253,11 +253,6 @@ if ( function_exists( 'get_file_data' ) && file_exists( $nxtcc_plugin_file ) ) {
 				</div>
 			<?php endif; ?>
 
-			<noscript>
-				<p class="nxtcc-noscript">
-					<?php esc_html_e( 'JavaScript is required to use WhatsApp login. Please enable JavaScript and reload this page.', 'nxt-cloud-chat' ); ?>
-				</p>
-			</noscript>
 		</div>
 	</div>
 </div>

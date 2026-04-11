@@ -9,10 +9,13 @@
 jQuery( function ( $ ) {
 	'use strict';
 
-	const $widget = $( '.nxtcc-auth-widget' ).first();
-	if ( ! $widget.length ) {
-		return;
-	}
+	function nxtccInitAuthWidget( widgetEl ) {
+		const $widget = $( widgetEl );
+		if ( ! $widget.length || $widget.data( 'nxtccInit' ) ) {
+			return;
+		}
+
+		$widget.data( 'nxtccInit', 1 );
 
 	/**
 	 * I18n helper (fallback to identity if wp.i18n not present).
@@ -33,7 +36,7 @@ jQuery( function ( $ ) {
 	const $btnSend  = $widget.find( '.nxtcc-btn-send' );
 	const $errPhone = $widget.find( '.nxtcc-error-phone' );
 
-	// Elements (Step 2 – OTP).
+	// Elements (Step 2 - OTP).
 	const $stepPhone  = $widget.find( '.nxtcc-step-phone' );
 	const $stepOtp    = $widget.find( '.nxtcc-step-otp' );
 	const $otpTarget  = $widget.find( '.nxtcc-otp-target' );
@@ -180,6 +183,47 @@ jQuery( function ( $ ) {
 		}
 	}
 
+	function formatDialLabel( dial ) {
+		const cleanDial = String( dial || '' ).trim();
+		if ( ! cleanDial ) {
+			return '';
+		}
+
+		return cleanDial.startsWith( '+' ) ? cleanDial : '+' + cleanDial;
+	}
+
+	function formatCountryOptionLabel( iso, isDropdownOpen ) {
+		const meta = COUNTRY_MAP[ iso ] || {};
+		const name = String( meta.name || iso ).trim();
+		const code = String( iso || '' ).toUpperCase();
+		const dial = formatDialLabel( meta.dial_code || '' );
+		const dialWrapped = dial ? '(' + dial + ')' : '';
+
+		if ( isDropdownOpen ) {
+			return dialWrapped ? name + ' ' + dialWrapped : name;
+		}
+
+		return dialWrapped ? code + ' ' + dialWrapped : code;
+	}
+
+	function syncCountryOptionLabels( isDropdownOpen ) {
+		const selectedIso = selectedCode();
+
+		$country.find( 'option' ).each( function () {
+			const iso = String( $( this ).val() || '' ).toUpperCase();
+			if ( ! COUNTRY_MAP[ iso ] ) {
+				return;
+			}
+
+			if ( ! isDropdownOpen && iso !== selectedIso ) {
+				$( this ).text( formatCountryOptionLabel( iso, true ) );
+				return;
+			}
+
+			$( this ).text( formatCountryOptionLabel( iso, isDropdownOpen ) );
+		} );
+	}
+
 	function isPhoneValid() {
 		const meta = getSelectedMeta().meta;
 		const need = exDigitsLen( meta.example_format );
@@ -207,11 +251,12 @@ jQuery( function ( $ ) {
 				return;
 			}
 
-			const label = dial.startsWith( '+' ) ? dial : '+' + dial;
+			const label = formatDialLabel( dial );
 			const $opt  = $( '<option>', {
 				value: iso,
 				'data-dial': label,
-				text: label,
+				'data-country-name': String( m.name || iso ),
+				text: formatCountryOptionLabel( iso, true ),
 			} );
 
 			$country.get( 0 ).appendChild( $opt.get( 0 ) );
@@ -296,13 +341,17 @@ jQuery( function ( $ ) {
 					return;
 				}
 
-				const label = dial.startsWith( '+' ) ? dial : '+' + dial;
+				const label = formatDialLabel( dial );
 
-				$( this ).attr( 'data-dial', label ).text( label );
+				$( this )
+					.attr( 'data-dial', label )
+					.attr( 'data-country-name', String( meta.name || iso ) )
+					.text( formatCountryOptionLabel( iso, true ) );
 			} );
 		}
 
 		ensureOptionDialData();
+		syncCountryOptionLabels( false );
 		setPlaceholderFromExample();
 		renderSendEnabled();
 	}
@@ -348,7 +397,7 @@ jQuery( function ( $ ) {
 			const spinner     = document.createElement( 'span' );
 			spinner.className = 'nxtcc-spinner';
 			spinner.setAttribute( 'role', 'status' );
-			spinner.setAttribute( 'aria-label', __( 'Sending…', 'nxt-cloud-chat' ) );
+			spinner.setAttribute( 'aria-label', __( 'Sending...', 'nxt-cloud-chat' ) );
 
 			btn.appendChild( spinner );
 		} else {
@@ -376,7 +425,7 @@ jQuery( function ( $ ) {
 		const local = ccLocal[ 1 ];
 
 		const visible =
-			local.length <= 2 ? local : '••••••••' + local.slice( -2 );
+			local.length <= 2 ? local : '********' + local.slice( -2 );
 
 		return '+' + cc + ' ' + visible;
 	}
@@ -562,7 +611,7 @@ jQuery( function ( $ ) {
 				return;
 			}
 
-			$btnVerify.prop( 'disabled', true ).text( __( 'Verifying…', 'nxt-cloud-chat' ) );
+			$btnVerify.prop( 'disabled', true ).text( __( 'Verifying...', 'nxt-cloud-chat' ) );
 
 			fetch( REST_BASE + '/auth/verify-otp', {
 				method: 'POST',
@@ -638,7 +687,7 @@ jQuery( function ( $ ) {
 				return;
 			}
 
-			$btnResend.prop( 'disabled', true ).text( __( 'Resending…', 'nxt-cloud-chat' ) );
+			$btnResend.prop( 'disabled', true ).text( __( 'Resending...', 'nxt-cloud-chat' ) );
 
 			fetch( REST_BASE + '/auth/resend-otp', {
 				method: 'POST',
@@ -690,11 +739,20 @@ jQuery( function ( $ ) {
 
 	// ---------------- Bindings (Step 1) ----------------.
 
+	$country.on( 'focus mousedown touchstart keydown', function () {
+		syncCountryOptionLabels( true );
+	} );
+
 	$country.on( 'change', function () {
 		ensureOptionDialData();
+		window.setTimeout( () => syncCountryOptionLabels( false ), 0 );
 		setPlaceholderFromExample();
 		renderSendEnabled();
 		showErrorPhone( '' );
+	} );
+
+	$country.on( 'blur', function () {
+		window.setTimeout( () => syncCountryOptionLabels( false ), 0 );
 	} );
 
 	$phone.on( 'input blur', function () {
@@ -773,5 +831,27 @@ jQuery( function ( $ ) {
 	// Init.
 	$btnSend.prop( 'disabled', true );
 	loadCountryJson();
-} );
+	$( window ).on( 'resize.nxtcc-' + String( $widget.attr( 'id' ) || 'auth' ).replace( /[^A-Za-z0-9_-]/g, '' ), function () {
+		syncCountryOptionLabels( false );
+	} );
+	}
 
+	$( '.nxtcc-auth-widget' ).each( function () {
+		nxtccInitAuthWidget( this );
+	} );
+
+	if (
+		window.elementorFrontend &&
+		window.elementorFrontend.hooks &&
+		typeof window.elementorFrontend.hooks.addAction === 'function'
+	) {
+		window.elementorFrontend.hooks.addAction(
+			'frontend/element_ready/global',
+			function ( $scope ) {
+				$scope.find( '.nxtcc-auth-widget' ).each( function () {
+					nxtccInitAuthWidget( this );
+				} );
+			}
+		);
+	}
+} );

@@ -160,6 +160,11 @@ jQuery( function ( $ ) {
 		window.ajaxurl;
 
 	const NONCE = window.NXTCC_AUTH_ADMIN ? window.NXTCC_AUTH_ADMIN.nonce : '';
+	const DEFAULTS =
+		( window.NXTCC_AUTH_ADMIN && window.NXTCC_AUTH_ADMIN.defaults ) || {};
+	const WOO_ACTIVE = window.NXTCC_AUTH_ADMIN
+		? Boolean( parseInt( window.NXTCC_AUTH_ADMIN.wooActive || 0, 10 ) )
+		: false;
 
 	let OPTS =
 		( window.NXTCC_AUTH_ADMIN && window.NXTCC_AUTH_ADMIN.opts ) || {};
@@ -186,6 +191,27 @@ jQuery( function ( $ ) {
 
 	let SELECTED_OWNER =
 		OPTS && OPTS.default_tenant_key ? String( OPTS.default_tenant_key ) : '';
+
+	/**
+	 * Read a canonical default value passed from PHP.
+	 *
+	 * @param {string} key Default key.
+	 * @param {*} fallback Safety fallback.
+	 * @return {*} Default value.
+	 */
+	function getDefault( key, fallback ) {
+		if (
+			DEFAULTS &&
+			Object.prototype.hasOwnProperty.call( DEFAULTS, key ) &&
+			DEFAULTS[ key ] !== undefined &&
+			DEFAULTS[ key ] !== null &&
+			DEFAULTS[ key ] !== ''
+		) {
+			return DEFAULTS[ key ];
+		}
+
+		return fallback;
+	}
 
 	/**
 	 * Enable/disable migration inputs based on "Force migrate".
@@ -220,6 +246,66 @@ jQuery( function ( $ ) {
 	}
 
 	/**
+	 * Enable redirect control only when password fallback is hidden.
+	 *
+	 * @return {void}
+	 */
+	function toggleRedirectControl() {
+		const showPassword = $( '#nxtcc-show-password' ).is( ':checked' );
+		const $redirect    = $( '#nxtcc-redirect-wp-login' );
+		const $help        = $( '#nxtcc-redirect-help' );
+
+		$redirect.prop( 'disabled', showPassword );
+		if ( showPassword ) {
+			$redirect.prop( 'checked', false );
+			$help.text(
+				'Available only when "Use password instead" is disabled.'
+			);
+			return;
+		}
+
+		$help.text(
+			'Visitors to wp-login.php will be redirected to your dedicated user login page, while recovery and logout flows remain available.'
+		);
+	}
+
+	/**
+	 * Update the login-button preview.
+	 *
+	 * @return {void}
+	 */
+	function updateLoginButtonPreview() {
+		const text =
+			readRaw( '#nxtcc-login-button-text' ) ||
+			String( getDefault( 'login_button_text', 'Login with WhatsApp' ) );
+		const separator =
+			readRaw( '#nxtcc-login-button-separator' ) ||
+			String( getDefault( 'login_button_separator', 'or' ) );
+		const bg =
+			readRaw( '#nxtcc-login-button-bg' ) ||
+			String( getDefault( 'login_button_bg', '#25D366' ) );
+		const fg =
+			readRaw( '#nxtcc-login-button-text-color' ) ||
+			String( getDefault( 'login_button_text_color', '#FFFFFF' ) );
+		const corner    = String(
+			$( '#nxtcc-login-button-corner' ).val() ||
+				getDefault( 'login_button_corner', 'rounded' )
+		);
+
+		$( '#nxtcc-login-button-preview .nxtcc-auth-preview-separator span' ).text(
+			separator
+		);
+
+		$( '#nxtcc-login-button-preview-btn' )
+			.text( text )
+			.css( {
+				background: bg,
+				color: fg,
+			} )
+			.toggleClass( 'is-rectangle', corner === 'rectangle' );
+	}
+
+	/**
 	 * Get current owner email from the selector.
 	 *
 	 * @return {string} Owner email or empty string.
@@ -234,9 +320,11 @@ jQuery( function ( $ ) {
 	 * @return {void}
 	 */
 	function hydrateFromOptions() {
-		$( '#nxtcc-otp-len' ).val( String( OPTS.otp_len || 6 ) );
+		$( '#nxtcc-otp-len' ).val(
+			String( OPTS.otp_len || getDefault( 'otp_len', 6 ) )
+		);
 		$( '#nxtcc-resend-cooldown' ).val(
-			String( OPTS.resend_cooldown || 30 )
+			String( OPTS.resend_cooldown || getDefault( 'resend_cooldown', 30 ) )
 		);
 
 		$( '#nxtcc-terms-url' ).val( OPTS.terms_url || '' );
@@ -251,6 +339,41 @@ jQuery( function ( $ ) {
 			'disabled',
 			! $( '#nxtcc-auto-sync-contacts' ).is( ':checked' )
 		);
+
+		$( '#nxtcc-login-button-wp' ).prop(
+			'checked',
+			Boolean( parseInt( OPTS.login_button_wp || 0, 10 ) )
+		);
+		$( '#nxtcc-login-button-wc' )
+			.prop(
+				'checked',
+				WOO_ACTIVE && Boolean( parseInt( OPTS.login_button_wc || 0, 10 ) )
+			)
+			.prop( 'disabled', ! WOO_ACTIVE );
+
+		$( '#nxtcc-login-button-text' ).val(
+			OPTS.login_button_text ||
+				String( getDefault( 'login_button_text', 'Login with WhatsApp' ) )
+		);
+		$( '#nxtcc-login-button-separator' ).val(
+			OPTS.login_button_separator ||
+				String( getDefault( 'login_button_separator', 'or' ) )
+		);
+		$( '#nxtcc-login-button-bg' ).val(
+			OPTS.login_button_bg ||
+				String( getDefault( 'login_button_bg', '#25D366' ) )
+		);
+		$( '#nxtcc-login-button-text-color' ).val(
+			OPTS.login_button_text_color ||
+				String( getDefault( 'login_button_text_color', '#FFFFFF' ) )
+		);
+		$( '#nxtcc-login-button-corner' ).val(
+			OPTS.login_button_corner ||
+				String( getDefault( 'login_button_corner', 'rounded' ) )
+		);
+		$( '#nxtcc-login-page-url' ).val( OPTS.login_page_url || '' );
+
+		updateLoginButtonPreview();
 	}
 
 	/**
@@ -287,9 +410,14 @@ jQuery( function ( $ ) {
 		$( '#nxtcc-force-path' ).val( path );
 		$( '#nxtcc-grace-enabled' ).prop( 'checked', graceOn );
 		$( '#nxtcc-grace-days' ).val( String( graceDays ) );
+		$( '#nxtcc-redirect-wp-login' ).prop(
+			'checked',
+			Boolean( parseInt( POLICY.redirect_wp_login || 0, 10 ) )
+		);
 
 		toggleForceControls();
 		toggleGraceDays();
+		toggleRedirectControl();
 
 		if (
 			allowedCountriesMounted &&
@@ -706,9 +834,13 @@ jQuery( function ( $ ) {
 				nonce: NONCE,
 
 				// Core OTP settings.
-				otp_len: parseInt( $( '#nxtcc-otp-len' ).val() || 6, 10 ),
+				otp_len: parseInt(
+					$( '#nxtcc-otp-len' ).val() || getDefault( 'otp_len', 6 ),
+					10
+				),
 				resend_cooldown: parseInt(
-					$( '#nxtcc-resend-cooldown' ).val() || 30,
+					$( '#nxtcc-resend-cooldown' ).val() ||
+						getDefault( 'resend_cooldown', 30 ),
 					10
 				),
 
@@ -721,6 +853,29 @@ jQuery( function ( $ ) {
 					: 0,
 
 			auth_template: $( '#nxtcc-auth-template' ).val() || '',
+			login_button_wp: $( '#nxtcc-login-button-wp' ).is( ':checked' )
+					? 1
+					: 0,
+			login_button_wc:
+				WOO_ACTIVE && $( '#nxtcc-login-button-wc' ).is( ':checked' )
+					? 1
+					: 0,
+			login_button_text:
+				readRaw( '#nxtcc-login-button-text' ) ||
+				String( getDefault( 'login_button_text', 'Login with WhatsApp' ) ),
+			login_button_separator:
+				readRaw( '#nxtcc-login-button-separator' ) ||
+				String( getDefault( 'login_button_separator', 'or' ) ),
+			login_button_bg:
+				readRaw( '#nxtcc-login-button-bg' ) ||
+				String( getDefault( 'login_button_bg', '#25D366' ) ),
+			login_button_text_color:
+				readRaw( '#nxtcc-login-button-text-color' ) ||
+				String( getDefault( 'login_button_text_color', '#FFFFFF' ) ),
+			login_button_corner:
+				$( '#nxtcc-login-button-corner' ).val() ||
+				String( getDefault( 'login_button_corner', 'rounded' ) ),
+			login_page_url: readRaw( '#nxtcc-login-page-url' ),
 
 				// Migration behavior.
 			show_password: $( '#nxtcc-show-password' ).is( ':checked' )
@@ -738,6 +893,11 @@ jQuery( function ( $ ) {
 					: 0,
 
 			grace_days: parseInt( $( '#nxtcc-grace-days' ).val() || 7, 10 ),
+			redirect_wp_login:
+				! $( '#nxtcc-show-password' ).is( ':checked' ) &&
+				$( '#nxtcc-redirect-wp-login' ).is( ':checked' )
+					? 1
+					: 0,
 
 				// Widget branding preference.
 			widget_branding: $( '#nxtcc-widget-branding' ).is( ':checked' )
@@ -828,6 +988,7 @@ jQuery( function ( $ ) {
 		} );
 
 		$( '#nxtcc-grace-enabled' ).on( 'change', toggleGraceDays );
+		$( '#nxtcc-show-password' ).on( 'change', toggleRedirectControl );
 
 		$( '#nxtcc-auto-sync-contacts' ).on( 'change', function () {
 			$( '#nxtcc-sync-verified' ).prop(
@@ -835,6 +996,10 @@ jQuery( function ( $ ) {
 				! $( this ).is( ':checked' )
 			);
 		} );
+
+		$(
+			'#nxtcc-login-button-text, #nxtcc-login-button-separator, #nxtcc-login-button-bg, #nxtcc-login-button-text-color, #nxtcc-login-button-corner'
+		).on( 'input change', updateLoginButtonPreview );
 
 		$( document ).on( 'change', '#nxtcc-auth-owner', function () {
 			SELECTED_OWNER = currentOwner();

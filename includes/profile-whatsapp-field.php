@@ -143,13 +143,13 @@ function nxtcc_verified_whatsapp_enqueue_profile_lock( string $hook ): void {
 	/*
 	 * Register "empty" handles so we can attach inline style/script safely.
 	 */
-	wp_register_style( 'nxtcc-profile-whatsapp', false, array(), '1.0.0' );
+	wp_register_style( 'nxtcc-profile-whatsapp', false, array(), NXTCC_VERSION );
 	wp_enqueue_style( 'nxtcc-profile-whatsapp' );
 
 	$css = 'input[name="nxtcc_verified_whatsapp"]{background:#f6f7f7!important;color:#1d2327!important;border-color:#dcdcde!important;pointer-events:none!important;}';
 	wp_add_inline_style( 'nxtcc-profile-whatsapp', $css );
 
-	wp_register_script( 'nxtcc-profile-whatsapp', false, array(), '1.0.0', true );
+	wp_register_script( 'nxtcc-profile-whatsapp', false, array(), NXTCC_VERSION, true );
 	wp_enqueue_script( 'nxtcc-profile-whatsapp' );
 
 	$placeholder = __( 'Not verified yet', 'nxt-cloud-chat' );
