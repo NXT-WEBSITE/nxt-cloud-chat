@@ -392,6 +392,24 @@ function nxtcc_build_inbound_message_content_from_webhook( array $m ): string {
 	}
 
 	// -------------------------
+	// Reaction messages
+	// -------------------------
+	if ( 'reaction' === $type && isset( $m['reaction'] ) && is_array( $m['reaction'] ) ) {
+		$reaction = $m['reaction'];
+		$emoji    = isset( $reaction['emoji'] ) ? sanitize_text_field( (string) $reaction['emoji'] ) : '';
+
+		if ( '' !== $emoji ) {
+			return $emoji;
+		}
+
+		if ( ! empty( $reaction['message_id'] ) ) {
+			return 'Reaction removed';
+		}
+
+		return 'Reaction';
+	}
+
+	// -------------------------
 	// Template messages
 	// -------------------------
 	if ( 'template' === $type && isset( $m['template'] ) && is_array( $m['template'] ) ) {
@@ -464,6 +482,34 @@ function nxtcc_build_inbound_message_content_from_webhook( array $m ): string {
 }
 
 /**
+ * Extract the related target WAMID from an inbound webhook message.
+ *
+ * Used for replies and reaction messages so the chat UI can attach the quoted
+ * source message when a webhook references an earlier message id.
+ *
+ * @param array $message Webhook message payload.
+ * @return string
+ */
+function nxtcc_rest_extract_related_wamid_from_webhook( array $message ): string {
+	$context   = isset( $message['context'] ) && is_array( $message['context'] ) ? $message['context'] : array();
+	$candidate = isset( $context['id'] ) ? sanitize_text_field( (string) $context['id'] ) : '';
+
+	if ( '' === $candidate && isset( $message['reaction'] ) && is_array( $message['reaction'] ) ) {
+		$candidate = isset( $message['reaction']['message_id'] ) ? sanitize_text_field( (string) $message['reaction']['message_id'] ) : '';
+	}
+
+	if ( '' === $candidate ) {
+		return '';
+	}
+
+	if ( function_exists( 'nxtcc_normalize_reply_wamid' ) ) {
+		return nxtcc_normalize_reply_wamid( $candidate );
+	}
+
+	return nxtcc_rest_normalize_meta_message_id( $candidate );
+}
+
+/**
  * Extract a safe error message from a webhook status object.
  *
  * @param array $st Status object.
@@ -518,6 +564,27 @@ function nxtcc_rest_merge_status_timestamp( string $existing_json, string $key, 
 }
 
 /**
+ * Normalize one Meta message id exactly as message-history storage expects it.
+ *
+ * @param string $wamid Meta message id.
+ * @return string
+ */
+function nxtcc_rest_normalize_meta_message_id( string $wamid ): string {
+	$wamid = sanitize_text_field( $wamid );
+
+	if ( '' === $wamid ) {
+		return '';
+	}
+
+	if ( function_exists( 'nxtcc_clip_meta_message_id' ) ) {
+		$normalized = nxtcc_clip_meta_message_id( $wamid );
+		return is_string( $normalized ) ? sanitize_text_field( $normalized ) : '';
+	}
+
+	return sanitize_text_field( substr( $wamid, 0, 191 ) );
+}
+
+/**
  * Update message history row by meta_message_id (wamid) for webhook statuses.
  *
  * Sets:
@@ -536,7 +603,8 @@ function nxtcc_rest_merge_status_timestamp( string $existing_json, string $key, 
  * @return void
  */
 function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, string $new_status, int $unix_ts, string $err_msg, array $status_obj ): void {
-	$wamid      = sanitize_text_field( $wamid );
+	$wamid_raw  = sanitize_text_field( $wamid );
+	$wamid      = nxtcc_rest_normalize_meta_message_id( $wamid_raw );
 	$new_status = sanitize_key( $new_status );
 	$err_msg    = sanitize_text_field( $err_msg );
 	$table_hist = nxtcc_rest_quote_table_name( $db->t_message_history() );
@@ -551,7 +619,7 @@ function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, 
 	// Find the row first (need current status_timestamps + response_json).
 	$row = $db->get_row(
 		nxtcc_rest_sql_with_table_tokens(
-			'SELECT id, user_mailid, business_account_id, phone_number_id, contact_id, status, status_timestamps, response_json
+			'SELECT id, queue_id, user_mailid, business_account_id, phone_number_id, contact_id, status, status_timestamps, response_json
 		   FROM {history}
 		  WHERE meta_message_id = %s
 		  LIMIT 1',
@@ -650,11 +718,13 @@ function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, 
 		'nxtcc_message_history_status_updated',
 		array(
 			'history_id'          => $id,
+			'queue_id'            => isset( $row->queue_id ) ? (int) $row->queue_id : 0,
 			'user_mailid'         => isset( $row->user_mailid ) ? sanitize_email( (string) $row->user_mailid ) : '',
 			'business_account_id' => isset( $row->business_account_id ) ? sanitize_text_field( (string) $row->business_account_id ) : '',
 			'phone_number_id'     => isset( $row->phone_number_id ) ? sanitize_text_field( (string) $row->phone_number_id ) : '',
 			'contact_id'          => isset( $row->contact_id ) ? (int) $row->contact_id : 0,
 			'meta_message_id'     => $wamid,
+			'meta_message_id_raw' => $wamid_raw,
 			'previous_status'     => $previous_status,
 			'status'              => $new_status,
 			'status_at'           => $ts_mysql,
@@ -960,8 +1030,20 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 			// -------------------------
 			// 2) Inbound messages (received from user)
 			// -------------------------
-			$contacts = isset( $value['contacts'] ) && is_array( $value['contacts'] ) ? $value['contacts'] : array();
-			$messages = isset( $value['messages'] ) && is_array( $value['messages'] ) ? $value['messages'] : array();
+			$contacts     = isset( $value['contacts'] ) && is_array( $value['contacts'] ) ? $value['contacts'] : array();
+			$messages     = isset( $value['messages'] ) && is_array( $value['messages'] ) ? $value['messages'] : array();
+			$history_cols = array();
+
+			$show_cols_sql = nxtcc_rest_sql_with_table_tokens( 'SHOW COLUMNS FROM {history}', $table_map );
+			$cols          = $db->get_col( $show_cols_sql );
+
+			if ( is_array( $cols ) ) {
+				foreach ( $cols as $col_name ) {
+					if ( is_string( $col_name ) && '' !== $col_name ) {
+						$history_cols[ $col_name ] = true;
+					}
+				}
+			}
 
 			// Build wa_id => name map.
 			$name_by_wa = array();
@@ -1064,28 +1146,57 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 					'received_utc'  => gmdate( 'Y-m-d H:i:s', $wa_ts > 0 ? $wa_ts : time() ),
 				);
 
+				$reply_to_wamid      = '';
+				$reply_to_history_id = 0;
+
+				if ( function_exists( 'nxtcc_rest_extract_related_wamid_from_webhook' ) ) {
+					$reply_to_wamid = nxtcc_rest_extract_related_wamid_from_webhook( $m );
+				}
+
+				if ( '' !== $reply_to_wamid ) {
+					$reply_to_history_id = (int) $db->get_var(
+						nxtcc_rest_sql_with_table_tokens(
+							'SELECT id FROM {history} WHERE meta_message_id = %s LIMIT 1',
+							$table_map
+						),
+						array( $reply_to_wamid )
+					);
+				}
+
 				$json_ts = wp_json_encode( $status_ts );
 				$json_m  = wp_json_encode( $m );
 
 				// Persist the inbound message first so downstream listeners can trust the row id.
 				$received_at = current_time( 'mysql', 1 );
-				$inserted    = $db->insert(
+				$insert_row  = array(
+					'user_mailid'          => $user_mailid,
+					'business_account_id'  => $business_account_id,
+					'phone_number_id'      => $phone_number_id,
+					'contact_id'           => $contact_id,
+					'display_phone_number' => $display_phone_number,
+					'template_type'        => $type,
+					'message_content'      => $message_content,
+					'status'               => 'received',
+					'status_timestamps'    => is_string( $json_ts ) ? $json_ts : '',
+					'meta_message_id'      => $meta_message_id,
+					'origin_type'          => 'inbound',
+					'origin_ref'           => substr( $meta_message_id, 0, 191 ),
+					'response_json'        => is_string( $json_m ) ? $json_m : '',
+					'created_at'           => $received_at,
+					'is_read'              => 0,
+				);
+
+				if ( '' !== $reply_to_wamid && isset( $history_cols['reply_to_wamid'] ) ) {
+					$insert_row['reply_to_wamid'] = $reply_to_wamid;
+				}
+
+				if ( $reply_to_history_id > 0 && isset( $history_cols['reply_to_history_id'] ) ) {
+					$insert_row['reply_to_history_id'] = $reply_to_history_id;
+				}
+
+				$inserted = $db->insert(
 					$db->t_message_history(),
-					array(
-						'user_mailid'          => $user_mailid,
-						'business_account_id'  => $business_account_id,
-						'phone_number_id'      => $phone_number_id,
-						'contact_id'           => $contact_id,
-						'display_phone_number' => $display_phone_number,
-						'template_type'        => $type,
-						'message_content'      => $message_content,
-						'status'               => 'received',
-						'status_timestamps'    => is_string( $json_ts ) ? $json_ts : '',
-						'meta_message_id'      => $meta_message_id,
-						'response_json'        => is_string( $json_m ) ? $json_m : '',
-						'created_at'           => $received_at,
-						'is_read'              => 0,
-					)
+					$insert_row
 				);
 
 				if ( $inserted ) {
@@ -1107,6 +1218,8 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 							'from_wa_id'           => $from_wa,
 							'message_type'         => $type,
 							'message_content'      => $message_content,
+							'reply_to_wamid'       => $reply_to_wamid,
+							'reply_to_history_id'  => $reply_to_history_id,
 							'received_at'          => $received_at,
 							'received_unix'        => $wa_ts > 0 ? $wa_ts : time(),
 						)

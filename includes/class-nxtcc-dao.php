@@ -16,7 +16,7 @@ defined( 'ABSPATH' ) || exit;
  * This class wires filters/actions consumed by NXTCC_Helpers:
  * - Tenant credentials lookup.
  * - Templates list and template-names lookup.
- * - Upsert and delete template rows.
+ * - Insert/update and delete template rows.
  */
 final class NXTCC_DAO {
 
@@ -41,17 +41,33 @@ final class NXTCC_DAO {
 	}
 
 	/**
-	 * Execute a replace query for a table.
+	 * Execute an insert query for a table.
 	 *
 	 * @param string $table  Table name.
 	 * @param array  $data   Row data.
 	 * @param array  $format Formats.
 	 * @return void
 	 */
-	private static function db_replace( string $table, array $data, array $format ): void {
+	private static function db_insert( string $table, array $data, array $format ): void {
 		global $wpdb;
 
-		call_user_func( array( $wpdb, 'replace' ), $table, $data, $format );
+		call_user_func( array( $wpdb, 'insert' ), $table, $data, $format );
+	}
+
+	/**
+	 * Execute an update query for a table.
+	 *
+	 * @param string $table        Table name.
+	 * @param array  $data         Row data.
+	 * @param array  $where        Where clause.
+	 * @param array  $format       Value formats.
+	 * @param array  $where_format Where formats.
+	 * @return void
+	 */
+	private static function db_update( string $table, array $data, array $where, array $format, array $where_format ): void {
+		global $wpdb;
+
+		call_user_func( array( $wpdb, 'update' ), $table, $data, $where, $format, $where_format );
 	}
 
 	/**
@@ -161,7 +177,7 @@ final class NXTCC_DAO {
 		$rows = call_user_func(
 			array( $wpdb, 'get_results' ),
 			$wpdb->prepare(
-				'SELECT template_name, category, language, status, components, business_account_id, phone_number_id, last_synced, created_at, updated_at
+				'SELECT template_name, category, language, status, components, business_account_id, phone_number_id, last_synced, created_by, updated_by, created_at, updated_at
 				 FROM `' . $wpdb->prefix . 'nxtcc_templates`
 				 WHERE user_mailid = %s AND phone_number_id = %s
 				 ORDER BY template_name ASC',
@@ -253,6 +269,8 @@ final class NXTCC_DAO {
 		$language   = isset( $row['language'] ) ? sanitize_text_field( (string) $row['language'] ) : null;
 		$status     = isset( $row['status'] ) ? sanitize_text_field( (string) $row['status'] ) : null;
 		$components = isset( $row['components'] ) ? (string) $row['components'] : null;
+		$created_by = isset( $row['created_by'] ) ? absint( $row['created_by'] ) : 0;
+		$updated_by = isset( $row['updated_by'] ) ? absint( $row['updated_by'] ) : 0;
 
 		$now         = current_time( 'mysql', 1 );
 		$last_synced = isset( $row['last_synced'] ) ? (string) $row['last_synced'] : $now;
@@ -264,10 +282,58 @@ final class NXTCC_DAO {
 		}
 
 		$table = $wpdb->prefix . 'nxtcc_templates';
+		$actor = $updated_by;
 
-		self::db_replace(
-			$table,
-			array(
+		if ( $actor <= 0 ) {
+			$actor = $created_by;
+		}
+
+		if ( $actor <= 0 && class_exists( 'NXTCC_Actor_Audit' ) ) {
+			$actor = NXTCC_Actor_Audit::current_user_id();
+		}
+
+		$existing = call_user_func(
+			array( $wpdb, 'get_row' ),
+			$wpdb->prepare(
+				'SELECT id
+				 FROM `' . $wpdb->prefix . 'nxtcc_templates`
+				 WHERE user_mailid = %s AND business_account_id = %s AND phone_number_id = %s AND template_name = %s
+				 LIMIT 1',
+				$user_mailid,
+				$business_account_id,
+				$phone_number_id,
+				$template_name
+			),
+			ARRAY_A
+		);
+
+		if ( is_array( $existing ) && ! empty( $existing['id'] ) ) {
+			$data   = array(
+				'category'    => $category,
+				'language'    => $language,
+				'status'      => $status,
+				'components'  => $components,
+				'last_synced' => $last_synced,
+				'updated_at'  => $updated_at,
+			);
+			$format = array( '%s', '%s', '%s', '%s', '%s', '%s' );
+
+			if ( $actor > 0 ) {
+				$data['updated_by'] = $actor;
+				$format[]           = '%d';
+			}
+
+			self::db_update(
+				$table,
+				$data,
+				array(
+					'id' => absint( $existing['id'] ),
+				),
+				$format,
+				array( '%d' )
+			);
+		} else {
+			$data   = array(
 				'user_mailid'         => $user_mailid,
 				'phone_number_id'     => $phone_number_id,
 				'business_account_id' => $business_account_id,
@@ -279,8 +345,8 @@ final class NXTCC_DAO {
 				'last_synced'         => $last_synced,
 				'created_at'          => $created_at,
 				'updated_at'          => $updated_at,
-			),
-			array(
+			);
+			$format = array(
 				'%s',
 				'%s',
 				'%s',
@@ -292,8 +358,27 @@ final class NXTCC_DAO {
 				'%s',
 				'%s',
 				'%s',
-			)
-		);
+			);
+
+			if ( $created_by <= 0 ) {
+				$created_by = $actor;
+			}
+			if ( $updated_by <= 0 ) {
+				$updated_by = $actor;
+			}
+
+			if ( $created_by > 0 ) {
+				$data['created_by'] = $created_by;
+				$format[]           = '%d';
+			}
+
+			if ( $updated_by > 0 ) {
+				$data['updated_by'] = $updated_by;
+				$format[]           = '%d';
+			}
+
+			self::db_insert( $table, $data, $format );
+		}
 
 		wp_cache_delete( NXTCC_Helpers::ckey( 'dao:tpl:list', array( $user_mailid, $phone_number_id ) ), self::GROUP );
 		wp_cache_delete( NXTCC_Helpers::ckey( 'dao:tpl:names', array( $user_mailid, $business_account_id, $phone_number_id ) ), self::GROUP );

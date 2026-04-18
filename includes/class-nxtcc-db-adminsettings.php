@@ -74,9 +74,10 @@ final class NXTCC_DB_AdminSettings {
 	 * @param string $query SQL with placeholders.
 	 * @param array  $args  Placeholder values.
 	 * @param string $ckey  Optional cache key.
+	 * @param mixed  $output Output type for wpdb::get_row().
 	 * @return object|null Cached row or DB row.
 	 */
-	public static function get_row_prepared_query( string $query, array $args = array(), string $ckey = '' ) {
+	public static function get_row_prepared_query( string $query, array $args = array(), string $ckey = '', $output = OBJECT ) {
 		if ( '' !== $ckey ) {
 			$cached = wp_cache_get( $ckey, self::CACHE_GROUP );
 			if ( false !== $cached ) {
@@ -91,7 +92,8 @@ final class NXTCC_DB_AdminSettings {
 		}
 
 		$row = $db->get_row(
-			$db->prepare( $query, ...$args )
+			$db->prepare( $query, ...$args ),
+			$output
 		);
 
 		if ( '' !== $ckey ) {
@@ -99,6 +101,65 @@ final class NXTCC_DB_AdminSettings {
 		}
 
 		return $row;
+	}
+
+	/**
+	 * Execute a SQL query via get_results() with explicit wpdb::prepare() args.
+	 *
+	 * Note: Cache TTL is intentionally a literal (300) to satisfy VIP sniffs.
+	 *
+	 * @param string $query SQL with placeholders.
+	 * @param array  $args  Placeholder values.
+	 * @param string $ckey  Optional cache key.
+	 * @return array<int,mixed>
+	 */
+	public static function get_results_prepared_query( string $query, array $args = array(), string $ckey = '' ): array {
+		if ( '' !== $ckey ) {
+			$cached = wp_cache_get( $ckey, self::CACHE_GROUP );
+			if ( false !== $cached ) {
+				return is_array( $cached ) ? $cached : array();
+			}
+		}
+
+		$db = $GLOBALS['wpdb'];
+
+		if ( empty( $args ) ) {
+			return array();
+		}
+
+		$rows = $db->get_results(
+			$db->prepare( $query, ...$args ),
+			ARRAY_A
+		);
+
+		if ( ! is_array( $rows ) ) {
+			$rows = array();
+		}
+
+		if ( '' !== $ckey ) {
+			wp_cache_set( $ckey, $rows, self::CACHE_GROUP, 300 );
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * Execute a prepared write/update query.
+	 *
+	 * @param string $query SQL with placeholders.
+	 * @param array  $args  Placeholder values.
+	 * @return int|false
+	 */
+	public static function query_prepared( string $query, array $args = array() ) {
+		$db = $GLOBALS['wpdb'];
+
+		if ( empty( $args ) ) {
+			return false;
+		}
+
+		return $db->query(
+			$db->prepare( $query, ...$args )
+		);
 	}
 
 	/**

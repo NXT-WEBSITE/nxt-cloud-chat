@@ -23,7 +23,7 @@ if ( ! function_exists( 'nxtcc_chat_ajax_require_caps' ) ) {
 	 * @return void
 	 */
 	function nxtcc_chat_ajax_require_caps(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_access_chat' ) ) ) {
 			wp_send_json_error(
 				array( 'message' => 'Insufficient permissions.' ),
 				403
@@ -88,6 +88,16 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 		}
 
 		$preview = isset( $chat->message_preview ) ? $chat->message_preview : '';
+
+		if ( ( ! is_string( $preview ) || '' === trim( $preview ) ) && function_exists( 'nxtcc_chat_extract_message_content_from_message' ) ) {
+			$preview               = nxtcc_chat_extract_message_content_from_message(
+				array(
+					'message_content' => $chat->message_preview,
+					'response_json'   => isset( $chat->message_preview_json ) ? $chat->message_preview_json : '',
+				)
+			);
+			$chat->message_preview = $preview;
+		}
 
 		// If preview is a JSON envelope, unwrap it into a display-friendly string.
 		if ( is_string( $preview ) && '' !== $preview && '{' === $preview[0] ) {
@@ -216,6 +226,25 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 		$messages = array();
 	}
 
+	foreach ( $messages as &$msg ) {
+		if ( empty( $msg->message_content ) && function_exists( 'nxtcc_chat_extract_message_content_from_message' ) ) {
+			$rebuilt_content = nxtcc_chat_extract_message_content_from_message( $msg );
+
+			if ( '' !== $rebuilt_content ) {
+				$msg->message_content = $rebuilt_content;
+			}
+		}
+
+		if ( empty( $msg->reply_to_wamid ) && function_exists( 'nxtcc_chat_extract_reply_wamid_from_message' ) ) {
+			$derived_reply_wamid = nxtcc_chat_extract_reply_wamid_from_message( $msg );
+
+			if ( '' !== $derived_reply_wamid ) {
+				$msg->reply_to_wamid = $derived_reply_wamid;
+			}
+		}
+	}
+	unset( $msg );
+
 	/*
 	 * Build reply map for quick lookup of replied-to messages.
 	 * Primary key: reply_to_history_id; fallback key: reply_to_wamid.
@@ -281,6 +310,8 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 		if ( null !== $reply_payload ) {
 			$msg->reply = $reply_payload;
 		}
+
+		unset( $msg->response_json );
 	}
 	unset( $msg );
 

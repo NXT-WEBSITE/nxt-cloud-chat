@@ -105,7 +105,7 @@ final class NXTCC_Unread {
 			wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
 		}
 
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_access_chat' ) ) ) {
 			wp_send_json_error( array( 'message' => 'Forbidden' ), 403 );
 		}
 
@@ -119,8 +119,8 @@ final class NXTCC_Unread {
 			wp_send_json_error( array( 'message' => 'Bad nonce' ), 403 );
 		}
 
-		$user = wp_get_current_user();
-		$mail = ( $user instanceof WP_User ) ? (string) $user->user_email : '';
+		$tenant = NXTCC_Access_Control::get_current_tenant_context();
+		$mail   = isset( $tenant['user_mailid'] ) ? (string) $tenant['user_mailid'] : '';
 
 		$count = 0;
 		if ( '' !== $mail ) {

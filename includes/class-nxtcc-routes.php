@@ -151,6 +151,90 @@ class NXTCC_Routes {
 	}
 
 	/**
+	 * Resolve the contact name used when syncing a verified WordPress user.
+	 *
+	 * Prefers the user's current display name so contact records stay aligned
+	 * with the active WordPress profile label.
+	 *
+	 * @param WP_User $user WordPress user object.
+	 * @return string
+	 */
+	private static function synced_contact_name_from_user( WP_User $user ): string {
+		$name = sanitize_text_field( (string) $user->display_name );
+
+		if ( '' === $name ) {
+			$name = sanitize_text_field( (string) $user->user_nicename );
+		}
+
+		if ( '' === $name ) {
+			$name = sanitize_text_field( (string) $user->user_login );
+		}
+
+		if ( '' === $name ) {
+			$name = sanitize_email( (string) $user->user_email );
+		}
+
+		return $name;
+	}
+
+	/**
+	 * Resolve the auth settings row used for verified-contact sync.
+	 *
+	 * Prefers the explicitly selected Authentication profile. Falls back to the
+	 * active auth settings resolver, and only then to the current tenant context
+	 * for compatibility inside the admin.
+	 *
+	 * @param string $owner_mailid Optional selected auth owner email.
+	 * @return array<string,mixed>|null
+	 */
+	private static function auth_sync_settings_row( string $owner_mailid = '' ): ?array {
+		if ( '' !== $owner_mailid && function_exists( 'nxtcc_auth_pick_settings_row' ) ) {
+			$row = nxtcc_auth_pick_settings_row( $owner_mailid );
+			if ( is_array( $row ) ) {
+				return $row;
+			}
+		}
+
+		if ( function_exists( 'nxtcc_auth_get_active_settings_row' ) ) {
+			$row = nxtcc_auth_get_active_settings_row();
+			if ( is_array( $row ) ) {
+				return $row;
+			}
+		}
+
+		$tenant   = NXTCC_Access_Control::get_current_tenant_context();
+		$settings = NXTCC_Access_Control::get_settings_row_for_tenant( $tenant );
+
+		if ( is_object( $settings ) ) {
+			return array(
+				'user_mailid'         => isset( $settings->user_mailid ) ? (string) $settings->user_mailid : '',
+				'business_account_id' => isset( $settings->business_account_id ) ? (string) $settings->business_account_id : '',
+				'phone_number_id'     => isset( $settings->phone_number_id ) ? (string) $settings->phone_number_id : '',
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Resolve the actor user ID for verified-contact sync writes.
+	 *
+	 * Admin-initiated sync keeps the acting staff user. Automatic OTP sync falls
+	 * back to the resolved WordPress account that completed verification.
+	 *
+	 * @param int $fallback_user_id Fallback WordPress user ID.
+	 * @return int
+	 */
+	private static function auth_sync_actor_user_id( int $fallback_user_id = 0 ): int {
+		$actor_id = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::current_user_id() : (int) get_current_user_id();
+		if ( $actor_id > 0 ) {
+			return $actor_id;
+		}
+
+		return $fallback_user_id > 0 ? $fallback_user_id : 0;
+	}
+
+	/**
 	 * Resolve + decrypt the WhatsApp access token for a given owner + phone number ID.
 	 *
 	 * Uses object cache to avoid repeated decrypt work.
@@ -381,7 +465,7 @@ class NXTCC_Routes {
 	 */
 	public static function test_api_connection(): void {
 		self::require_ajax_nonce( 'nxtcc_admin', 'nonce' );
-		self::require_cap( 'manage_options' );
+		self::require_cap( 'nxtcc_manage_settings' );
 
 		$app_id              = self::post_text( 'app_id' );
 		$access_token        = self::post_text( 'access_token' );
@@ -441,7 +525,7 @@ class NXTCC_Routes {
 	public static function media_proxy(): void {
 		// This is admin-side; ensure capability + nonce. Do not allow anonymous requests.
 		self::require_ajax_nonce( 'nxtcc_received_messages', 'nonce' );
-		self::require_cap( 'manage_options' );
+		self::require_cap( 'nxtcc_access_chat' );
 
 		$mid  = self::request_text( 'mid' );
 		$pnid = self::request_text( 'pnid' );
@@ -453,17 +537,25 @@ class NXTCC_Routes {
 			);
 		}
 
-		$user        = wp_get_current_user();
-		$user_mailid = (string) $user->user_email;
-
-		if ( '' === $user_mailid ) {
+		$tenant = NXTCC_Access_Control::get_current_tenant_context();
+		if ( empty( $tenant['user_mailid'] ) || empty( $tenant['phone_number_id'] ) ) {
 			wp_send_json_error(
 				array( 'message' => esc_html__( 'Unauthorized', 'nxt-cloud-chat' ) ),
 				403
 			);
 		}
 
-		$token = self::resolve_access_token_for( $user_mailid, $pnid );
+		$user_mailid = sanitize_email( (string) $tenant['user_mailid'] );
+		$active_pnid = sanitize_text_field( (string) $tenant['phone_number_id'] );
+
+		if ( $pnid !== $active_pnid ) {
+			wp_send_json_error(
+				array( 'message' => esc_html__( 'Unauthorized', 'nxt-cloud-chat' ) ),
+				403
+			);
+		}
+
+		$token = self::resolve_access_token_for( $user_mailid, $active_pnid );
 		if ( null === $token ) {
 			wp_send_json_error(
 				array( 'message' => esc_html__( 'Access token not found', 'nxt-cloud-chat' ) ),
@@ -566,22 +658,20 @@ class NXTCC_Routes {
 	 */
 	public static function sync_verified_bindings(): void {
 		self::require_ajax_nonce( 'nxtcc_auth_admin', 'nonce' );
-		self::require_cap( 'manage_options' );
+		self::require_cap( 'nxtcc_manage_authentication' );
 
-		$db = NXTCC_DB::i();
+		$db           = NXTCC_DB::i();
+		$owner_mailid = sanitize_email( self::post_text( 'owner_mailid' ) );
+		$settings     = self::auth_sync_settings_row( $owner_mailid );
+		$actor_id     = self::auth_sync_actor_user_id();
 
-		$user        = wp_get_current_user();
-		$user_mailid = (string) $user->user_email;
-
-		$settings = self::latest_tenant_row_for_owner( $user_mailid );
-
-		if ( ! $settings || empty( $settings->business_account_id ) || empty( $settings->phone_number_id ) ) {
+		if ( ! is_array( $settings ) || empty( $settings['user_mailid'] ) || empty( $settings['business_account_id'] ) || empty( $settings['phone_number_id'] ) ) {
 			wp_send_json_error( array( 'message' => 'Connection not configured for this admin' ), 400 );
 		}
 
-		$owner_mailid = (string) $settings->user_mailid;
-		$baid         = (string) $settings->business_account_id;
-		$pnid         = (string) $settings->phone_number_id;
+		$owner_mailid = sanitize_email( (string) $settings['user_mailid'] );
+		$baid         = sanitize_text_field( (string) $settings['business_account_id'] );
+		$pnid         = sanitize_text_field( (string) $settings['phone_number_id'] );
 
 		$contacts_table      = $db->t_contacts();
 		$map_table           = $db->t_group_contact_map();
@@ -633,17 +723,11 @@ class NXTCC_Routes {
 				continue;
 			}
 
-			$first = get_user_meta( $uid, 'first_name', true );
-			$last  = get_user_meta( $uid, 'last_name', true );
-
-			$name = trim( trim( (string) $first ) . ' ' . trim( (string) $last ) );
-			if ( '' === $name ) {
-				$name = ! empty( $ud->user_nicename ) ? (string) $ud->user_nicename : (string) $ud->user_login;
-			}
+			$name = self::synced_contact_name_from_user( $ud );
 
 			$existing = $db->get_row(
 				$db->prepare(
-					'SELECT id, wp_uid, group_ids FROM ' . $table_contacts . '
+					'SELECT id, wp_uid, group_ids, name, is_verified FROM ' . $table_contacts . '
                   WHERE user_mailid = %s
                     AND business_account_id = %s AND phone_number_id = %s
                     AND country_code = %s AND phone_number = %s
@@ -661,6 +745,10 @@ class NXTCC_Routes {
 			if ( $existing ) {
 				$update = array();
 
+				if ( (string) ( $existing['name'] ?? '' ) !== $name ) {
+					$update['name'] = $name;
+				}
+
 				if ( empty( $existing['wp_uid'] ) ) {
 					$update['wp_uid'] = (int) $uid;
 				}
@@ -672,9 +760,14 @@ class NXTCC_Routes {
 					$update['group_ids'] = $new_csv;
 				}
 
-				$update['is_verified'] = 1;
+				if ( 1 !== (int) ( $existing['is_verified'] ?? 0 ) ) {
+					$update['is_verified'] = 1;
+				}
 
 				if ( ! empty( $update ) ) {
+					if ( $actor_id > 0 ) {
+						$update['updated_by'] = $actor_id;
+					}
 					$update['updated_at'] = current_time( 'mysql', 1 );
 					$db->update( $contacts_table, $update, array( 'id' => (int) $existing['id'] ) );
 					++$updated;
@@ -715,6 +808,8 @@ class NXTCC_Routes {
 					'group_ids'           => (string) $verified_gid,
 					'is_verified'         => 1,
 					'custom_fields'       => wp_json_encode( array() ),
+					'created_by'          => $actor_id > 0 ? $actor_id : null,
+					'updated_by'          => $actor_id > 0 ? $actor_id : null,
 					'created_at'          => current_time( 'mysql', 1 ),
 					'updated_at'          => current_time( 'mysql', 1 ),
 				)
@@ -764,8 +859,8 @@ class NXTCC_Routes {
 			return;
 		}
 
-		$db                  = NXTCC_DB::i();
-		$table_user_settings = self::quote_table_name( $db->t_user_settings() );
+		$db       = NXTCC_DB::i();
+		$actor_id = self::auth_sync_actor_user_id( (int) $user_id );
 
 		$baid       = '';
 		$pnid       = '';
@@ -782,23 +877,16 @@ class NXTCC_Routes {
 		}
 
 		if ( '' === $baid || '' === $pnid || '' === $owner_mail ) {
-			$query_latest = 'SELECT user_mailid, business_account_id, phone_number_id
-                   FROM ' . $table_user_settings . '
-               ORDER BY id DESC LIMIT 1';
-
-			$row = $db->get_row(
-				$query_latest
-			);
-
-			if ( $row ) {
+			$settings = self::auth_sync_settings_row( $owner_mail );
+			if ( is_array( $settings ) ) {
 				if ( '' === $baid ) {
-					$baid = (string) $row->business_account_id;
+					$baid = sanitize_text_field( (string) ( $settings['business_account_id'] ?? '' ) );
 				}
 				if ( '' === $pnid ) {
-					$pnid = (string) $row->phone_number_id;
+					$pnid = sanitize_text_field( (string) ( $settings['phone_number_id'] ?? '' ) );
 				}
 				if ( '' === $owner_mail ) {
-					$owner_mail = (string) $row->user_mailid;
+					$owner_mail = sanitize_email( (string) ( $settings['user_mailid'] ?? '' ) );
 				}
 			}
 		}
@@ -816,13 +904,7 @@ class NXTCC_Routes {
 			return;
 		}
 
-		$first = get_user_meta( $user_id, 'first_name', true );
-		$last  = get_user_meta( $user_id, 'last_name', true );
-
-		$name = trim( trim( (string) $first ) . ' ' . trim( (string) $last ) );
-		if ( '' === $name ) {
-			$name = ! empty( $ud->user_nicename ) ? (string) $ud->user_nicename : (string) $ud->user_login;
-		}
+		$name = self::synced_contact_name_from_user( $ud );
 
 		list( $cc, $local ) = nxtcc_split_msisdn( (string) $phone_e164 );
 
@@ -842,7 +924,7 @@ class NXTCC_Routes {
 
 		$existing = $db->get_row(
 			$db->prepare(
-				'SELECT id, wp_uid, group_ids FROM ' . $table_contacts . '
+				'SELECT id, wp_uid, group_ids, name, is_verified FROM ' . $table_contacts . '
               WHERE user_mailid = %s
                 AND business_account_id = %s AND phone_number_id = %s
                 AND country_code = %s AND phone_number = %s
@@ -860,6 +942,10 @@ class NXTCC_Routes {
 		if ( $existing ) {
 			$update = array();
 
+			if ( (string) ( $existing['name'] ?? '' ) !== $name ) {
+				$update['name'] = $name;
+			}
+
 			if ( empty( $existing['wp_uid'] ) ) {
 				$update['wp_uid'] = (int) $user_id;
 			}
@@ -871,9 +957,14 @@ class NXTCC_Routes {
 				$update['group_ids'] = $new_csv;
 			}
 
-			$update['is_verified'] = 1;
+			if ( 1 !== (int) ( $existing['is_verified'] ?? 0 ) ) {
+				$update['is_verified'] = 1;
+			}
 
 			if ( ! empty( $update ) ) {
+				if ( $actor_id > 0 ) {
+					$update['updated_by'] = $actor_id;
+				}
 				$update['updated_at'] = current_time( 'mysql', 1 );
 				$db->update( $contacts_table, $update, array( 'id' => (int) $existing['id'] ) );
 			}
@@ -913,6 +1004,8 @@ class NXTCC_Routes {
 				'group_ids'           => (string) $verified_gid,
 				'is_verified'         => 1,
 				'custom_fields'       => wp_json_encode( array() ),
+				'created_by'          => $actor_id > 0 ? $actor_id : null,
+				'updated_by'          => $actor_id > 0 ? $actor_id : null,
 				'created_at'          => current_time( 'mysql', 1 ),
 				'updated_at'          => current_time( 'mysql', 1 ),
 			)

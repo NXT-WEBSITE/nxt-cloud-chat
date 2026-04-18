@@ -32,6 +32,17 @@ if ( ! function_exists( 'nxtcc_groups_get_current_tenant' ) ) {
 			return NXTCC_Contacts_Handler_Repo::instance()->get_current_tenant_for_user( get_current_user_id() );
 		}
 
+		if ( class_exists( 'NXTCC_Access_Control' ) ) {
+			$tenant = NXTCC_Access_Control::get_current_tenant_context();
+
+			return array(
+				$tenant['user_mailid'] ?? null,
+				$tenant['business_account_id'] ?? null,
+				$tenant['phone_number_id'] ?? null,
+				NXTCC_Access_Control::get_settings_row_for_tenant( $tenant ),
+			);
+		}
+
 		/*
 		 * Fallback: If contacts repo is not available, return only the user email.
 		 * This indicates that a tenant is not configured.

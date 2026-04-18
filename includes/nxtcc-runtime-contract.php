@@ -11,6 +11,7 @@
 defined( 'ABSPATH' ) || exit;
 
 require_once __DIR__ . '/class-nxtcc-db.php';
+require_once __DIR__ . '/class-nxtcc-runtime-integration.php';
 
 if ( ! function_exists( 'nxtcc_runtime_quote_table_name' ) ) {
 	/**
@@ -56,7 +57,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 		}
 
 		$contract = array(
-			'contract_version' => '1.0.2',
+			'contract_version' => defined( 'NXTCC_VERSION' ) ? (string) NXTCC_VERSION : '0.0.0',
 			'plugin'           => array(
 				'slug'         => 'nxt-cloud-chat',
 				'version'      => defined( 'NXTCC_VERSION' ) ? (string) NXTCC_VERSION : '0.0.0',
@@ -69,10 +70,15 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'auth_lifecycle_hooks'                => true,
 				'tenant_credentials_wrapper'          => function_exists( 'nxtcc_get_tenant_api_credentials' ),
 				'session_reply_sender'                => function_exists( 'nxtcc_send_session_reply' ),
+				'background_session_reply_sender'     => function_exists( 'nxtcc_send_background_session_reply' ),
 				'message_history_reader'              => function_exists( 'nxtcc_get_message_history_after_id' ),
+				'message_history_wamid_reader'        => function_exists( 'nxtcc_get_message_history_id_by_wamid' ),
 				'contact_reader'                      => function_exists( 'nxtcc_get_contact_by_id' ),
+				'contact_phone_reader'                => function_exists( 'nxtcc_get_contact_by_phone' ),
+				'contact_wp_user_reader'              => function_exists( 'nxtcc_get_contact_by_wp_user' ),
 				'contact_group_reader'                => function_exists( 'nxtcc_get_contact_groups_by_id' ),
 				'latest_inbound_reader'               => function_exists( 'nxtcc_get_latest_inbound_at' ),
+				'verified_phone_reader'               => function_exists( 'nxtcc_get_latest_verified_phone_for_user' ),
 			),
 			'hooks'            => array(
 				'nxtcc_inbound_message_persisted',
@@ -88,10 +94,15 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 			'wrappers'         => array(
 				'nxtcc_get_tenant_api_credentials',
 				'nxtcc_send_session_reply',
+				'nxtcc_send_background_session_reply',
 				'nxtcc_get_message_history_after_id',
+				'nxtcc_get_message_history_id_by_wamid',
 				'nxtcc_get_contact_by_id',
+				'nxtcc_get_contact_by_phone',
+				'nxtcc_get_contact_by_wp_user',
 				'nxtcc_get_contact_groups_by_id',
 				'nxtcc_get_latest_inbound_at',
+				'nxtcc_get_latest_verified_phone_for_user',
 			),
 		);
 
@@ -259,6 +270,59 @@ if ( ! function_exists( 'nxtcc_get_contact_by_id' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nxtcc_get_contact_by_phone' ) ) {
+	/**
+	 * Read a contact row by phone number, optionally scoped to a tenant.
+	 *
+	 * @param string $phone_number         Phone number in any common format.
+	 * @param string $user_mailid          Optional owner mail.
+	 * @param string $business_account_id  Optional business account id.
+	 * @param string $phone_number_id      Optional phone number id.
+	 * @return array<string, mixed>|null
+	 */
+	function nxtcc_get_contact_by_phone(
+		string $phone_number,
+		string $user_mailid = '',
+		string $business_account_id = '',
+		string $phone_number_id = ''
+	): ?array {
+		return NXTCC_Runtime_Integration::get_contact_by_phone(
+			$phone_number,
+			$user_mailid,
+			$business_account_id,
+			$phone_number_id
+		);
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_contact_by_wp_user' ) ) {
+	/**
+	 * Read a contact row by linked WordPress user id.
+	 *
+	 * Falls back to the user's latest verified WhatsApp binding when the
+	 * contact row is not yet linked by `wp_uid`.
+	 *
+	 * @param int    $user_id              WordPress user id.
+	 * @param string $user_mailid          Optional owner mail.
+	 * @param string $business_account_id  Optional business account id.
+	 * @param string $phone_number_id      Optional phone number id.
+	 * @return array<string, mixed>|null
+	 */
+	function nxtcc_get_contact_by_wp_user(
+		int $user_id,
+		string $user_mailid = '',
+		string $business_account_id = '',
+		string $phone_number_id = ''
+	): ?array {
+		return NXTCC_Runtime_Integration::get_contact_by_wp_user(
+			$user_id,
+			$user_mailid,
+			$business_account_id,
+			$phone_number_id
+		);
+	}
+}
+
 if ( ! function_exists( 'nxtcc_get_contact_groups_by_id' ) ) {
 	/**
 	 * Read the groups currently mapped to a contact.
@@ -397,6 +461,30 @@ if ( ! function_exists( 'nxtcc_get_latest_inbound_at' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nxtcc_get_latest_verified_phone_for_user' ) ) {
+	/**
+	 * Read the latest verified WhatsApp number for a WordPress user.
+	 *
+	 * @param int $user_id WordPress user id.
+	 * @return string
+	 */
+	function nxtcc_get_latest_verified_phone_for_user( int $user_id ): string {
+		return NXTCC_Runtime_Integration::get_latest_verified_phone_for_user( $user_id );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_message_history_id_by_wamid' ) ) {
+	/**
+	 * Resolve a local history row id from a Meta message id.
+	 *
+	 * @param string $wamid Meta message id.
+	 * @return int
+	 */
+	function nxtcc_get_message_history_id_by_wamid( string $wamid ): int {
+		return NXTCC_Runtime_Integration::get_message_history_id_by_wamid( $wamid );
+	}
+}
+
 if ( ! function_exists( 'nxtcc_send_session_reply' ) ) {
 	/**
 	 * Stable wrapper for session-reply sends.
@@ -416,5 +504,20 @@ if ( ! function_exists( 'nxtcc_send_session_reply' ) ) {
 		}
 
 		return nxtcc_send_message_immediately( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_send_background_session_reply' ) ) {
+	/**
+	 * Stable wrapper for background-safe session replies.
+	 *
+	 * This bypasses current-user checks while still reusing the shared Free send
+	 * path and history persistence behavior.
+	 *
+	 * @param array $args Send arguments.
+	 * @return array<string, mixed>
+	 */
+	function nxtcc_send_background_session_reply( array $args ): array {
+		return NXTCC_Runtime_Integration::send_background_session_reply( $args );
 	}
 }

@@ -377,6 +377,7 @@ if ( ! function_exists( 'nxtcc__wipe_site_data' ) ) {
 			$site_prefix . 'nxtcc_contacts',
 			$site_prefix . 'nxtcc_groups',
 			$site_prefix . 'nxtcc_user_settings',
+			$site_prefix . 'nxtcc_tenant_user_access',
 			$site_prefix . 'nxtcc_auth_otp',
 			$site_prefix . 'nxtcc_auth_bindings',
 			$site_prefix . 'nxtcc_schema_migrations',

@@ -549,9 +549,11 @@ final class NXTCC_Helpers {
 		$body = wp_remote_retrieve_body( $resp );
 		$data = json_decode( (string) $body, true );
 
-		if ( ! is_array( $data ) || empty( $data['data'] ) || ! is_array( $data['data'] ) ) {
+		if ( ! is_array( $data ) || ! isset( $data['data'] ) || ! is_array( $data['data'] ) ) {
 			return false;
 		}
+
+		$actor_id = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::current_user_id() : 0;
 
 		foreach ( $data['data'] as $tpl ) {
 			do_action(
@@ -568,6 +570,8 @@ final class NXTCC_Helpers {
 					'last_synced'         => current_time( 'mysql', 1 ),
 					'created_at'          => current_time( 'mysql', 1 ),
 					'updated_at'          => current_time( 'mysql', 1 ),
+					'created_by'          => $actor_id,
+					'updated_by'          => $actor_id,
 				)
 			);
 		}

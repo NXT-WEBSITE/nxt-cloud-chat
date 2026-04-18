@@ -189,6 +189,21 @@ final class NXTCC_Contacts_Handler_Repo {
 			return array( null, null, null, null );
 		}
 
+		if ( class_exists( 'NXTCC_Access_Control' ) ) {
+			$tenant = NXTCC_Access_Control::get_tenant_context_for_user( $wp_user_id );
+
+			if ( ! empty( $tenant['user_mailid'] ) && ! empty( $tenant['business_account_id'] ) && ! empty( $tenant['phone_number_id'] ) ) {
+				$row = NXTCC_Access_Control::get_settings_row_for_tenant( $tenant );
+
+				return array(
+					(string) $tenant['user_mailid'],
+					(string) $tenant['business_account_id'],
+					(string) $tenant['phone_number_id'],
+					$row,
+				);
+			}
+		}
+
 		$user = get_user_by( 'id', $wp_user_id );
 		if ( ! $user || empty( $user->user_email ) ) {
 			return array( null, null, null, null );
@@ -378,6 +393,7 @@ final class NXTCC_Contacts_Handler_Repo {
 	 */
 	public function create_group_if_absent( string $user_mailid, string $baid, string $pnid, string $group_name ): array {
 		$group_name = trim( $group_name );
+		$actor_id   = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::current_user_id() : (int) get_current_user_id();
 
 		if ( '' === $group_name ) {
 			return array();
@@ -423,8 +439,12 @@ final class NXTCC_Contacts_Handler_Repo {
 				'phone_number_id'     => $pnid,
 				'group_name'          => $group_name,
 				'is_verified'         => $is_verified,
+				'created_by'          => $actor_id > 0 ? $actor_id : null,
+				'updated_by'          => $actor_id > 0 ? $actor_id : null,
+				'created_at'          => current_time( 'mysql', 1 ),
+				'updated_at'          => current_time( 'mysql', 1 ),
 			),
-			array( '%s', '%s', '%s', '%s', '%d' )
+			array( '%s', '%s', '%s', '%s', '%d', '%d', '%d', '%s', '%s' )
 		);
 
 		if ( ! $ins ) {
@@ -456,9 +476,11 @@ final class NXTCC_Contacts_Handler_Repo {
 		$baid = (string) $args['baid'];
 		$pnid = (string) $args['pnid'];
 
-		$db             = $this->db();
-		$table_contacts = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
-		$table_map      = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		$db              = $this->db();
+		$table_contacts  = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
+		$table_group_map = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		// phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.user_meta__wpdb__users -- Contacts actor filters join the WordPress users table for admin-only actor labels.
+		$table_users = $this->quote_table( $db->users );
 
 		$where  = array( 'c.business_account_id = %s', 'c.phone_number_id = %s' );
 		$params = array( $baid, $pnid );
@@ -474,7 +496,7 @@ final class NXTCC_Contacts_Handler_Repo {
 		}
 
 		if ( '' !== (string) $args['created_by'] ) {
-			$where[]  = 'c.user_mailid = %s';
+			$where[]  = 'creator.user_email = %s';
 			$params[] = (string) $args['created_by'];
 		}
 
@@ -499,11 +521,12 @@ final class NXTCC_Contacts_Handler_Repo {
 			$params[] = (string) $args['search_like'];
 		}
 
-		$sql        = 'SELECT COUNT(*) FROM {contacts} c';
+		$sql        = 'SELECT COUNT(*) FROM {contacts} c LEFT JOIN {users} creator ON creator.ID = c.created_by';
 		$query_args = array();
 		$table_map  = array(
 			'contacts'  => $table_contacts,
-			'group_map' => $table_map,
+			'group_map' => $table_group_map,
+			'users'     => $table_users,
 		);
 
 		if ( ! empty( $args['group_id'] ) ) {
@@ -531,9 +554,11 @@ final class NXTCC_Contacts_Handler_Repo {
 		$baid = (string) $args['baid'];
 		$pnid = (string) $args['pnid'];
 
-		$db             = $this->db();
-		$table_contacts = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
-		$table_map      = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		$db              = $this->db();
+		$table_contacts  = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
+		$table_group_map = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		// phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.user_meta__wpdb__users -- Contacts actor filters join the WordPress users table for admin-only actor labels.
+		$table_users = $this->quote_table( $db->users );
 
 		$where  = array( 'c.business_account_id = %s', 'c.phone_number_id = %s' );
 		$params = array( $baid, $pnid );
@@ -549,7 +574,7 @@ final class NXTCC_Contacts_Handler_Repo {
 		}
 
 		if ( '' !== (string) $args['created_by'] ) {
-			$where[]  = 'c.user_mailid = %s';
+			$where[]  = 'creator.user_email = %s';
 			$params[] = (string) $args['created_by'];
 		}
 
@@ -574,11 +599,12 @@ final class NXTCC_Contacts_Handler_Repo {
 			$params[] = (string) $args['search_like'];
 		}
 
-		$sql        = 'SELECT c.* FROM {contacts} c';
+		$sql        = 'SELECT c.*, creator.user_login AS created_by_login, creator.display_name AS created_by_name, creator.user_email AS created_by_email, updater.user_login AS updated_by_login, updater.display_name AS updated_by_name, updater.user_email AS updated_by_email FROM {contacts} c LEFT JOIN {users} creator ON creator.ID = c.created_by LEFT JOIN {users} updater ON updater.ID = c.updated_by';
 		$query_args = array();
 		$table_map  = array(
 			'contacts'  => $table_contacts,
-			'group_map' => $table_map,
+			'group_map' => $table_group_map,
+			'users'     => $table_users,
 		);
 
 		if ( ! empty( $args['group_id'] ) ) {
@@ -683,11 +709,11 @@ final class NXTCC_Contacts_Handler_Repo {
 	}
 
 	/**
-	 * Get distinct creators (user_mailid) for a tenant.
+	 * Get distinct creators from actor assignments for a tenant.
 	 *
 	 * @param string $baid Business account id.
 	 * @param string $pnid Phone number id.
-	 * @return array<int, string>
+	 * @return array<int, array<string, string>>
 	 */
 	public function creators_for_tenant( string $baid, string $pnid ): array {
 		$ckey   = 'creators:' . md5( $baid . '|' . $pnid );
@@ -698,20 +724,54 @@ final class NXTCC_Contacts_Handler_Repo {
 
 		$db             = $this->db();
 		$table_contacts = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
-		$query          = $this->prepare_with_table_tokens(
-			'SELECT DISTINCT user_mailid
-			   FROM {contacts}
-			  WHERE business_account_id = %s
-			    AND phone_number_id = %s
-		   ORDER BY user_mailid ASC',
+		// phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.user_meta__wpdb__users -- Contacts creator filters join the WordPress users table for admin-only actor labels.
+		$table_users = $this->quote_table( $db->users );
+		$query       = $this->prepare_with_table_tokens(
+			'SELECT DISTINCT
+					creator.user_login AS creator_login,
+					creator.user_email AS creator_email,
+					creator.display_name AS creator_name
+			   FROM {contacts} c
+		  INNER JOIN {users} creator ON creator.ID = c.created_by
+			  WHERE c.business_account_id = %s
+			    AND c.phone_number_id = %s
+		   ORDER BY creator_login ASC, creator_email ASC',
 			array(
 				'contacts' => $table_contacts,
+				'users'    => $table_users,
 			),
 			array( $baid, $pnid )
 		);
-		$rows           = '' !== $query ? $db->get_col( $query ) : array();
+		$rows        = '' !== $query ? $db->get_results( $query, ARRAY_A ) : array();
+		$out         = array();
 
-		$rows = array_values( array_filter( $rows ? $rows : array() ) );
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$email = sanitize_email( (string) ( $row['creator_email'] ?? '' ) );
+
+			if ( '' === $email ) {
+				continue;
+			}
+
+			$login = sanitize_user( (string) ( $row['creator_login'] ?? '' ), true );
+			$label = '' !== $login
+				? $login
+				: (
+					class_exists( 'NXTCC_Actor_Audit' )
+						? NXTCC_Actor_Audit::format_user_label(
+							(string) ( $row['creator_name'] ?? '' ),
+							$email,
+							$email
+						)
+						: $email
+				);
+
+			$out[] = array(
+				'value' => $email,
+				'label' => $label,
+			);
+		}
+
+		$rows = $out;
 
 		// Inline TTL to satisfy VIP sniff (must be >= 300).
 		wp_cache_set( $ckey, $rows, self::CACHE_GROUP, 900 );
@@ -872,6 +932,7 @@ final class NXTCC_Contacts_Handler_Repo {
 			'phone_number_id'     => '%s',
 			'is_verified'         => '%d',
 			'is_subscribed'       => '%d',
+			'updated_by'          => '%d',
 			'updated_at'          => '%s',
 		);
 
@@ -984,6 +1045,8 @@ final class NXTCC_Contacts_Handler_Repo {
 			'is_verified'         => '%d',
 			'wp_uid'              => '%d',
 			'is_subscribed'       => '%d',
+			'created_by'          => '%d',
+			'updated_by'          => '%d',
 			'created_at'          => '%s',
 			'updated_at'          => '%s',
 		);
@@ -1191,6 +1254,30 @@ final class NXTCC_Contacts_Handler_Repo {
 	}
 
 	/**
+	 * Get verified group IDs currently mapped to a contact.
+	 *
+	 * @param int $contact_id Contact id.
+	 * @return array<int>
+	 */
+	public function verified_group_ids_for_contact( int $contact_id ): array {
+		if ( $contact_id <= 0 ) {
+			return array();
+		}
+
+		return $this->verified_groups_from_pool( $this->current_groups_for_contact( $contact_id ) );
+	}
+
+	/**
+	 * Check whether a contact currently belongs to any verified group.
+	 *
+	 * @param int $contact_id Contact id.
+	 * @return bool
+	 */
+	public function contact_has_verified_group( int $contact_id ): bool {
+		return ! empty( $this->verified_group_ids_for_contact( $contact_id ) );
+	}
+
+	/**
 	 * Filter only verified group IDs from a pool of IDs.
 	 *
 	 * @param array<int|mixed> $ids Group ids.
@@ -1213,6 +1300,49 @@ final class NXTCC_Contacts_Handler_Repo {
 			$ids
 		);
 		$rows         = '' !== $query ? $db->get_col( $query ) : array();
+
+		return array_map( 'intval', $rows ? $rows : array() );
+	}
+
+	/**
+	 * Return protected contact IDs that belong to verified groups inside a tenant.
+	 *
+	 * @param array<int|mixed> $ids Contact ids.
+	 * @param string           $baid Business account id.
+	 * @param string           $pnid Phone number id.
+	 * @return array<int>
+	 */
+	public function protected_contact_ids_in_tenant( array $ids, string $baid, string $pnid ): array {
+		$ids = array_values( array_filter( array_map( 'intval', $ids ) ) );
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$db             = $this->db();
+		$table_contacts = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
+		$table_map      = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		$table_groups   = $this->quote_table( $this->table( 'nxtcc_groups' ) );
+		$placeholders   = $this->int_placeholders( $ids );
+		$query          = $this->prepare_with_table_tokens(
+			"SELECT DISTINCT c.id
+			   FROM {contacts} c
+		  INNER JOIN {group_map} gm ON gm.contact_id = c.id
+		  INNER JOIN {groups} g ON g.id = gm.group_id
+			  WHERE c.id IN ({$placeholders})
+			    AND c.business_account_id = %s
+			    AND c.phone_number_id = %s
+			    AND g.is_verified = 1",
+			array(
+				'contacts'  => $table_contacts,
+				'group_map' => $table_map,
+				'groups'    => $table_groups,
+			),
+			array_merge(
+				$ids,
+				array( $baid, $pnid )
+			)
+		);
+		$rows           = '' !== $query ? $db->get_col( $query ) : array();
 
 		return array_map( 'intval', $rows ? $rows : array() );
 	}

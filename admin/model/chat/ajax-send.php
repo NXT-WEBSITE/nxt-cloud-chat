@@ -20,7 +20,7 @@ if ( ! function_exists( 'nxtcc_chat_ajax_require_caps' ) ) {
 	 * @return void
 	 */
 	function nxtcc_chat_ajax_require_caps(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_access_chat' ) ) ) {
 			wp_send_json_error(
 				array( 'message' => 'Insufficient permissions.' ),
 				403
@@ -132,41 +132,35 @@ if ( ! function_exists( 'nxtcc_chat_max_upload_bytes' ) ) {
 	}
 }
 
-/**
- * Resolve tenant context for the current admin user.
- *
- * Does not trust business_account_id/phone_number_id from input. Instead:
- * - Validates requested phone_number_id belongs to the current user.
- * - Resolves latest business_account_id for that phone_number_id.
- *
- * @param string $requested_pnid Requested phone_number_id (optional).
- * @return array{0:string,1:string,2:string} user_mailid, phone_number_id, business_account_id
- */
-function nxtcc_chat_resolve_tenant_context( string $requested_pnid ): array {
-	$user = wp_get_current_user();
+if ( ! function_exists( 'nxtcc_chat_resolve_tenant_context' ) ) {
+	/**
+	 * Resolve tenant context for the current admin user.
+	 *
+	 * Does not trust business_account_id/phone_number_id from input. Instead:
+	 * - Validates requested phone_number_id belongs to the current user.
+	 * - Resolves latest business_account_id for that phone_number_id.
+	 *
+	 * @param string $requested_pnid Requested phone_number_id (optional).
+	 * @return array{0:string,1:string,2:string} user_mailid, phone_number_id, business_account_id
+	 */
+	function nxtcc_chat_resolve_tenant_context( string $requested_pnid ): array {
+		$tenant = NXTCC_Access_Control::get_current_tenant_context();
 
-	$user_mailid = ( $user instanceof WP_User ) ? sanitize_email( (string) $user->user_email ) : '';
-	if ( '' === $user_mailid ) {
-		return array( '', '', '' );
+		$user_mailid         = isset( $tenant['user_mailid'] ) ? sanitize_email( (string) $tenant['user_mailid'] ) : '';
+		$phone_number_id     = isset( $tenant['phone_number_id'] ) ? sanitize_text_field( (string) $tenant['phone_number_id'] ) : '';
+		$business_account_id = isset( $tenant['business_account_id'] ) ? sanitize_text_field( (string) $tenant['business_account_id'] ) : '';
+
+		if ( '' === $user_mailid || '' === $phone_number_id || '' === $business_account_id ) {
+			return array( '', '', '' );
+		}
+
+		$requested_pnid = sanitize_text_field( $requested_pnid );
+		if ( '' !== $requested_pnid && $requested_pnid !== $phone_number_id ) {
+			return array( '', '', '' );
+		}
+
+		return array( $user_mailid, $phone_number_id, $business_account_id );
 	}
-
-	if ( ! function_exists( 'nxtcc_chat_repo' ) ) {
-		require_once NXTCC_PLUGIN_DIR . 'admin/model/chat/chat-helpers.php';
-	}
-
-	$repo = nxtcc_chat_repo();
-
-	$phone_number_id = $repo->get_user_phone_number_id( $user_mailid, (string) $requested_pnid );
-	$phone_number_id = (string) $phone_number_id;
-
-	if ( '' === $phone_number_id ) {
-		return array( $user_mailid, '', '' );
-	}
-
-	$settings = $repo->get_tenant_settings_by_phone_number_id( $phone_number_id );
-	$baid     = ( $settings && ! empty( $settings->business_account_id ) ) ? (string) $settings->business_account_id : '';
-
-	return array( $user_mailid, $phone_number_id, $baid );
 }
 
 /**
@@ -230,6 +224,8 @@ function nxtcc_ajax_send_message(): void {
 		'phone_number_id'     => $phone_number_id,
 		'contact_id'          => $contact_id,
 		'message_content'     => $message_content,
+		'origin_type'         => 'chat_user',
+		'origin_user_id'      => (int) get_current_user_id(),
 	);
 
 	if ( '' !== $reply_to_message_id ) {
@@ -421,6 +417,8 @@ function nxtcc_ajax_send_media(): void {
 		'mime_type'           => $type,
 		'filename'            => $base,
 		'caption'             => $caption,
+		'origin_type'         => 'chat_user',
+		'origin_user_id'      => (int) get_current_user_id(),
 	);
 
 	if ( '' !== $reply_to_message_id ) {
@@ -515,6 +513,8 @@ function nxtcc_ajax_send_media_by_url(): void {
 		'link'                => $link,
 		'filename'            => $filename,
 		'caption'             => $caption,
+		'origin_type'         => 'chat_user',
+		'origin_user_id'      => (int) get_current_user_id(),
 	);
 
 	if ( '' !== $reply_to_message_id ) {

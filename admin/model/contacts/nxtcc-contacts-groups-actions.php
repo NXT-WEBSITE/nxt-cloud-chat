@@ -15,7 +15,7 @@ if ( ! function_exists( 'nxtcc_ajax_groups_list' ) ) {
 	 */
 	function nxtcc_ajax_groups_list(): void {
 		check_ajax_referer( 'nxtcc_contacts_nonce', 'security' );
-		nxtcc_verify_caps( 'manage_options' );
+		nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 		list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 
@@ -39,7 +39,7 @@ if ( ! function_exists( 'nxtcc_ajax_groups_create' ) ) {
 	 */
 	function nxtcc_ajax_groups_create(): void {
 		check_ajax_referer( 'nxtcc_contacts_nonce', 'security' );
-		nxtcc_verify_caps( 'manage_options' );
+		nxtcc_verify_caps( 'nxtcc_manage_groups' );
 
 		list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 

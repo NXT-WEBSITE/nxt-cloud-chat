@@ -1,7 +1,7 @@
 /**
  * History screen JS (Admin).
  *
- * Handles: fetch + infinite scroll, deep-link filters, row modal, bulk actions.
+ * Handles paged fetch, filters, modal details, and bulk actions.
  *
  * @package NXTCC
  */
@@ -10,70 +10,55 @@ jQuery(
 	function ( $ ) {
 		'use strict';
 
-		const cfg = window.NXTCC_History || {};
+		var cfg = window.NXTCC_History || {};
+		var ajaxurl = 'string' === typeof cfg.ajaxurl && cfg.ajaxurl
+			? cfg.ajaxurl
+			: ( 'string' === typeof window.ajaxurl ? window.ajaxurl : '' );
+		var nonce = 'string' === typeof cfg.nonce ? cfg.nonce : '';
+		var pageLimit = parseInt( cfg.limit || 30, 10 );
+		var sameOrigin = true;
+		var colspan = 12;
+		var page = 1;
+		var done = false;
+		var isLoading = false;
+		var scrollTicking = false;
 
-		// ---- Harden ajaxurl + nonce (type guard + same-origin enforcement). ----
-		const ajaxurl =
-		'string' === typeof cfg.ajaxurl && cfg.ajaxurl
-		? cfg.ajaxurl
-		: ( 'string' === typeof window.ajaxurl ? window.ajaxurl : '' );
-		const nonce   = 'string' === typeof cfg.nonce ? cfg.nonce : '';
-
-		let sameOrigin = true;
+		if ( ! pageLimit || pageLimit < 1 ) {
+			pageLimit = 30;
+		}
 
 		try {
-				const origin = 'string' === typeof document.location.origin ? document.location.origin : '';
-				const urlObj = new URL( ajaxurl, origin );
-				sameOrigin   = '' !== origin && urlObj.origin === origin;
-		} catch ( e ) {
+			var origin = 'string' === typeof document.location.origin ? document.location.origin : '';
+			var urlObj = new URL( ajaxurl, origin );
+
+			sameOrigin = '' !== origin && urlObj.origin === origin;
+		} catch ( error ) {
 			sameOrigin = false;
 		}
 
 		if ( ! sameOrigin ) {
-			// eslint-disable-next-line no-console.
-			console.warn( '[NXTCC] Blocked cross-origin ajaxurl:', ajaxurl );
+			window.console.warn( '[NXTCC] Blocked cross-origin ajaxurl:', ajaxurl );
 		}
 
-		const PAGE_LIMIT = parseInt( cfg.limit || 30, 10 );
+		var $tbody = $( '#nxtcc-history-tbody' );
+		var $loading = $( '#nxtcc-history-loading-row' );
+		var $end = $( '#nxtcc-history-end-row' );
+		var $search = $( '#nxtcc-history-search' );
+		var $messageType = $( '#nxtcc-history-message-type' );
+		var $status = $( '#nxtcc-history-status' );
+		var $refresh = $( '#nxtcc-history-refresh' );
+		var $bulkSelectAll = $( '#nxtcc-history-select-all' );
+		var $bulkAction = $( '#nxtcc-history-bulk-action' );
+		var $bulkApply = $( '#nxtcc-history-apply' );
+		var $modal = $( '#nxtcc-history-modal' );
+		var $modalClosePrimary = $( '#nxtcc-history-modal-close' );
+		var $modalCloseSecondary = $( '#nxtcc-history-modal-close-2' );
+		var $modalOverlay = $( '.nxtcc-history-modal-overlay' );
+		var $tableWrap = $( '.nxtcc-history-table-wrap' );
 
-		const $tbody   = $( '#nxtcc-history-tbody' );
-		const $loading = $( '#nxtcc-history-loading-row' );
-		const $end     = $( '#nxtcc-history-end-row' );
-
-		const $search = $( '#nxtcc-history-search' );
-		const $status = $( '#nxtcc-history-status' );
-		const $btnRef = $( '#nxtcc-history-refresh' );
-
-		const $bulkSelAll = $( '#nxtcc-history-select-all' );
-		const $bulkSel    = $( '#nxtcc-history-bulk-action' );
-		const $bulkApply  = $( '#nxtcc-history-apply' );
-
-		// Modal.
-		const $modal        = $( '#nxtcc-history-modal' );
-		const $modalClose1  = $( '#nxtcc-history-modal-close' );
-		const $modalClose2  = $( '#nxtcc-history-modal-close-2' );
-		const $modalOverlay = $modal.find( '.nxtcc-modal-overlay' );
-
-		const COLSPAN = 12;
-
-		// State.
-		let page      = 1;
-		let done      = false;
-		let isLoading = false;
-
-		/**
-		 * Normalize any value to string.
-		 *
-		 * @param {*} v Value.
-		 * @return {string} String.
-		 */
-		function toStr( v ) {
-				return null == v ? '' : String( v );
-		}
-
-		// Deep link support (server-sanitized via PHP and passed as cfg.deeplink).
-		const deepLinkFilters = Object.assign(
+		var deepLinkFilters = $.extend(
 			{
+				message_type: '',
 				status_any: '',
 				status: '',
 				range: '7d',
@@ -91,455 +76,491 @@ jQuery(
 		}
 
 		if (
-		deepLinkFilters.status &&
-		$(
-			'#nxtcc-history-status option[value="' +
-			deepLinkFilters.status +
-			'"]'
-		).length
+			deepLinkFilters.message_type &&
+			$(
+				'#nxtcc-history-message-type option[value="' +
+				deepLinkFilters.message_type +
+				'"]'
+			).length
 		) {
-				$status.val( deepLinkFilters.status );
+			$messageType.val( deepLinkFilters.message_type );
+		}
+
+		if (
+			deepLinkFilters.status &&
+			$(
+				'#nxtcc-history-status option[value="' +
+				deepLinkFilters.status +
+				'"]'
+			).length
+		) {
+			$status.val( deepLinkFilters.status );
 		} else if (
-		deepLinkFilters.status_any &&
-		-1 === deepLinkFilters.status_any.indexOf( ',' )
+			deepLinkFilters.status_any &&
+			-1 === deepLinkFilters.status_any.indexOf( ',' ) &&
+			$(
+				'#nxtcc-history-status option[value="' +
+				deepLinkFilters.status_any +
+				'"]'
+			).length
 		) {
-			if (
-				$(
-					'#nxtcc-history-status option[value="' +
-					deepLinkFilters.status_any +
-					'"]'
-				).length
-			) {
-				$status.val( deepLinkFilters.status_any );
-			}
+			$status.val( deepLinkFilters.status_any );
 		}
 
 		/**
-		 * Build a status badge element (DOM node, not HTML string).
+		 * Normalize any value to a readable text string.
 		 *
-		 * @param {string} status Status.
+		 * @param {*} value Raw value.
+		 * @return {string} Display string.
+		 */
+		function displayText( value ) {
+			if ( null === value || 'undefined' === typeof value ) {
+				return '-';
+			}
+
+			value = String( value );
+
+			return '' === value ? '-' : value;
+		}
+
+		/**
+		 * Build a status badge node.
+		 *
+		 * @param {string} status Status text.
 		 * @return {HTMLElement} Badge element.
 		 */
-		function statusBadge( status ) {
-			const st = ( status || '' ).toLowerCase();
-			let cls  = 'is-unknown';
+		function buildStatusBadge( status ) {
+			var normalizedStatus = String( status || '' ).toLowerCase();
+			var badgeClass = 'is-unknown';
+			var badge = document.createElement( 'span' );
 
-			if ( 'sent' === st ) {
-				cls = 'is-sent';
-			} else if ( 'delivered' === st ) {
-				cls = 'is-delivered';
-			} else if ( 'read' === st ) {
-				cls = 'is-read';
-			} else if ( 'failed' === st ) {
-				cls = 'is-failed';
-			} else if ( 'sending' === st ) {
-				cls = 'is-sending';
-			} else if ( 'pending' === st ) {
-				cls = 'is-pending';
-			} else if ( 'scheduled' === st ) {
-				cls = 'is-scheduled';
-			} else if ( 'received' === st ) {
-				cls = 'is-received';
+			if ( 'sent' === normalizedStatus ) {
+				badgeClass = 'is-sent';
+			} else if ( 'delivered' === normalizedStatus ) {
+				badgeClass = 'is-delivered';
+			} else if ( 'read' === normalizedStatus ) {
+				badgeClass = 'is-read';
+			} else if ( 'failed' === normalizedStatus ) {
+				badgeClass = 'is-failed';
+			} else if ( 'sending' === normalizedStatus ) {
+				badgeClass = 'is-sending';
+			} else if ( 'pending' === normalizedStatus ) {
+				badgeClass = 'is-pending';
+			} else if ( 'scheduled' === normalizedStatus ) {
+				badgeClass = 'is-scheduled';
+			} else if ( 'received' === normalizedStatus ) {
+				badgeClass = 'is-received';
 			}
 
-			const span       = document.createElement( 'span' );
-			span.className   = 'nxtcc-status-badge ' + cls;
-			span.textContent = status || '—';
+			badge.className = 'nxtcc-status-badge ' + badgeClass;
+			badge.textContent = displayText( status );
 
-			return span;
+			return badge;
 		}
 
 		/**
-		 * Get current filters (deep link + UI).
+		 * Build current UI filters plus deeplink-only values.
 		 *
-		 * @return {Object} Filters.
+		 * @return {Object} Filter object.
 		 */
 		function currentFilters() {
-				const base = {
-					search: ( $search.val() || '' ).trim(),
-					status: ( $status.val() || '' ).trim(),
-			};
+			var selectedStatus = String( $status.val() || '' ).trim().toLowerCase();
+			var statusAny = selectedStatus;
 
-				const merged = {
-					status_any: deepLinkFilters.status_any || '',
-					range: deepLinkFilters.range || '7d',
-					from: deepLinkFilters.from || '',
-					to: deepLinkFilters.to || '',
-					phone_number_id: deepLinkFilters.phone_number_id || '',
-					sort: deepLinkFilters.sort || 'newest',
-			};
-
-			if ( base.status ) {
-				const sel         = base.status.toLowerCase();
-				merged.status_any = 'pending' === sel ? 'pending,queued' : sel; // Alias queued.
+			if ( 'pending' === selectedStatus ) {
+				statusAny = 'pending,queued';
 			}
 
-			merged.search = base.search || deepLinkFilters.search || '';
+			if ( ! statusAny ) {
+				statusAny = deepLinkFilters.status_any || '';
+			}
 
-			return merged;
+			return {
+				search: String( $search.val() || '' ).trim(),
+				message_type: String( $messageType.val() || '' ).trim(),
+				status: selectedStatus,
+				status_any: statusAny,
+				range: deepLinkFilters.range || '7d',
+				from: deepLinkFilters.from || '',
+				to: deepLinkFilters.to || '',
+				phone_number_id: deepLinkFilters.phone_number_id || '',
+				sort: deepLinkFilters.sort || 'newest',
+			};
 		}
 
 		/**
-		 * Build a single <tr> row as DOM node (no HTML string concatenation).
+		 * Create a plain text table cell.
 		 *
-		 * @param {Object} r Row data.
-		 * @return {HTMLElement} <tr>.
+		 * @param {*} value Cell value.
+		 * @return {HTMLElement} Table cell.
 		 */
-		function buildRow( r ) {
-				const id     = null != r.id ? r.id : '';
-				const source = r.source || 'history';
+		function buildTextCell( value ) {
+			var cell = document.createElement( 'td' );
 
-				const tr = document.createElement( 'tr' );
-				tr.setAttribute( 'data-id', toStr( id ) );
-				tr.setAttribute( 'data-source', toStr( source ) );
+			cell.textContent = displayText( value );
 
-			function tdText( value ) {
-				const td       = document.createElement( 'td' );
-				td.textContent = value ? toStr( value ) : '—';
-				return td;
-			}
-
-			// Checkbox cell.
-			{
-				const td        = document.createElement( 'td' );
-				const input     = document.createElement( 'input' );
-				input.type      = 'checkbox';
-				input.className = 'nxtcc-row-check';
-				input.setAttribute( 'data-id', toStr( id ) );
-				input.setAttribute( 'data-source', toStr( source ) );
-				td.appendChild( input );
-				tr.appendChild( td );
-			}
-
-				tr.appendChild( tdText( r.contact_name ) );
-				tr.appendChild( tdText( r.contact_number ) );
-				tr.appendChild( tdText( r.template_name ) );
-				tr.appendChild( tdText( r.message ) );
-
-				// Status badge cell.
-				{
-					const td = document.createElement( 'td' );
-					td.appendChild( statusBadge( r.status ) );
-					tr.appendChild( td );
-			}
-
-				tr.appendChild( tdText( r.sent_at ) );
-				tr.appendChild( tdText( r.delivered_at ) );
-				tr.appendChild( tdText( r.read_at ) );
-				tr.appendChild( tdText( r.scheduled_at ) );
-				tr.appendChild( tdText( r.created_at ) );
-				tr.appendChild( tdText( r.created_by ) );
-
-				return tr;
+			return cell;
 		}
 
 		/**
-		 * Append a simple message row (centered) to tbody.
+		 * Build a table row node.
 		 *
-		 * @param {string} message Message.
-		 * @param {string} color   Optional color.
+		 * @param {Object} row Row payload.
+		 * @return {HTMLElement} Table row.
 		 */
-		function appendMessageRow( message, color ) {
-				const tr = document.createElement( 'tr' );
-				const td = document.createElement( 'td' );
+		function buildRow( row ) {
+			var id = null !== row.id && 'undefined' !== typeof row.id ? row.id : '';
+			var source = row.source || 'history';
+			var tr = document.createElement( 'tr' );
+			var checkboxCell = document.createElement( 'td' );
+			var checkbox = document.createElement( 'input' );
+			var statusCell = document.createElement( 'td' );
 
-				td.setAttribute( 'colspan', String( COLSPAN ) );
-				td.style.textAlign = 'center';
-				td.textContent     = message;
+			tr.setAttribute( 'data-id', String( id ) );
+			tr.setAttribute( 'data-source', String( source ) );
 
-			if ( color ) {
-				td.style.color = color;
-			}
+			checkbox.type = 'checkbox';
+			checkbox.className = 'nxtcc-row-check';
+			checkbox.setAttribute( 'data-id', String( id ) );
+			checkbox.setAttribute( 'data-source', String( source ) );
+			checkboxCell.appendChild( checkbox );
+			tr.appendChild( checkboxCell );
 
+			tr.appendChild( buildTextCell( row.contact_name ) );
+			tr.appendChild( buildTextCell( row.contact_number ) );
+			tr.appendChild( buildTextCell( row.template_name ) );
+			tr.appendChild( buildTextCell( row.message ) );
+
+			statusCell.appendChild( buildStatusBadge( row.status ) );
+			tr.appendChild( statusCell );
+
+			tr.appendChild( buildTextCell( row.sent_at ) );
+			tr.appendChild( buildTextCell( row.delivered_at ) );
+			tr.appendChild( buildTextCell( row.read_at ) );
+			tr.appendChild( buildTextCell( row.scheduled_at ) );
+			tr.appendChild( buildTextCell( row.created_at ) );
+			tr.appendChild( buildTextCell( row.created_by ) );
+
+			return tr;
+		}
+
+		/**
+		 * Append a centered state row to the table body.
+		 *
+		 * @param {string} message Message text.
+		 */
+		function appendMessageRow( message ) {
+			var tr = document.createElement( 'tr' );
+			var td = document.createElement( 'td' );
+
+			td.setAttribute( 'colspan', String( colspan ) );
+			td.textContent = message;
+			tr.className = 'nxtcc-history-state-row';
 			tr.appendChild( td );
 			$tbody.get( 0 ).appendChild( tr );
 		}
 
 		/**
-		 * Toggle loading row.
-		 *
-		 * @param {boolean} show Whether to show.
-		 */
-		function toggleLoading( show ) {
-				$loading.toggle( ! ! show );
-		}
-
-		/**
-		 * Reset table state.
+		 * Reset list state before a fresh fetch.
 		 */
 		function resetTable() {
-				page = 1;
-				done = false;
-				$tbody.empty();
-				$end.hide();
-				$bulkSelAll.prop( 'checked', false );
+			page = 1;
+			done = false;
+			isLoading = false;
+			$tbody.empty();
+			$loading.prop( 'hidden', true );
+			$end.prop( 'hidden', true );
+			$bulkSelectAll.prop( 'checked', false );
 		}
 
 		/**
-		 * Safe POST helper.
+		 * Post to AJAX endpoint safely.
 		 *
-		 * @param {Object} data Data.
-		 * @return {jqXHR|Promise} Promise.
+		 * @param {Object} data Request payload.
+		 * @return {jqXHR|Promise} AJAX promise.
 		 */
 		function safePost( data ) {
 			if ( ! sameOrigin || ! ajaxurl ) {
 				return $.Deferred().reject().promise();
 			}
 
-			return $.post( ajaxurl, data ).fail(
-				function () {
-					if ( 0 === $tbody.children().length ) {
-						appendMessageRow( 'Error loading data.', '#b00' );
-					}
-				} 
-			);
+			return $.post( ajaxurl, data );
 		}
 
 		/**
-		 * Fetch next page.
+		 * Fetch the next history page.
 		 */
 		function fetchPage() {
+			var filters;
+
 			if ( isLoading || done ) {
 				return;
 			}
 
-			if ( ! Number.isFinite( page ) || page <= 0 ) {
-				page = 1;
-			}
-
 			isLoading = true;
-			toggleLoading( true );
-
-			const filters = currentFilters();
+			$loading.prop( 'hidden', false );
+			filters = currentFilters();
 
 			safePost(
 				{
 					action: 'nxtcc_history_fetch',
-					nonce,
-					page,
-					limit: PAGE_LIMIT,
-					filters,
-					} 
+					nonce: nonce,
+					page: page,
+					limit: pageLimit,
+					filters: filters,
+				}
 			)
-					.done(
-						function ( resp ) {
-							if ( ! resp || ! resp.success ) {
-								return;
+				.done(
+					function ( response ) {
+						var rows;
+						var fragment;
+
+						if ( ! response || ! response.success ) {
+							if ( 1 === page && 0 === $tbody.children().length ) {
+								appendMessageRow( 'Error loading data.' );
 							}
 
-							const rows = resp.data && resp.data.rows ? resp.data.rows : [];
+							done = true;
+							return;
+						}
 
-							if ( ! rows.length ) {
-								if ( 1 === page ) {
-									appendMessageRow( 'No records found.', '#777' );
-								} else {
-									$end.show();
-								}
+						rows = response.data && response.data.rows ? response.data.rows : [];
 
-								done = true;
-								return;
-							}
-
-							const frag = document.createDocumentFragment();
-
-							rows.forEach(
-								function ( row ) {
-									frag.appendChild( buildRow( row ) );
-								} 
-							);
-
-							$tbody.get( 0 ).appendChild( frag );
-
-							if ( rows.length < PAGE_LIMIT ) {
-								$end.show();
-								done = true;
+						if ( ! rows.length ) {
+							if ( 1 === page ) {
+								appendMessageRow( 'No records found.' );
 							} else {
-								page = ( page + 1 ) | 0;
+								$end.prop( 'hidden', false );
 							}
-						} 
-					)
-					.always(
-						function () {
-							isLoading = false;
-							toggleLoading( false );
-						} 
-					);
+
+							done = true;
+							return;
+						}
+
+						fragment = document.createDocumentFragment();
+
+						rows.forEach(
+							function ( row ) {
+								fragment.appendChild( buildRow( row ) );
+							}
+						);
+
+						$tbody.get( 0 ).appendChild( fragment );
+
+						if ( rows.length < pageLimit ) {
+							done = true;
+							$end.prop( 'hidden', false );
+						} else {
+							page += 1;
+						}
+					}
+				)
+				.fail(
+					function () {
+						if ( 1 === page && 0 === $tbody.children().length ) {
+							appendMessageRow( 'Error loading data.' );
+						}
+
+						done = true;
+					}
+				)
+				.always(
+					function () {
+						isLoading = false;
+						$loading.prop( 'hidden', true );
+					}
+				);
 		}
 
-		// Refresh, search, status change.
-		$btnRef.on(
+		/**
+		 * Open the detail modal for one row.
+		 *
+		 * @param {number} id Row id.
+		 * @param {string} source Row source.
+		 */
+		function openModal( id, source ) {
+			safePost(
+				{
+					action: 'nxtcc_history_fetch_one',
+					nonce: nonce,
+					id: id,
+					source: source,
+				}
+			).done(
+				function ( response ) {
+					var row;
+					var hasBroadcast;
+
+					if ( ! response || ! response.success ) {
+						return;
+					}
+
+					row = response.data && response.data.row ? response.data.row : {};
+					hasBroadcast = !! row.broadcast_id;
+
+					$( '#kv-contact' ).text( displayText( row.contact_name ) );
+					$( '#kv-number' ).text( displayText( row.contact_number ) );
+					$( '#kv-template' ).text( displayText( row.template_name ) );
+					$( '#kv-status' ).text( displayText( row.status ) );
+					$( '#kv-meta-id' ).text( displayText( row.meta_id ) );
+					$( '#kv-broadcast-id' ).text( displayText( row.broadcast_id ) );
+					$( '#kv-last-error' ).text( displayText( row.last_error ) );
+					$( '#kv-sent' ).text( displayText( row.sent_at ) );
+					$( '#kv-delivered' ).text( displayText( row.delivered_at ) );
+					$( '#kv-read' ).text( displayText( row.read_at ) );
+					$( '#kv-created-at' ).text( displayText( row.created_at ) );
+					$( '#kv-created-by' ).text( displayText( row.created_by ) );
+					$( '#kv-message' ).text( displayText( row.message ) );
+					$( '#kv-broadcast-row' ).prop( 'hidden', ! hasBroadcast );
+					$( '#kv-last-error-row' ).prop( 'hidden', ! row.last_error );
+					$( '#kv-media-wrap' ).prop( 'hidden', true );
+					$modal.attr( 'aria-hidden', 'false' ).prop( 'hidden', false );
+				}
+			);
+		}
+
+		/**
+		 * Close the detail modal.
+		 */
+		function closeModal() {
+			$modal.attr( 'aria-hidden', 'true' ).prop( 'hidden', true );
+		}
+
+		$refresh.on(
 			'click',
 			function () {
 				resetTable();
 				fetchPage();
-			} 
+			}
 		);
 
 		$search.on(
 			'keydown',
-			function ( e ) {
-				if ( 'Enter' === e.key ) {
-						e.preventDefault();
-						$btnRef.trigger( 'click' );
+			function ( event ) {
+				if ( 'Enter' === event.key ) {
+					event.preventDefault();
+					$refresh.trigger( 'click' );
 				}
-			} 
+			}
 		);
 
-		$status.on(
-			'change',
-			function () {
-				$btnRef.trigger( 'click' );
-			} 
-		);
+		$status.on( 'change', function () {
+			$refresh.trigger( 'click' );
+		} );
 
-		// Throttled infinite scroll on table wrap.
-		const $wrap       = $( '.nxtcc-history-table-wrap' );
-		let scrollTicking = false;
+		$messageType.on( 'change', function () {
+			$refresh.trigger( 'click' );
+		} );
 
-		$wrap.on(
+		$tableWrap.on(
 			'scroll',
 			function () {
 				if ( scrollTicking ) {
-						return;
+					return;
 				}
 
 				scrollTicking = true;
 
 				window.requestAnimationFrame(
 					function () {
-						const el = $wrap.get( 0 );
+						var element = $tableWrap.get( 0 );
 
 						if (
-						el &&
-						el.scrollTop + el.clientHeight >= el.scrollHeight - 30
+							element &&
+							element.scrollTop + element.clientHeight >= element.scrollHeight - 30
 						) {
-								fetchPage();
+							fetchPage();
 						}
 
 						scrollTicking = false;
-					} 
+					}
 				);
-			} 
+			}
 		);
 
-		// Modal open.
 		$( document ).on(
 			'click',
 			'.nxtcc-history-table tbody tr',
-			function ( e ) {
-				if ( $( e.target ).is( 'input[type="checkbox"]' ) ) {
-						return;
+			function ( event ) {
+				var id;
+				var source;
+
+				if ( $( event.target ).is( 'input[type="checkbox"]' ) ) {
+					return;
 				}
 
-				const id     = $( this ).data( 'id' );
-				const source = $( this ).data( 'source' ) || 'history';
+				id = parseInt( $( this ).data( 'id' ), 10 );
+				source = String( $( this ).data( 'source' ) || 'history' );
 
-				safePost(
-					{
-						action: 'nxtcc_history_fetch_one',
-						nonce,
-						id,
-						source,
-					} 
-				).done(
-					function ( resp ) {
-						if ( ! resp || ! resp.success ) {
-							return;
-						}
+				if ( ! id ) {
+					return;
+				}
 
-						const r = resp.data && resp.data.row ? resp.data.row : {};
-
-						$( '#kv-contact' ).text( r.contact_name || '—' );
-						$( '#kv-number' ).text( r.contact_number || '—' );
-						$( '#kv-template' ).text( r.template_name || '—' );
-						$( '#kv-status' ).text( r.status || '—' );
-						$( '#kv-meta-id' ).text( r.meta_id || '—' );
-						$( '#kv-sent' ).text( r.sent_at || '—' );
-						$( '#kv-delivered' ).text( r.delivered_at || '—' );
-						$( '#kv-read' ).text( r.read_at || '—' );
-						$( '#kv-created-at' ).text( r.created_at || '—' );
-						$( '#kv-created-by' ).text( r.created_by || '—' );
-						$( '#kv-message' ).text( r.message || '' );
-						$( '#kv-media-wrap' ).hide();
-
-						$modal.attr( 'aria-hidden', 'false' ).show();
-					} 
-				);
-			} 
+				openModal( id, source );
+			}
 		);
 
-		/**
-		 * Close modal.
-		 */
-		function closeModal() {
-			$modal.attr( 'aria-hidden', 'true' ).hide();
-		}
-
-		$modalClose1.on( 'click', closeModal );
-		$modalClose2.on( 'click', closeModal );
+		$modalClosePrimary.on( 'click', closeModal );
+		$modalCloseSecondary.on( 'click', closeModal );
 		$modalOverlay.on( 'click', closeModal );
 
 		$( document ).on(
 			'keydown',
-			function ( e ) {
-				if ( 'Escape' === e.key ) {
+			function ( event ) {
+				if ( 'Escape' === event.key ) {
 					closeModal();
 				}
-			} 
+			}
 		);
 
-		// Bulk select all.
-		$bulkSelAll.on(
+		$bulkSelectAll.on(
 			'change',
 			function () {
-				const checked = $( this ).is( ':checked' );
+				var checked = $( this ).is( ':checked' );
+
 				$( '.nxtcc-row-check' ).prop( 'checked', checked );
-			} 
+			}
 		);
 
-		// Bulk Apply (disable button during action to avoid double-submit).
 		$bulkApply.on(
 			'click',
 			function () {
-				const action = $bulkSel.val();
+				var action = String( $bulkAction.val() || '' );
+				var ids = [];
+				var sourceMap = {};
 
 				if ( ! action ) {
-						return;
+					return;
 				}
-
-				const ids     = [];
-				const sources = new Set();
 
 				$( '.nxtcc-row-check:checked' ).each(
 					function () {
-						const rowId = parseInt( $( this ).data( 'id' ), 10 );
+						var rowId = parseInt( $( this ).data( 'id' ), 10 );
+						var source = String( $( this ).data( 'source' ) || 'history' );
 
-						if ( ! Number.isNaN( rowId ) ) {
-								ids.push( rowId );
-								sources.add( $( this ).data( 'source' ) || 'history' );
+						if ( rowId ) {
+							ids.push( rowId );
+							sourceMap[ source ] = true;
 						}
-					} 
+					}
 				);
 
 				if ( ! ids.length ) {
-						window.alert( 'Please select at least one row.' );
-						return;
+					window.alert( 'Please select at least one row.' );
+					return;
 				}
 
-				let sourceParam = 'history';
+				var sourceParam = 'history';
+				var filters = currentFilters();
 
-				if ( sources.has( 'queue' ) && sources.has( 'history' ) ) {
-						sourceParam = 'both';
-				} else if ( sources.has( 'queue' ) && ! sources.has( 'history' ) ) {
+				if ( sourceMap.queue && sourceMap.history ) {
+					sourceParam = 'both';
+				} else if ( sourceMap.queue ) {
 					sourceParam = 'queue';
 				}
 
 				if ( 'delete' === action ) {
-					if (
-					! window.confirm(
-						'Delete selected rows? This cannot be undone.'
-					)
-					) {
+					if ( ! window.confirm( 'Delete selected rows? This cannot be undone.' ) ) {
 						return;
 					}
 
@@ -548,75 +569,71 @@ jQuery(
 					safePost(
 						{
 							action: 'nxtcc_history_bulk_delete',
-							nonce,
+							nonce: nonce,
 							source: sourceParam,
-							ids,
-						} 
+							ids: ids,
+						}
 					)
 						.done(
-							function ( resp ) {
-								if ( resp && resp.success ) {
-										$( '.nxtcc-row-check:checked' )
-									.closest( 'tr' )
-									.remove();
+							function ( response ) {
+								if ( response && response.success ) {
+									$( '.nxtcc-row-check:checked' ).closest( 'tr' ).remove();
+									$bulkSelectAll.prop( 'checked', false );
 								} else {
-									const msg =
-										resp && resp.data && resp.data.message
-									? resp.data.message
-									: 'Delete failed.';
-									window.alert( msg );
+									window.alert(
+										response && response.data && response.data.message
+											? response.data.message
+											: 'Delete failed.'
+									);
 								}
-							} 
+							}
 						)
 						.always(
 							function () {
 								$bulkApply.prop( 'disabled', false );
-							} 
+							}
 						);
 
 					return;
 				}
 
 				if ( 'export' === action ) {
-					const filters = currentFilters();
+					var form = document.createElement( 'form' );
 
-					const form  = document.createElement( 'form' );
+					function addHiddenField( name, value ) {
+						var input = document.createElement( 'input' );
+
+						input.type = 'hidden';
+						input.name = name;
+						input.value = String( value || '' );
+						form.appendChild( input );
+					}
+
 					form.method = 'POST';
 					form.action = ajaxurl;
 					form.target = '_blank';
 
-					function addHidden( name, value ) {
-						const input = document.createElement( 'input' );
-						input.type  = 'hidden';
-						input.name  = name;
-						input.value = toStr( value );
-						form.appendChild( input );
-					}
-
-					addHidden( 'action', 'nxtcc_history_export' );
-					addHidden( 'nonce', nonce );
-					addHidden( 'source', sourceParam );
-
-					addHidden( 'status_any', filters.status_any || '' );
-					addHidden( 'status', filters.status || '' );
-					addHidden( 'search', filters.search || '' );
-					addHidden( 'range', filters.range || '' );
-					addHidden( 'from', filters.from || '' );
-					addHidden( 'to', filters.to || '' );
-					addHidden( 'phone_number_id', filters.phone_number_id || '' );
-					addHidden( 'sort', filters.sort || '' );
+					addHiddenField( 'action', 'nxtcc_history_export' );
+					addHiddenField( 'nonce', nonce );
+					addHiddenField( 'source', sourceParam );
+					addHiddenField( 'search', filters.search || '' );
+					addHiddenField( 'message_type', filters.message_type || '' );
+					addHiddenField( 'status', filters.status || '' );
+					addHiddenField( 'status_any', filters.status_any || '' );
+					addHiddenField( 'range', filters.range || '' );
+					addHiddenField( 'from', filters.from || '' );
+					addHiddenField( 'to', filters.to || '' );
+					addHiddenField( 'phone_number_id', filters.phone_number_id || '' );
+					addHiddenField( 'sort', filters.sort || '' );
 
 					document.body.appendChild( form );
 					form.submit();
 					document.body.removeChild( form );
 				}
-			} 
+			}
 		);
 
-		// Initial.
 		resetTable();
 		fetchPage();
-	} 
+	}
 );
-
-

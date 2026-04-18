@@ -47,6 +47,10 @@ if ( ! function_exists( 'nxtcc_chat_make_reply_payload' ) ) {
 
 		$raw = trim( $raw );
 
+		if ( '' === $raw && function_exists( 'nxtcc_chat_extract_message_content_from_message' ) ) {
+			$raw = nxtcc_chat_extract_message_content_from_message( $row );
+		}
+
 		if ( '' !== $raw && '{' === substr( $raw, 0, 1 ) ) {
 			$obj = json_decode( $raw, true );
 
@@ -79,6 +83,141 @@ if ( ! function_exists( 'nxtcc_chat_make_reply_payload' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nxtcc_chat_extract_message_content_from_message' ) ) {
+	/**
+	 * Extract displayable message content from a thread row.
+	 *
+	 * This is primarily used to recover older rows where `message_content` was
+	 * stored empty even though the raw webhook payload in `response_json`
+	 * contains enough information to rebuild a readable value.
+	 *
+	 * @param object|array $message Message row.
+	 * @return string
+	 */
+	function nxtcc_chat_extract_message_content_from_message( $message ): string {
+		$existing = '';
+
+		if ( is_object( $message ) && isset( $message->message_content ) ) {
+			$existing = (string) $message->message_content;
+		} elseif ( is_array( $message ) && isset( $message['message_content'] ) ) {
+			$existing = (string) $message['message_content'];
+		}
+
+		$existing = trim( $existing );
+		if ( '' !== $existing ) {
+			return $existing;
+		}
+
+		$response_json = '';
+
+		if ( is_object( $message ) && ! empty( $message->response_json ) ) {
+			$response_json = (string) $message->response_json;
+		} elseif ( is_array( $message ) && ! empty( $message['response_json'] ) ) {
+			$response_json = (string) $message['response_json'];
+		}
+
+		if ( '' === $response_json ) {
+			return '';
+		}
+
+		$decoded = json_decode( $response_json, true );
+		if ( ! is_array( $decoded ) ) {
+			return '';
+		}
+
+		if ( function_exists( 'nxtcc_build_inbound_message_content_from_webhook' ) ) {
+			$rebuilt = nxtcc_build_inbound_message_content_from_webhook( $decoded );
+			if ( is_string( $rebuilt ) && '' !== trim( $rebuilt ) ) {
+				return trim( $rebuilt );
+			}
+		}
+
+		$type = isset( $decoded['type'] ) ? sanitize_key( (string) $decoded['type'] ) : '';
+		if ( 'reaction' === $type && isset( $decoded['reaction'] ) && is_array( $decoded['reaction'] ) ) {
+			$emoji = isset( $decoded['reaction']['emoji'] ) ? sanitize_text_field( (string) $decoded['reaction']['emoji'] ) : '';
+
+			if ( '' !== $emoji ) {
+				return $emoji;
+			}
+
+			return ! empty( $decoded['reaction']['message_id'] ) ? 'Reaction removed' : 'Reaction';
+		}
+
+		return '';
+	}
+}
+
+if ( ! function_exists( 'nxtcc_chat_extract_reply_wamid_from_message' ) ) {
+	/**
+	 * Extract a reply target Meta message id from a chat-thread row.
+	 *
+	 * Supports current rows that already store `reply_to_wamid` and older rows
+	 * that only kept the raw webhook payload in `response_json`.
+	 *
+	 * @param object|array $message Message row.
+	 * @return string
+	 */
+	function nxtcc_chat_extract_reply_wamid_from_message( $message ): string {
+		$existing = '';
+
+		if ( is_object( $message ) && ! empty( $message->reply_to_wamid ) ) {
+			$existing = (string) $message->reply_to_wamid;
+		} elseif ( is_array( $message ) && ! empty( $message['reply_to_wamid'] ) ) {
+			$existing = (string) $message['reply_to_wamid'];
+		}
+
+		if ( '' !== $existing ) {
+			if ( function_exists( 'nxtcc_normalize_reply_wamid' ) ) {
+				return nxtcc_normalize_reply_wamid( $existing );
+			}
+
+			if ( function_exists( 'nxtcc_rest_normalize_meta_message_id' ) ) {
+				return nxtcc_rest_normalize_meta_message_id( $existing );
+			}
+
+			return sanitize_text_field( $existing );
+		}
+
+		$response_json = '';
+
+		if ( is_object( $message ) && ! empty( $message->response_json ) ) {
+			$response_json = (string) $message->response_json;
+		} elseif ( is_array( $message ) && ! empty( $message['response_json'] ) ) {
+			$response_json = (string) $message['response_json'];
+		}
+
+		if ( '' === $response_json ) {
+			return '';
+		}
+
+		$decoded = json_decode( $response_json, true );
+		if ( ! is_array( $decoded ) ) {
+			return '';
+		}
+
+		$context     = isset( $decoded['context'] ) && is_array( $decoded['context'] ) ? $decoded['context'] : array();
+		$reply_wamid = isset( $context['id'] ) ? sanitize_text_field( (string) $context['id'] ) : '';
+
+		if ( '' === $reply_wamid && isset( $decoded['reaction'] ) && is_array( $decoded['reaction'] ) ) {
+			$reply_wamid = isset( $decoded['reaction']['message_id'] ) ? sanitize_text_field( (string) $decoded['reaction']['message_id'] ) : '';
+		}
+
+		if ( '' === $reply_wamid ) {
+			return '';
+		}
+
+		if ( function_exists( 'nxtcc_normalize_reply_wamid' ) ) {
+			return nxtcc_normalize_reply_wamid( $reply_wamid );
+		}
+
+		if ( function_exists( 'nxtcc_rest_normalize_meta_message_id' ) ) {
+			return nxtcc_rest_normalize_meta_message_id( $reply_wamid );
+		}
+
+		return $reply_wamid;
+	}
+}
+
 if ( ! function_exists( 'nxtcc_chat_resolve_user_and_pnid' ) ) {
 	/**
 	 * Resolve (user_mailid, phone_number_id) for the current user.
@@ -87,19 +226,19 @@ if ( ! function_exists( 'nxtcc_chat_resolve_user_and_pnid' ) ) {
 	 * @return array{0:string,1:string} Pair [user_mailid, phone_number_id].
 	 */
 	function nxtcc_chat_resolve_user_and_pnid( string $requested_pnid = '' ): array {
-		$user = wp_get_current_user();
+		$tenant = NXTCC_Access_Control::get_current_tenant_context();
 
-		if ( ! ( $user instanceof WP_User ) || empty( $user->user_email ) ) {
+		$user_mailid = isset( $tenant['user_mailid'] ) ? sanitize_email( (string) $tenant['user_mailid'] ) : '';
+		$pnid        = isset( $tenant['phone_number_id'] ) ? sanitize_text_field( (string) $tenant['phone_number_id'] ) : '';
+
+		if ( '' === $user_mailid || '' === $pnid ) {
 			return array( '', '' );
 		}
 
-		$user_mailid = sanitize_email( (string) $user->user_email );
-		if ( '' === $user_mailid ) {
+		$requested_pnid = sanitize_text_field( $requested_pnid );
+		if ( '' !== $requested_pnid && $requested_pnid !== $pnid ) {
 			return array( '', '' );
 		}
-
-		$repo = nxtcc_chat_repo();
-		$pnid = $repo->get_user_phone_number_id( $user_mailid, (string) $requested_pnid );
 
 		return array( $user_mailid, (string) $pnid );
 	}

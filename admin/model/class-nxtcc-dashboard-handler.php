@@ -52,7 +52,7 @@ final class NXTCC_Dashboard_Handler {
 	 *
 	 * Requirements:
 	 * - Must be logged in.
-	 * - Must have manage_options capability.
+	 * - Must have dashboard access for the active tenant.
 	 * - Must pass a valid nonce for the dashboard action.
 	 *
 	 * @return void
@@ -67,7 +67,7 @@ final class NXTCC_Dashboard_Handler {
 			);
 		}
 
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_access_dashboard' ) ) ) {
 			wp_send_json_error(
 				array(
 					'message' => __( 'Insufficient permissions.', 'nxt-cloud-chat' ),
@@ -106,37 +106,31 @@ final class NXTCC_Dashboard_Handler {
 			'webhook'              => false,
 		);
 
-		$current_user = wp_get_current_user();
-
-		if ( ! ( $current_user instanceof WP_User ) || empty( $current_user->user_email ) ) {
+		$tenant = NXTCC_Access_Control::get_current_tenant_context();
+		if ( empty( $tenant['user_mailid'] ) || empty( $tenant['business_account_id'] ) || empty( $tenant['phone_number_id'] ) ) {
 			return array(
 				'ok'     => false,
 				'checks' => $checks,
 			);
 		}
 
-		$user_mailid = sanitize_email( $current_user->user_email );
-
-		if ( '' === $user_mailid ) {
+		$settings = NXTCC_Access_Control::get_settings_row_for_tenant( $tenant );
+		if ( ! is_object( $settings ) ) {
 			return array(
 				'ok'     => false,
 				'checks' => $checks,
 			);
 		}
-
-		$repo     = NXTCC_Dashboard_Repo::instance();
-		$settings = $repo->get_latest_user_settings( $user_mailid );
 
 		if (
-			is_array( $settings ) &&
-			! empty( $settings['app_id'] ) &&
-			! empty( $settings['business_account_id'] ) &&
-			! empty( $settings['phone_number_id'] )
+			! empty( $settings->app_id ) &&
+			! empty( $settings->business_account_id ) &&
+			! empty( $settings->phone_number_id )
 		) {
 			$checks['waba_profile']         = true;
 			$checks['templates_list']       = true;
 			$checks['phone_number_profile'] = true;
-			$checks['webhook']              = ! empty( $settings['meta_webhook_subscribed'] );
+			$checks['webhook']              = ! empty( $settings->meta_webhook_subscribed );
 		}
 
 		$core_all_ok   = ( $checks['waba_profile'] && $checks['templates_list'] && $checks['phone_number_profile'] );

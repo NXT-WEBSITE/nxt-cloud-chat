@@ -351,7 +351,7 @@ function nxtcc_contacts_import_extract_fields_from_row( array $row, array $mappi
  */
 function nxtcc_ajax_contacts_import_sample(): void {
 	check_ajax_referer( 'nxtcc_contacts_nonce', 'security' );
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	$csv = nxtcc_contacts_import_sample_csv();
 
@@ -376,7 +376,7 @@ add_action( 'wp_ajax_nxtcc_contacts_import_sample', 'nxtcc_ajax_contacts_import_
  */
 function nxtcc_ajax_contacts_import_upload(): void {
 	check_ajax_referer( 'nxtcc_contacts_nonce', 'security' );
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	if ( empty( $_FILES['file'] ) || ! is_array( $_FILES['file'] ) ) {
 		wp_send_json_error( array( 'message' => 'No file uploaded.' ) );
@@ -526,7 +526,7 @@ add_action( 'wp_ajax_nxtcc_contacts_import_upload', 'nxtcc_ajax_contacts_import_
  */
 function nxtcc_ajax_contacts_import_validate(): void {
 	check_ajax_referer( 'nxtcc_contacts_nonce', 'security' );
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $user_mailid ) || empty( $baid ) || empty( $pnid ) ) {
@@ -687,7 +687,7 @@ add_action( 'wp_ajax_nxtcc_contacts_import_validate', 'nxtcc_ajax_contacts_impor
  */
 function nxtcc_ajax_contacts_import_run(): void {
 	check_ajax_referer( 'nxtcc_contacts_nonce', 'security' );
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $user_mailid ) || empty( $baid ) || empty( $pnid ) ) {
@@ -817,8 +817,8 @@ function nxtcc_ajax_contacts_import_run(): void {
 
 		$dup = $repo->find_duplicate_in_tenant( $baid, $pnid, $cc, $pn );
 
-		$group_ids   = $repo->allowlist_user_groups( $user_mailid, $default_groups );
-		$is_verified = $repo->contact_verified_flag_from_groups( $group_ids );
+		$group_ids = $repo->allowlist_user_groups( $user_mailid, $default_groups );
+		$group_ids = $repo->strip_verified_groups( $group_ids );
 
 		if ( $dup ) {
 			if ( 'skip' === $mode ) {
@@ -827,6 +827,15 @@ function nxtcc_ajax_contacts_import_run(): void {
 			}
 
 			$merged_json = nxtcc_merge_custom_fields( $dup->custom_fields, $incoming_cf );
+			$group_ids   = array_values(
+				array_unique(
+					array_merge(
+						$group_ids,
+						$repo->verified_group_ids_for_contact( (int) $dup->id )
+					)
+				)
+			);
+			$is_verified = $repo->contact_verified_flag_from_groups( $group_ids );
 
 			$repo->upsert_contact_custom_fields( (int) $dup->id, $name, $merged_json, $default_subscribed );
 			$repo->replace_contact_groups( (int) $dup->id, $group_ids );
@@ -845,6 +854,7 @@ function nxtcc_ajax_contacts_import_run(): void {
 		}
 
 		$merged_json = nxtcc_merge_custom_fields( '', $incoming_cf );
+		$is_verified = $repo->contact_verified_flag_from_groups( $group_ids );
 
 		$new_id = $repo->insert_contact(
 			array(

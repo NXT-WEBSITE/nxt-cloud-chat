@@ -15,6 +15,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
+if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_access_chat' ) ) ) {
+	wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'nxt-cloud-chat' ) );
+}
+
 if ( ! class_exists( 'NXTCC_Pages_DAO' ) ) {
 	require_once plugin_dir_path( __FILE__ ) . '../../includes/pages-dao/class-nxtcc-pages-dao.php';
 }
@@ -27,15 +31,18 @@ if ( function_exists( 'wp_enqueue_media' ) ) {
 	wp_enqueue_media();
 }
 
-$nxtcc_current_user = wp_get_current_user();
-$nxtcc_user_mailid  = ( $nxtcc_current_user instanceof WP_User ) ? (string) $nxtcc_current_user->user_email : '';
-$nxtcc_user_mailid  = sanitize_email( $nxtcc_user_mailid );
+$nxtcc_active_tenant = NXTCC_Access_Control::get_current_tenant_context();
+$nxtcc_user_mailid   = isset( $nxtcc_active_tenant['user_mailid'] ) ? sanitize_email( (string) $nxtcc_active_tenant['user_mailid'] ) : '';
 
 /*
  * Load the latest connection settings row for this admin.
  * DAO handles SQL + caching so templates stay clean.
  */
-$nxtcc_row = NXTCC_Pages_DAO::get_latest_settings_row_for_user( $nxtcc_user_mailid );
+$nxtcc_row = NXTCC_Access_Control::get_settings_row_for_tenant( $nxtcc_active_tenant );
+
+if ( ! is_object( $nxtcc_row ) ) {
+	$nxtcc_row = NXTCC_Pages_DAO::get_latest_settings_row_for_user( $nxtcc_user_mailid );
+}
 
 /*
  * Pass connection identifiers to the widget root element for JS boot.
@@ -191,7 +198,7 @@ $nxtcc_instance_id         = isset( $instance_id ) ? (string) $instance_id : 'ad
 					title="<?php esc_attr_e( 'Attach', 'nxt-cloud-chat' ); ?>"
 					aria-label="<?php esc_attr_e( 'Attach', 'nxt-cloud-chat' ); ?>"
 				>
-					📎
+					<i class="fa-solid fa-paperclip" aria-hidden="true"></i>
 				</button>
 
 				<input

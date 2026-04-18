@@ -60,46 +60,9 @@ jQuery( function ( $ ) {
 			$chatHeader: $widget.find( '.nxtcc-chat-header' ),
 			$backBtn: $widget.find( '.nxtcc-chat-back-btn' ),
 
-			$search: $widget.find( '.nxtcc-inbox-search' ),
-
 			nonce: nonceVal,
 			businessAccountId: String( $widget.data( 'business-account-id' ) || '' ),
 			phoneNumberId: String( $widget.data( 'phone-number-id' ) || '' ),
-
-			// Action bar (selection mode).
-			$actions: $widget.find( '.nxtcc-chat-actions' ),
-			$selCount: $widget.find( '.nxtcc-chat-actions .nxtcc-selected-count' ),
-			$btnReply: $widget.find( '.nxtcc-chat-actions .nxtcc-act-reply' ),
-			$btnForward: $widget.find( '.nxtcc-chat-actions .nxtcc-act-forward' ),
-			$btnFav: $widget.find( '.nxtcc-chat-actions .nxtcc-act-favorite' ),
-			$favIcon: $widget.find( '.nxtcc-chat-actions .nxtcc-act-favorite-icon' ),
-			$btnDel: $widget.find( '.nxtcc-chat-actions .nxtcc-act-delete' ),
-			$btnClose: $widget.find( '.nxtcc-chat-actions .nxtcc-act-close' ), // optional.
-
-			// Reply strip.
-			$replyStrip: $widget.find( '.nxtcc-reply-strip' ),
-			$replyCancel: $widget.find( '.nxtcc-reply-cancel' ),
-			$replySnippet: $widget.find( '.nxtcc-reply-snippet' ),
-
-			// Forward modal.
-			$fModal: $widget.find( '.nxtcc-forward-modal' ),
-			$fBackdrop: $widget.find( '.nxtcc-forward-backdrop' ),
-			$fClose: $widget.find( '.nxtcc-forward-close' ),
-			$fSearch: $widget.find( '.nxtcc-forward-search' ),
-			$fList: $widget.find( '.nxtcc-forward-list' ),
-			$fEmpty: $widget.find( '.nxtcc-forward-empty' ),
-			$fSend: $widget.find( '.nxtcc-forward-send' ),
-			$fSelCount: $widget.find( '.nxtcc-forward-selected-count' ),
-
-			// Composer.
-			$inputWrap: $widget.find( '.nxtcc-chat-input-wrapper' ),
-			$textarea: $widget.find( '.nxtcc-chat-textarea' ),
-			$sendBtn: $widget.find( '.nxtcc-send-msg-btn' ),
-			$uploadBtn: $widget.find( '.nxtcc-upload-btn' ),
-			$fileInput: $widget.find( '.nxtcc-file-input' ),
-
-			// Scroll-to-latest button.
-			$scrollBtn: $widget.find( '.nxtcc-scroll-bottom' ),
 
 			// Shared per-widget state + cross-module hooks.
 			state: {},

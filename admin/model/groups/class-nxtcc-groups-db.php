@@ -403,11 +403,11 @@ final class NXTCC_Groups_DB {
 		$dir_lower = strtolower( $dir );
 		$dir_safe  = ( 'desc' === $dir_lower ) ? 'DESC' : 'ASC';
 
-		$allowed_cols = array( 'group_name', 'count', 'created_by', 'is_verified', 'subscribed_count' );
+		$allowed_cols = array( 'group_name', 'count', 'created_by', 'updated_by', 'is_verified' );
 		$col_safe     = in_array( $col, $allowed_cols, true ) ? $col : 'group_name';
 
 		$lver = $this->lver_get( $owner, $baid, $pnid );
-		$ckey = 'L:' . $lver . ':' . md5( $this->tenant_key( $owner, $baid, $pnid ) . '|' . $search . '|' . $col_safe . '|' . $dir_safe );
+		$ckey = 'L:' . $lver . ':' . md5( 'actor-ui-v2|' . $this->tenant_key( $owner, $baid, $pnid ) . '|' . $search . '|' . $col_safe . '|' . $dir_safe );
 
 		$wpdb       = $this->db();
 		$has_search = ( '' !== $search );
@@ -419,31 +419,33 @@ final class NXTCC_Groups_DB {
 
 		$groups_table = $this->quote_table( $this->table( 'nxtcc_groups' ) );
 		$map_table    = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
-		$contacts_tbl = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
+		// phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.user_meta__wpdb__users -- Admin actor columns resolve linked WordPress user logins for tenant-scoped group rows.
+		$users_table = $this->quote_table( $wpdb->users );
 
 		$order_col = 'g.group_name';
 		if ( 'count' === $col_safe ) {
 			$order_col = 'count';
 		} elseif ( 'created_by' === $col_safe ) {
-			$order_col = 'g.user_mailid';
+			$order_col = 'g.created_by';
+		} elseif ( 'updated_by' === $col_safe ) {
+			$order_col = 'g.updated_by';
 		} elseif ( 'is_verified' === $col_safe ) {
 			$order_col = 'g.is_verified';
-		} elseif ( 'subscribed_count' === $col_safe ) {
-			$order_col = 'subscribed_count';
 		}
 
 		$query = 'SELECT
 				g.id,
 				g.group_name,
-				g.user_mailid,
-				g.business_account_id,
-				g.phone_number_id,
 				g.is_verified,
-				COUNT(m.contact_id) AS count,
-				SUM(CASE WHEN c.is_subscribed = 1 THEN 1 ELSE 0 END) AS subscribed_count
+				MAX(creator.user_login) AS created_by_login,
+				MAX(creator.user_email) AS created_by_email,
+				MAX(updater.user_login) AS updated_by_login,
+				MAX(updater.user_email) AS updated_by_email,
+				COUNT(m.contact_id) AS count
 			FROM {groups} AS g
 			LEFT JOIN {group_map} AS m ON m.group_id = g.id
-			LEFT JOIN {contacts} AS c ON c.id = m.contact_id
+			LEFT JOIN {users} AS creator ON creator.ID = g.created_by
+			LEFT JOIN {users} AS updater ON updater.ID = g.updated_by
 			WHERE g.user_mailid = %s
 			  AND g.business_account_id = %s
 			  AND g.phone_number_id = %s';
@@ -459,7 +461,7 @@ final class NXTCC_Groups_DB {
 
 		return $this->cache_results(
 			$ckey,
-			function () use ( $query, $params, $groups_table, $map_table, $contacts_tbl ) {
+			function () use ( $query, $params, $groups_table, $map_table, $users_table ) {
 				return $this->run_prepared(
 					$query,
 					$params,
@@ -468,7 +470,7 @@ final class NXTCC_Groups_DB {
 					array(
 						'groups'    => $groups_table,
 						'group_map' => $map_table,
-						'contacts'  => $contacts_tbl,
+						'users'     => $users_table,
 					)
 				);
 			}
@@ -662,18 +664,19 @@ final class NXTCC_Groups_DB {
 	 * @param string $baid        Business account ID.
 	 * @param string $pnid        Phone number ID.
 	 * @param int    $is_verified Verified flag.
+	 * @param int    $actor_id    Acting WordPress user ID.
 	 * @return int New group ID.
 	 */
-	public function insert_group( string $name, string $owner, string $baid, string $pnid, int $is_verified ): int {
+	public function insert_group( string $name, string $owner, string $baid, string $pnid, int $is_verified, int $actor_id = 0 ): int {
 		if ( '' === $name || '' === $owner || '' === $baid || '' === $pnid ) {
 			return 0;
 		}
 
 		$wpdb   = $this->db();
 		$groups = $this->quote_table( $this->table( 'nxtcc_groups' ) );
-		$query  = 'INSERT INTO {groups} (user_mailid, business_account_id, phone_number_id, group_name, is_verified, created_at)
-			VALUES (%s,%s,%s,%s,%d,%s)';
-		$params = array( $owner, $baid, $pnid, $name, ( 0 !== $is_verified ) ? 1 : 0, current_time( 'mysql', 1 ) );
+		$query  = 'INSERT INTO {groups} (user_mailid, business_account_id, phone_number_id, group_name, is_verified, created_by, updated_by, created_at, updated_at)
+			VALUES (%s,%s,%s,%s,%d,NULLIF(%d,0),NULLIF(%d,0),%s,%s)';
+		$params = array( $owner, $baid, $pnid, $name, ( 0 !== $is_verified ) ? 1 : 0, $actor_id, $actor_id, current_time( 'mysql', 1 ), current_time( 'mysql', 1 ) );
 
 		$this->run_prepared( $query, $params, 'exec', ARRAY_A, array( 'groups' => $groups ) );
 
@@ -695,19 +698,22 @@ final class NXTCC_Groups_DB {
 	 * @param string $owner Owner identifier (user_mailid).
 	 * @param string $baid  Business account ID.
 	 * @param string $pnid  Phone number ID.
+	 * @param int    $actor_id Acting WordPress user ID.
 	 * @return bool
 	 */
-	public function update_group_name( int $id, string $name, string $owner, string $baid, string $pnid ): bool {
+	public function update_group_name( int $id, string $name, string $owner, string $baid, string $pnid, int $actor_id = 0 ): bool {
 		if ( 0 >= $id || '' === $name || '' === $owner || '' === $baid || '' === $pnid ) {
 			return false;
 		}
 
 		$groups = $this->quote_table( $this->table( 'nxtcc_groups' ) );
 		$query  = 'UPDATE {groups}
-			SET group_name=%s
+			SET group_name=%s,
+			    updated_by=NULLIF(%d,0),
+			    updated_at=%s
 			WHERE id=%d AND user_mailid=%s AND business_account_id=%s AND phone_number_id=%s';
 
-		$params = array( $name, $id, $owner, $baid, $pnid );
+		$params = array( $name, $actor_id, current_time( 'mysql', 1 ), $id, $owner, $baid, $pnid );
 
 		$res = $this->run_prepared( $query, $params, 'exec', ARRAY_A, array( 'groups' => $groups ) );
 		if ( false !== $res ) {

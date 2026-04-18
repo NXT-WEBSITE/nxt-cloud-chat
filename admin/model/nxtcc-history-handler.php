@@ -71,7 +71,7 @@ if ( ! function_exists( 'nxtcc_post_array' ) ) {
  * @return void
  */
 function nxtcc_history_requirements_ok(): void {
-	if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+	if ( ! is_user_logged_in() || ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_view_history' ) ) ) {
 		wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
 	}
 
@@ -89,7 +89,7 @@ function nxtcc_history_requirements_ok(): void {
  * @return void
  */
 function nxtcc_history_export_requirements_ok(): void {
-	if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+	if ( ! is_user_logged_in() || ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_view_history' ) ) ) {
 		wp_die( esc_html__( 'Forbidden', 'nxt-cloud-chat' ), 403 );
 	}
 
@@ -99,6 +99,96 @@ function nxtcc_history_export_requirements_ok(): void {
 	}
 }
 
+
+/**
+ * Resolve the active tenant owner email for history queries.
+ *
+ * @return string
+ */
+function nxtcc_history_current_owner_mail(): string {
+	$tenant = NXTCC_Access_Control::get_current_tenant_context();
+
+	return isset( $tenant['user_mailid'] ) ? sanitize_email( (string) $tenant['user_mailid'] ) : '';
+}
+
+/**
+ * Resolve the active tenant context for history queries.
+ *
+ * @return array<string,string>
+ */
+function nxtcc_history_current_tenant(): array {
+	$tenant = NXTCC_Access_Control::get_current_tenant_context();
+
+	return array(
+		'user_mailid'         => isset( $tenant['user_mailid'] ) ? sanitize_email( (string) $tenant['user_mailid'] ) : '',
+		'business_account_id' => isset( $tenant['business_account_id'] ) ? sanitize_text_field( (string) $tenant['business_account_id'] ) : '',
+		'phone_number_id'     => isset( $tenant['phone_number_id'] ) ? sanitize_text_field( (string) $tenant['phone_number_id'] ) : '',
+	);
+}
+
+/**
+ * Build a human actor label for one history/broadcast row.
+ *
+ * @param array<string,mixed>            $row                    Row data.
+ * @param array<int,array<string,mixed>> $actor_map             Resolved user map.
+ * @param array<string,string>           $broadcast_actor_map Broadcast actor map.
+ * @return string
+ */
+function nxtcc_history_created_by_label( array $row, array $actor_map, array $broadcast_actor_map ): string {
+	$origin_type    = isset( $row['origin_type'] ) ? sanitize_key( (string) $row['origin_type'] ) : '';
+	$origin_user_id = isset( $row['origin_user_id'] ) ? (int) $row['origin_user_id'] : 0;
+	$broadcast_id   = isset( $row['broadcast_id'] ) ? sanitize_text_field( (string) $row['broadcast_id'] ) : '';
+	$origin_name    = isset( $row['origin_user_name'] ) ? sanitize_text_field( (string) $row['origin_user_name'] ) : '';
+	$origin_email   = isset( $row['origin_user_email'] ) ? sanitize_email( (string) $row['origin_user_email'] ) : '';
+
+	if ( '' !== $origin_name || '' !== $origin_email ) {
+		if ( class_exists( 'NXTCC_Actor_Audit' ) ) {
+			$label = NXTCC_Actor_Audit::format_user_label( $origin_name, $origin_email, '' );
+		} else {
+			$label = $origin_email;
+		}
+
+		if ( '' !== $label ) {
+			return $label;
+		}
+	}
+
+	if ( $origin_user_id > 0 && class_exists( 'NXTCC_Actor_Audit' ) ) {
+		$label = NXTCC_Actor_Audit::label_for_user_id( $origin_user_id, $actor_map, '' );
+		if ( '' !== $label ) {
+			return $label;
+		}
+	}
+
+	if ( '' !== $broadcast_id && isset( $broadcast_actor_map[ $broadcast_id ] ) ) {
+		$label = sanitize_text_field( (string) $broadcast_actor_map[ $broadcast_id ] );
+		if ( '' !== $label ) {
+			return $label;
+		}
+	}
+
+	if ( 'inbound' === $origin_type ) {
+		return __( 'Customer', 'nxt-cloud-chat' );
+	}
+
+	if ( 'broadcast' === $origin_type || ( '' !== $broadcast_id && 'queue' === (string) ( $row['source'] ?? '' ) ) ) {
+		return __( 'Broadcast', 'nxt-cloud-chat' );
+	}
+
+	if ( 'workflow' === $origin_type ) {
+		return __( 'Workflow', 'nxt-cloud-chat' );
+	}
+
+	if ( 'system' === $origin_type ) {
+		return __( 'System', 'nxt-cloud-chat' );
+	}
+
+	if ( 'chat_user' === $origin_type ) {
+		return '';
+	}
+
+	return '';
+}
 
 /**
  * Convert a DB timestamp (UTC or unix) to site timezone in 12-hour format.
@@ -156,6 +246,7 @@ function nxtcc_history_parse_filters( $in ): array {
 
 	$f = array(
 		'search'          => sanitize_text_field( $in['search'] ?? '' ),
+		'message_type'    => sanitize_key( (string) ( $in['message_type'] ?? '' ) ),
 		'status_any'      => sanitize_text_field( $in['status_any'] ?? '' ),
 		'status'          => sanitize_text_field( $in['status'] ?? '' ),
 		'range'           => sanitize_text_field( $in['range'] ?? '7d' ),
@@ -200,7 +291,7 @@ function nxtcc_history_parse_filters( $in ): array {
 	$f['to_ts']   = (int) $to_ts;
 
 	$f['deeplink'] = false;
-	foreach ( array( 'status_any', 'status', 'phone_number_id', 'sort', 'search', 'from', 'to' ) as $key ) {
+	foreach ( array( 'message_type', 'status_any', 'status', 'phone_number_id', 'sort', 'search', 'from', 'to' ) as $key ) {
 		if ( ! empty( $f[ $key ] ) ) {
 			$f['deeplink'] = true;
 			break;
@@ -245,14 +336,29 @@ function nxtcc_history_fetch(): void {
 	$limit  = min( 200, max( 1, absint( nxtcc_post_int( 'limit', 30 ) ) ) );
 	$offset = ( $page - 1 ) * $limit;
 
-	$user      = wp_get_current_user();
-	$user_mail = $user ? (string) $user->user_email : '';
+	$tenant    = nxtcc_history_current_tenant();
+	$user_mail = $tenant['user_mailid'];
 
 	$h_order = ( 'oldest' === $filters['sort'] ) ? 'ASC' : 'DESC';
 	$q_order = $h_order;
 
-	$repo = NXTCC_History_Repo::instance();
-	$rows = $repo->fetch_list( $user_mail, $filters, $limit, $offset, $h_order, $q_order );
+	$repo          = NXTCC_History_Repo::instance();
+	$rows          = $repo->fetch_list( $user_mail, $filters, $limit, $offset, $h_order, $q_order );
+	$actor_ids     = array();
+	$broadcast_ids = array();
+
+	foreach ( $rows as $row ) {
+		if ( ! empty( $row['origin_user_id'] ) ) {
+			$actor_ids[] = (int) $row['origin_user_id'];
+		}
+
+		if ( ! empty( $row['broadcast_id'] ) ) {
+			$broadcast_ids[] = (string) $row['broadcast_id'];
+		}
+	}
+
+	$broadcast_actor_map = $repo->broadcast_creator_map( $tenant, $broadcast_ids );
+	$actor_map           = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::get_user_map( $actor_ids ) : array();
 
 	$rows_out = array();
 
@@ -283,6 +389,8 @@ function nxtcc_history_fetch(): void {
 		$rows_out[] = array(
 			'id'             => $id_value,
 			'source'         => $source_value,
+			'broadcast_id'   => ! empty( $row['broadcast_id'] ) ? (string) $row['broadcast_id'] : '',
+			'message_type'   => ( ! empty( $row['broadcast_id'] ) || ! empty( $row['queue_id'] ) ) ? 'broadcast' : 'individual',
 			'contact_name'   => ! empty( $row['contact_name'] ) ? (string) $row['contact_name'] : '',
 			'contact_number' => $number,
 			'template_name'  => ! empty( $row['template_name'] ) ? (string) $row['template_name'] : '',
@@ -293,7 +401,7 @@ function nxtcc_history_fetch(): void {
 			'read_at'        => nxtcc_hist_site_time_12( $row['read_at'] ?? '' ),
 			'scheduled_at'   => nxtcc_hist_site_time_12( $row['scheduled_at'] ?? '' ),
 			'created_at'     => nxtcc_hist_site_time_12( $created_at ),
-			'created_by'     => ! empty( $row['created_by'] ) ? (string) $row['created_by'] : '',
+			'created_by'     => nxtcc_history_created_by_label( $row, $actor_map, $broadcast_actor_map ),
 		);
 	}
 
@@ -323,8 +431,8 @@ function nxtcc_history_fetch_one(): void {
 		wp_send_json_error( array( 'message' => 'Missing id' ), 400 );
 	}
 
-	$user      = wp_get_current_user();
-	$user_mail = $user ? (string) $user->user_email : '';
+	$tenant    = nxtcc_history_current_tenant();
+	$user_mail = $tenant['user_mailid'];
 
 	$repo = NXTCC_History_Repo::instance();
 	$row  = $repo->fetch_one( $user_mail, $id, $source );
@@ -332,6 +440,16 @@ function nxtcc_history_fetch_one(): void {
 	if ( ! $row ) {
 		wp_send_json_error( array( 'message' => 'Not found' ), 404 );
 	}
+
+	$actor_ids = array();
+
+	if ( ! empty( $row['origin_user_id'] ) ) {
+		$actor_ids[] = (int) $row['origin_user_id'];
+	}
+
+	$broadcast_ids       = ! empty( $row['broadcast_id'] ) ? array( (string) $row['broadcast_id'] ) : array();
+	$broadcast_actor_map = $repo->broadcast_creator_map( $tenant, $broadcast_ids );
+	$actor_map           = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::get_user_map( $actor_ids ) : array();
 
 	$number = '';
 	if ( ! empty( $row['country_code'] ) && ! empty( $row['phone_number'] ) ) {
@@ -358,6 +476,8 @@ function nxtcc_history_fetch_one(): void {
 	$row_out = array(
 		'id'             => $id_value,
 		'source'         => $source_value,
+		'broadcast_id'   => ! empty( $row['broadcast_id'] ) ? (string) $row['broadcast_id'] : '',
+		'message_type'   => ( ! empty( $row['broadcast_id'] ) || ! empty( $row['queue_id'] ) ) ? 'broadcast' : 'individual',
 		'contact_name'   => ! empty( $row['contact_name'] ) ? (string) $row['contact_name'] : '',
 		'contact_number' => $number,
 		'template_name'  => ! empty( $row['template_name'] ) ? (string) $row['template_name'] : '',
@@ -368,8 +488,9 @@ function nxtcc_history_fetch_one(): void {
 		'read_at'        => nxtcc_hist_site_time_12( $row['read_at'] ?? '' ),
 		'scheduled_at'   => nxtcc_hist_site_time_12( $row['scheduled_at'] ?? '' ),
 		'created_at'     => nxtcc_hist_site_time_12( $created_at ),
-		'created_by'     => ! empty( $row['created_by'] ) ? (string) $row['created_by'] : '',
+		'created_by'     => nxtcc_history_created_by_label( $row, $actor_map, $broadcast_actor_map ),
 		'meta_id'        => ! empty( $row['meta_message_id'] ) ? (string) $row['meta_message_id'] : '',
+		'last_error'     => ! empty( $row['last_error'] ) ? (string) $row['last_error'] : '',
 	);
 
 	wp_send_json_success( array( 'row' => $row_out ) );
@@ -405,8 +526,8 @@ function nxtcc_history_bulk_delete(): void {
 		wp_send_json_error( array( 'message' => 'No IDs' ), 400 );
 	}
 
-	$user      = wp_get_current_user();
-	$user_mail = $user ? (string) $user->user_email : '';
+	$tenant    = nxtcc_history_current_tenant();
+	$user_mail = $tenant['user_mailid'];
 
 	$repo    = NXTCC_History_Repo::instance();
 	$deleted = $repo->bulk_delete( $user_mail, $ids, $source );
@@ -438,14 +559,29 @@ function nxtcc_history_export(): void {
 	}
 
 	$filters   = nxtcc_history_parse_filters( $post );
-	$user      = wp_get_current_user();
-	$user_mail = $user ? (string) $user->user_email : '';
+	$tenant    = nxtcc_history_current_tenant();
+	$user_mail = $tenant['user_mailid'];
 
 	$h_order = ( 'oldest' === $filters['sort'] ) ? 'ASC' : 'DESC';
 	$q_order = $h_order;
 
-	$repo = NXTCC_History_Repo::instance();
-	$rows = $repo->export_rows( $user_mail, $filters, $h_order, $q_order );
+	$repo          = NXTCC_History_Repo::instance();
+	$rows          = $repo->export_rows( $user_mail, $filters, $h_order, $q_order );
+	$actor_ids     = array();
+	$broadcast_ids = array();
+
+	foreach ( $rows as $row ) {
+		if ( ! empty( $row['origin_user_id'] ) ) {
+			$actor_ids[] = (int) $row['origin_user_id'];
+		}
+
+		if ( ! empty( $row['broadcast_id'] ) ) {
+			$broadcast_ids[] = (string) $row['broadcast_id'];
+		}
+	}
+
+	$broadcast_actor_map = $repo->broadcast_creator_map( $tenant, $broadcast_ids );
+	$actor_map           = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::get_user_map( $actor_ids ) : array();
 
 	$fname = 'nxtcc-history-merged-' . gmdate( 'Ymd-His' ) . '-' . str_replace( '/', '-', wp_timezone_string() ) . '.csv';
 	$fname = sanitize_file_name( $fname );
@@ -502,13 +638,13 @@ function nxtcc_history_export(): void {
 				nxtcc_hist_excel_safe( $number ),
 				nxtcc_hist_excel_safe( $row['template_name'] ?? '' ),
 				nxtcc_hist_excel_safe( $row['message_content'] ?? '' ),
-				nxtcc_hist_excel_safe( $row['status'] ?? '' ),
+				nxtcc_hist_excel_safe( ! empty( $row['status'] ) ? (string) $row['status'] : '' ),
 				nxtcc_hist_site_time_12( $row['sent_at'] ?? '' ),
 				nxtcc_hist_site_time_12( $row['delivered_at'] ?? '' ),
 				nxtcc_hist_site_time_12( $row['read_at'] ?? '' ),
 				nxtcc_hist_site_time_12( $row['scheduled_at'] ?? '' ),
 				nxtcc_hist_site_time_12( $created_at ),
-				nxtcc_hist_excel_safe( $row['created_by'] ?? '' ),
+				nxtcc_hist_excel_safe( nxtcc_history_created_by_label( $row, $actor_map, $broadcast_actor_map ) ),
 			)
 		);
 	}

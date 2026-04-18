@@ -43,6 +43,9 @@ function nxtcc_mh_columns(): array {
 			'meta_message_id'      => true,
 			'status_timestamps'    => true,
 			'last_error'           => true,
+			'origin_type'          => true,
+			'origin_user_id'       => true,
+			'origin_ref'           => true,
 			'response_json'        => true,
 			'created_at'           => true,
 			'sent_at'              => true,
@@ -185,10 +188,9 @@ function nxtcc_normalize_reply_wamid( string $wamid ): string {
 		return '';
 	}
 
-	// Allow common safe characters; drop anything suspicious.
-	// (WAMID/Graph ids are typically URL-safe-ish strings).
-	if ( 1 !== preg_match( '/^[a-zA-Z0-9._:-]{1,512}$/', $wamid ) ) {
-		return '';
+	if ( function_exists( 'nxtcc_clip_meta_message_id' ) ) {
+		$clipped = nxtcc_clip_meta_message_id( $wamid );
+		return is_string( $clipped ) ? sanitize_text_field( $clipped ) : '';
 	}
 
 	$max = nxtcc_mh_col_maxlen( 'reply_to_wamid' );
@@ -196,7 +198,7 @@ function nxtcc_normalize_reply_wamid( string $wamid ): string {
 		$wamid = substr( $wamid, 0, $max );
 	}
 
-	return $wamid;
+	return sanitize_text_field( $wamid );
 }
 
 /**
@@ -410,23 +412,40 @@ function nxtcc_normalize_media_caption( string $caption ): string {
 }
 
 /**
- * Send a text message via WhatsApp Cloud API and insert history.
+ * Verify that the current admin user may send chat traffic for the given tenant.
  *
- * Required args:
- * - user_mailid
- * - business_account_id
- * - phone_number_id
- * - contact_id
- * - message_content
+ * @param string $user_mailid         Tenant owner email.
+ * @param string $business_account_id Tenant business account ID.
+ * @param string $phone_number_id     Tenant phone number ID.
+ * @return bool
+ */
+function nxtcc_current_user_can_access_chat_tenant( string $user_mailid, string $business_account_id, string $phone_number_id ): bool {
+	if ( ! is_user_logged_in() || ! class_exists( 'NXTCC_Access_Control' ) ) {
+		return false;
+	}
+
+	if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_access_chat' ) ) ) {
+		return false;
+	}
+
+	$tenant = NXTCC_Access_Control::get_current_tenant_context();
+
+	return (
+		isset( $tenant['user_mailid'], $tenant['business_account_id'], $tenant['phone_number_id'] )
+		&& sanitize_email( (string) $tenant['user_mailid'] ) === $user_mailid
+		&& sanitize_text_field( (string) $tenant['business_account_id'] ) === $business_account_id
+		&& sanitize_text_field( (string) $tenant['phone_number_id'] ) === $phone_number_id
+	);
+}
+
+/**
+ * Internal shared helper for sending a text message and inserting history.
  *
- * Optional args:
- * - reply_to_message_id
- * - reply_to_history_id
- *
- * @param array $args Input args.
+ * @param array $args              Input args.
+ * @param bool  $require_user_auth Whether a logged-in user check is required.
  * @return array<string, mixed>
  */
-function nxtcc_send_message_immediately( array $args ): array {
+function nxtcc_send_text_message_internal( array $args, bool $require_user_auth = true ): array {
 	global $wpdb;
 
 	$required = array( 'user_mailid', 'business_account_id', 'phone_number_id', 'contact_id', 'message_content' );
@@ -449,20 +468,25 @@ function nxtcc_send_message_immediately( array $args ): array {
 
 	$reply_to_message_id = isset( $args['reply_to_message_id'] ) ? nxtcc_normalize_reply_wamid( (string) $args['reply_to_message_id'] ) : '';
 	$reply_to_history_id = isset( $args['reply_to_history_id'] ) ? (int) $args['reply_to_history_id'] : 0;
+	$origin_type         = isset( $args['origin_type'] ) ? sanitize_key( (string) $args['origin_type'] ) : ( $require_user_auth ? 'chat_user' : 'system' );
+	$origin_user_id      = isset( $args['origin_user_id'] ) ? (int) $args['origin_user_id'] : ( $require_user_auth ? (int) get_current_user_id() : 0 );
+	$origin_ref          = isset( $args['origin_ref'] ) ? sanitize_text_field( (string) $args['origin_ref'] ) : '';
 
-	if ( ! is_user_logged_in() ) {
-		return array(
-			'success' => false,
-			'error'   => 'Unauthorized',
-		);
+	if ( ! in_array( $origin_type, array( 'inbound', 'chat_user', 'broadcast', 'workflow', 'system' ), true ) ) {
+		$origin_type = $require_user_auth ? 'chat_user' : 'system';
 	}
 
-	$user = wp_get_current_user();
-	if ( ! is_object( $user ) || (string) $user->user_email !== $user_mailid ) {
-		return array(
-			'success' => false,
-			'error'   => 'Unauthorized',
-		);
+	if ( strlen( $origin_ref ) > 191 ) {
+		$origin_ref = substr( $origin_ref, 0, 191 );
+	}
+
+	if ( $require_user_auth ) {
+		if ( ! nxtcc_current_user_can_access_chat_tenant( $user_mailid, $business_account_id, $phone_number_id ) ) {
+			return array(
+				'success' => false,
+				'error'   => 'Unauthorized',
+			);
+		}
 	}
 
 	if ( '' === $user_mailid || '' === $business_account_id || '' === $phone_number_id || 0 === $contact_id ) {
@@ -586,6 +610,18 @@ function nxtcc_send_message_immediately( array $args ): array {
 		'is_read'              => 1,
 	);
 
+	if ( nxtcc_mh_has_column( 'origin_type' ) ) {
+		$row['origin_type'] = $origin_type;
+	}
+
+	if ( $origin_user_id > 0 && nxtcc_mh_has_column( 'origin_user_id' ) ) {
+		$row['origin_user_id'] = $origin_user_id;
+	}
+
+	if ( '' !== $origin_ref && nxtcc_mh_has_column( 'origin_ref' ) ) {
+		$row['origin_ref'] = $origin_ref;
+	}
+
 	if ( 0 === $reply_to_history_id && '' !== $reply_to_message_id && nxtcc_mh_has_column( 'reply_to_history_id' ) ) {
 		$reply_to_history_id = NXTCC_Send_DAO::get_history_id_by_wamid( $reply_to_message_id );
 	}
@@ -620,6 +656,27 @@ function nxtcc_send_message_immediately( array $args ): array {
 		'meta_message_id'     => $meta_msg_id,
 		'reply_to_message_id' => ( '' !== $reply_to_message_id ) ? $reply_to_message_id : null,
 	);
+}
+
+/**
+ * Send a text message via WhatsApp Cloud API and insert history.
+ *
+ * Required args:
+ * - user_mailid
+ * - business_account_id
+ * - phone_number_id
+ * - contact_id
+ * - message_content
+ *
+ * Optional args:
+ * - reply_to_message_id
+ * - reply_to_history_id
+ *
+ * @param array $args Input args.
+ * @return array<string, mixed>
+ */
+function nxtcc_send_message_immediately( array $args ): array {
+	return nxtcc_send_text_message_internal( $args, true );
 }
 
 /**
@@ -669,16 +726,19 @@ function nxtcc_send_media_link_immediately( array $args ): array {
 	$local_path          = isset( $args['local_path'] ) ? nxtcc_validate_upload_local_path( (string) $args['local_path'] ) : '';
 	$reply_to_message_id = isset( $args['reply_to_message_id'] ) ? nxtcc_normalize_reply_wamid( (string) $args['reply_to_message_id'] ) : '';
 	$reply_to_history_id = isset( $args['reply_to_history_id'] ) ? (int) $args['reply_to_history_id'] : 0;
+	$origin_type         = isset( $args['origin_type'] ) ? sanitize_key( (string) $args['origin_type'] ) : 'chat_user';
+	$origin_user_id      = isset( $args['origin_user_id'] ) ? (int) $args['origin_user_id'] : (int) get_current_user_id();
+	$origin_ref          = isset( $args['origin_ref'] ) ? sanitize_text_field( (string) $args['origin_ref'] ) : '';
 
-	if ( ! is_user_logged_in() ) {
-		return array(
-			'success' => false,
-			'error'   => 'Unauthorized',
-		);
+	if ( ! in_array( $origin_type, array( 'inbound', 'chat_user', 'broadcast', 'workflow', 'system' ), true ) ) {
+		$origin_type = 'chat_user';
 	}
 
-	$user = wp_get_current_user();
-	if ( ! is_object( $user ) || (string) $user->user_email !== $user_mailid ) {
+	if ( strlen( $origin_ref ) > 191 ) {
+		$origin_ref = substr( $origin_ref, 0, 191 );
+	}
+
+	if ( ! nxtcc_current_user_can_access_chat_tenant( $user_mailid, $business_account_id, $phone_number_id ) ) {
 		return array(
 			'success' => false,
 			'error'   => 'Unauthorized',
@@ -860,6 +920,18 @@ function nxtcc_send_media_link_immediately( array $args ): array {
 		'failed_at'            => ( 'failed' === $meta_status ) ? $timestamp : null,
 		'is_read'              => 1,
 	);
+
+	if ( nxtcc_mh_has_column( 'origin_type' ) ) {
+		$row['origin_type'] = $origin_type;
+	}
+
+	if ( $origin_user_id > 0 && nxtcc_mh_has_column( 'origin_user_id' ) ) {
+		$row['origin_user_id'] = $origin_user_id;
+	}
+
+	if ( '' !== $origin_ref && nxtcc_mh_has_column( 'origin_ref' ) ) {
+		$row['origin_ref'] = $origin_ref;
+	}
 
 	if ( 0 === $reply_to_history_id && '' !== $reply_to_message_id && nxtcc_mh_has_column( 'reply_to_history_id' ) ) {
 		$reply_to_history_id = NXTCC_Send_DAO::get_history_id_by_wamid( $reply_to_message_id );

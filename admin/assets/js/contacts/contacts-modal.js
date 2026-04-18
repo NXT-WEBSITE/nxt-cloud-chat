@@ -41,8 +41,6 @@ jQuery( function ( $ ) {
 	const escapeHtml              = U.escapeHtml;
 	const enableMultiSelectToggle = U.enableMultiSelectToggle;
 
-	console.debug( '[NXTCC][DEBUG] contacts-modals init', { hasConnection } );
-
 	// -------------------------------------------------------------------------
 	// DOM helpers.
 	// -------------------------------------------------------------------------
@@ -211,9 +209,9 @@ jQuery( function ( $ ) {
 	 * @return {void}
 	 */
 	function loadGroupsDropdown( selectedGroups, opts ) {
-		const options               = opts || {};
-		const isVerifiedContact     = options.isVerifiedContact === true;
-		const lockedVerifiedGroupId = options.lockedVerifiedGroupId ? String( options.lockedVerifiedGroupId ) : null;
+		const options                  = opts || {};
+		const hasProtectedVerifiedGroup = options.hasProtectedVerifiedGroup === true;
+		const lockedVerifiedGroupId    = options.lockedVerifiedGroupId ? String( options.lockedVerifiedGroupId ) : null;
 
 		const $sel   = $( '#nxtcc-contact-groups' );
 		const selDom = firstDom( $sel );
@@ -236,21 +234,12 @@ jQuery( function ( $ ) {
 			let label    = group.group_name;
 
 			if ( isVerifiedGroup ) {
-				/*
-				 * Unverified contacts cannot be added to Verified group.
-				 */
-				if ( ! isVerifiedContact && ! isSelected ) {
-					disabled = true;
-					title    = 'Unverified contacts cannot be added to Verified group';
-				}
+				disabled = true;
+				title    = 'Verified groups cannot be assigned from Contacts';
 
-				/*
-				 * Verified contact keeps the verified group locked if already present.
-				 */
-				if ( isVerifiedContact && lockedVerifiedGroupId && idStr === lockedVerifiedGroupId ) {
-					disabled = true;
-					title    = 'Verified group is locked and cannot be removed';
-					label   += ' (Locked)';
+				if ( hasProtectedVerifiedGroup && lockedVerifiedGroupId && idStr === lockedVerifiedGroupId ) {
+					title  = 'Verified group is protected and cannot be removed';
+					label += ' (Protected)';
 				}
 			}
 
@@ -273,12 +262,6 @@ jQuery( function ( $ ) {
 
 		enableMultiSelectToggle( $sel );
 
-		console.debug( '[NXTCC][DEBUG] loadGroupsDropdown', {
-			selectedGroups,
-			isVerifiedContact,
-			lockedVerifiedGroupId,
-			verifiedGroupId: getVerifiedGroupId(),
-		} );
 	}
 
 	/**
@@ -295,7 +278,6 @@ jQuery( function ( $ ) {
 			group_name: ( groupName || '' ).trim(),
 		};
 
-		console.debug( '[NXTCC][AJAX] nxtcc_groups_create payload', payload );
 		return $.post( ajaxurl, payload );
 	}
 
@@ -316,8 +298,6 @@ jQuery( function ( $ ) {
 
 		apiCreateGroup( groupName )
 			.done( function ( resp ) {
-				console.debug( '[NXTCC][AJAX] nxtcc_groups_create resp', resp );
-
 				if ( ! resp || ! resp.success ) {
 					const msg = resp && resp.data && resp.data.message ? resp.data.message : 'Failed to create group';
 					alert( msg );
@@ -344,14 +324,14 @@ jQuery( function ( $ ) {
 							current.push( String( newId ) );
 						}
 
-						const editing          = S.editingContact || {};
-						const isLinkedVerified =
-							Number( editing.is_verified ) === 1 &&
-							editing.wp_uid !== null &&
-							editing.wp_uid !== undefined;
+						const editing                   = S.editingContact || {};
+						const hasProtectedVerifiedGroup =
+							modalLockedVerifiedGroupId &&
+							Array.isArray( editing.groups ) &&
+							editing.groups.map( String ).includes( String( modalLockedVerifiedGroupId ) );
 
 						loadGroupsDropdown( current, {
-							isVerifiedContact: isLinkedVerified,
+							hasProtectedVerifiedGroup: !! hasProtectedVerifiedGroup,
 							lockedVerifiedGroupId: modalLockedVerifiedGroupId,
 						} );
 					} );
@@ -543,7 +523,7 @@ jQuery( function ( $ ) {
 				select.appendChild( optNode );
 			} );
 
-			const addLink            = el( 'a', { href: '#', className: 'nxtcc-add-dropdown-option', text: '➕ Add' } );
+			const addLink            = el( 'a', { href: '#', className: 'nxtcc-add-dropdown-option', text: 'Add' } );
 			addLink.style.marginLeft = '8px';
 			addLink.style.fontSize   = '13px';
 
@@ -654,7 +634,6 @@ jQuery( function ( $ ) {
 			}
 		}
 
-		console.debug( '[NXTCC][DEBUG] added dropdown option', { label, newOpt } );
 	} );
 
 	/**
@@ -740,25 +719,20 @@ jQuery( function ( $ ) {
 			Number( payload.is_verified ) === 1 &&
 			payload.wp_uid !== null &&
 			payload.wp_uid !== undefined;
+		const verifiedGroupId = getVerifiedGroupId();
+		const hasProtectedVerifiedGroup =
+			!! verifiedGroupId &&
+			Array.isArray( groupsArr ) &&
+			groupsArr.map( String ).includes( String( verifiedGroupId ) );
 
 		modalLockedVerifiedGroupId = null;
 
-		if (
-			isLinkedVerified &&
-			Array.isArray( groupsArr ) &&
-			groupsArr.length &&
-			Array.isArray( S.allGroups ) &&
-			S.allGroups.length
-		) {
-			const verifiedGroupId = getVerifiedGroupId();
-
-			if ( verifiedGroupId && groupsArr.map( String ).includes( String( verifiedGroupId ) ) ) {
-				modalLockedVerifiedGroupId = String( verifiedGroupId );
-			}
+		if ( hasProtectedVerifiedGroup ) {
+			modalLockedVerifiedGroupId = String( verifiedGroupId );
 		}
 
 		loadGroupsDropdown( groupsArr || [], {
-			isVerifiedContact: isLinkedVerified,
+			hasProtectedVerifiedGroup: hasProtectedVerifiedGroup,
 			lockedVerifiedGroupId: modalLockedVerifiedGroupId,
 		} );
 
@@ -803,13 +777,17 @@ jQuery( function ( $ ) {
 			}
 		}
 
-		if ( isLinkedVerified ) {
+		if ( hasProtectedVerifiedGroup || isLinkedVerified ) {
 			$( '#nxtcc-verified-contact-hint' ).show();
+		} else {
+			$( '#nxtcc-verified-contact-hint' ).hide();
+		}
+
+		if ( isLinkedVerified ) {
 			$( '#nxtcc-country-code, #nxtcc-phone-number' )
 				.prop( 'disabled', true )
 				.attr( 'title', 'Locked for verified contacts' );
 		} else {
-			$( '#nxtcc-verified-contact-hint' ).hide();
 			$( '#nxtcc-country-code, #nxtcc-phone-number' )
 				.prop( 'disabled', false )
 				.removeAttr( 'title' );
@@ -893,11 +871,7 @@ jQuery( function ( $ ) {
 			id: idNum,
 		};
 
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_get payload', payload );
-
 		$.post( ajaxurl, payload, function ( resp ) {
-			console.debug( '[NXTCC][AJAX] nxtcc_contacts_get resp', resp );
-
 			if ( resp && resp.success && resp.data && resp.data.contact ) {
 				const c = resp.data.contact;
 
@@ -1036,11 +1010,7 @@ jQuery( function ( $ ) {
 
 		payload.custom_fields_json = JSON.stringify( customFields );
 
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_save payload', payload );
-
 		$.post( ajaxurl, payload, function ( resp ) {
-			console.debug( '[NXTCC][AJAX] nxtcc_contacts_save resp', resp );
-
 			if ( resp && resp.success ) {
 				closeModal();
 
@@ -1085,11 +1055,7 @@ jQuery( function ( $ ) {
 			id: idNum,
 		};
 
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_delete payload', payload );
-
 		$.post( ajaxurl, payload, function ( resp ) {
-			console.debug( '[NXTCC][AJAX] nxtcc_contacts_delete resp', resp );
-
 			if ( resp && resp.success ) {
 				if ( R.actions && typeof R.actions.loadAll === 'function' ) {
 					R.actions.loadAll( true );
@@ -1133,6 +1099,3 @@ jQuery( function ( $ ) {
 	 */
 	void escapeHtml;
 } );
-
-
-

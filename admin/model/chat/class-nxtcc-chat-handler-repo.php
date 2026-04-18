@@ -617,6 +617,7 @@ final class NXTCC_Chat_Handler_Repo {
 				c.phone_number,
 				m.id AS last_msg_id,
 				m.message_content AS message_preview,
+				m.response_json AS message_preview_json,
 				m.created_at AS last_msg_time,
 				m.status,
 				(
@@ -727,7 +728,7 @@ final class NXTCC_Chat_Handler_Repo {
 		if ( null !== $after_id && (int) $after_id > 0 ) {
 			$query = $this->prepare_with_table_tokens(
 				'SELECT id, contact_id, message_content, status, created_at, is_read, is_favorite,
-						meta_message_id, reply_to_history_id, reply_to_wamid
+						meta_message_id, reply_to_history_id, reply_to_wamid, response_json
 				 FROM {history}
 				 WHERE contact_id = %d
 				   AND user_mailid = %s
@@ -746,7 +747,7 @@ final class NXTCC_Chat_Handler_Repo {
 		} elseif ( null !== $before_id && (int) $before_id > 0 ) {
 			$query = $this->prepare_with_table_tokens(
 				'SELECT id, contact_id, message_content, status, created_at, is_read, is_favorite,
-						meta_message_id, reply_to_history_id, reply_to_wamid
+						meta_message_id, reply_to_history_id, reply_to_wamid, response_json
 				 FROM {history}
 				 WHERE contact_id = %d
 				   AND user_mailid = %s
@@ -766,7 +767,7 @@ final class NXTCC_Chat_Handler_Repo {
 		} else {
 			$query = $this->prepare_with_table_tokens(
 				'SELECT id, contact_id, message_content, status, created_at, is_read, is_favorite,
-						meta_message_id, reply_to_history_id, reply_to_wamid
+						meta_message_id, reply_to_history_id, reply_to_wamid, response_json
 				 FROM {history}
 				 WHERE contact_id = %d
 				   AND user_mailid = %s
@@ -818,7 +819,7 @@ final class NXTCC_Chat_Handler_Repo {
 		$placeholders = $this->in_placeholders( count( $ids ), '%d' );
 
 		$query = $this->prepare_with_table_tokens(
-			"SELECT id, meta_message_id, message_content
+			"SELECT id, meta_message_id, message_content, response_json
 			FROM {history}
 			WHERE id IN ({$placeholders})",
 			$table_map,
@@ -863,7 +864,7 @@ final class NXTCC_Chat_Handler_Repo {
 			$row = wp_cache_get( $cache_key, self::CACHE_GROUP );
 			if ( false === $row ) {
 				$query = $this->prepare_with_table_tokens(
-					'SELECT id, meta_message_id, message_content
+					'SELECT id, meta_message_id, message_content, response_json
 					 FROM {history}
 					 WHERE meta_message_id = %s
 					   AND user_mailid = %s

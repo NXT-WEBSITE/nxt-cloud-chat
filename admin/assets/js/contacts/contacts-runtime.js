@@ -80,7 +80,7 @@ jQuery( function ( $ ) {
 		'';
 
 	const storageScopeKey = [
-		'nxtcc_contacts_cols_v2',
+		'nxtcc_contacts_cols_v3',
 		tenantKey || 'no-tenant',
 		currentUserEmail || 'anon',
 	].join( '::' );
@@ -524,5 +524,4 @@ jQuery( function ( $ ) {
 	// Widget banner warning implies a disconnected tenant/config state.
 	R.state.hasConnection = ! $widget.find( '.nxtcc-banner-warning' ).length;
 } );
-
 

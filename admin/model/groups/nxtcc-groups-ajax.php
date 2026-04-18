@@ -36,6 +36,26 @@ function nxtcc_groups_send_unauthorized(): void {
 }
 
 /**
+ * Check whether the current user has any one of the requested group capabilities.
+ *
+ * @param array<int,string> $caps Capability keys.
+ * @return bool
+ */
+function nxtcc_groups_current_user_can_any( array $caps ): bool {
+	if ( class_exists( 'NXTCC_Access_Control' ) ) {
+		return NXTCC_Access_Control::current_user_can_any( $caps );
+	}
+
+	foreach ( $caps as $cap ) {
+		if ( current_user_can( $cap ) ) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * Ensure nonce is verified before reading any request data.
  *
  * VIP sniff requires nonce verification before any $_POST processing. We do it
@@ -172,6 +192,30 @@ function nxtcc_groups_get_tenant_safe(): array {
 }
 
 /**
+ * Build one actor label for a group list row.
+ *
+ * @param array<string,mixed> $row Group row.
+ * @param string              $key Actor key suffix.
+ * @return string
+ */
+function nxtcc_groups_actor_label( array $row, string $key ): string {
+	$login_key = $key . '_login';
+	$email_key = $key . '_email';
+	$login     = isset( $row[ $login_key ] ) ? sanitize_user( (string) $row[ $login_key ], true ) : '';
+	$email     = isset( $row[ $email_key ] ) ? sanitize_email( (string) $row[ $email_key ] ) : '';
+
+	if ( '' !== $login ) {
+		return $login;
+	}
+
+	if ( '' !== $email ) {
+		return $email;
+	}
+
+	return '';
+}
+
+/**
  * Fetch groups list for the current tenant.
  *
  * @return void
@@ -181,7 +225,7 @@ function nxtcc_fetch_groups_list_handler(): void {
 		nxtcc_groups_send_not_logged_in();
 	}
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! nxtcc_groups_current_user_can_any( array( 'nxtcc_view_groups', 'nxtcc_manage_groups' ) ) ) {
 		nxtcc_groups_send_unauthorized();
 	}
 
@@ -218,12 +262,17 @@ function nxtcc_fetch_groups_list_handler(): void {
 	);
 
 	foreach ( $rows as &$row ) {
-		$email = isset( $row['user_mailid'] ) ? sanitize_email( (string) $row['user_mailid'] ) : '';
+		$row['created_by']  = nxtcc_groups_actor_label( $row, 'created_by' );
+		$row['updated_by']  = nxtcc_groups_actor_label( $row, 'updated_by' );
+		$row['is_verified'] = (int) ( $row['is_verified'] ?? 0 );
+		$row['count']       = (int) ( $row['count'] ?? 0 );
 
-		$row['created_by']       = $email;
-		$row['is_verified']      = (int) ( $row['is_verified'] ?? 0 );
-		$row['count']            = (int) ( $row['count'] ?? 0 );
-		$row['subscribed_count'] = (int) ( $row['subscribed_count'] ?? 0 );
+		unset(
+			$row['created_by_login'],
+			$row['created_by_email'],
+			$row['updated_by_login'],
+			$row['updated_by_email']
+		);
 	}
 	unset( $row );
 
@@ -245,7 +294,7 @@ function nxtcc_fetch_single_group_handler(): void {
 		nxtcc_groups_send_not_logged_in();
 	}
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! nxtcc_groups_current_user_can_any( array( 'nxtcc_view_groups', 'nxtcc_manage_groups' ) ) ) {
 		nxtcc_groups_send_unauthorized();
 	}
 
@@ -276,7 +325,7 @@ function nxtcc_save_group_handler(): void {
 		nxtcc_groups_send_not_logged_in();
 	}
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! nxtcc_groups_current_user_can_any( array( 'nxtcc_manage_groups' ) ) ) {
 		nxtcc_groups_send_unauthorized();
 	}
 
@@ -294,6 +343,7 @@ function nxtcc_save_group_handler(): void {
 	}
 
 	$new_is_verified = ( 0 === strcasecmp( $group_name, 'verified' ) ) ? 1 : 0;
+	$actor_id        = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::current_user_id() : (int) get_current_user_id();
 
 	$repo = NXTCC_Groups_Repo::i();
 
@@ -318,7 +368,7 @@ function nxtcc_save_group_handler(): void {
 			wp_send_json_error( array( 'message' => 'Verified group cannot be edited.' ) );
 		}
 
-		if ( ! $repo->update_group_name( $id, $group_name, $owner_safe, $baid_safe, $pnid_safe ) ) {
+		if ( ! $repo->update_group_name( $id, $group_name, $owner_safe, $baid_safe, $pnid_safe, $actor_id ) ) {
 			wp_send_json_error( array( 'message' => 'Failed to save group.' ) );
 		}
 
@@ -333,7 +383,7 @@ function nxtcc_save_group_handler(): void {
 		);
 	}
 
-	$new_id = $repo->insert_group( $group_name, $owner_safe, $baid_safe, $pnid_safe, $new_is_verified );
+	$new_id = $repo->insert_group( $group_name, $owner_safe, $baid_safe, $pnid_safe, $new_is_verified, $actor_id );
 	if ( 0 === (int) $new_id ) {
 		wp_send_json_error( array( 'message' => 'Failed to create group.' ) );
 	}
@@ -357,7 +407,7 @@ function nxtcc_delete_group_handler(): void {
 		nxtcc_groups_send_not_logged_in();
 	}
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! nxtcc_groups_current_user_can_any( array( 'nxtcc_manage_groups' ) ) ) {
 		nxtcc_groups_send_unauthorized();
 	}
 
@@ -410,7 +460,7 @@ function nxtcc_groups_bulk_action_handler(): void {
 		nxtcc_groups_send_not_logged_in();
 	}
 
-	if ( ! current_user_can( 'manage_options' ) ) {
+	if ( ! nxtcc_groups_current_user_can_any( array( 'nxtcc_manage_groups' ) ) ) {
 		nxtcc_groups_send_unauthorized();
 	}
 

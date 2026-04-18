@@ -17,6 +17,10 @@
 
 defined( 'ABSPATH' ) || exit;
 
+if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_authentication' ) ) ) {
+	wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'nxt-cloud-chat' ) );
+}
+
 /**
  * DAO (Filter-backed): Get latest WhatsApp API settings for the given admin email.
  *
@@ -59,16 +63,20 @@ if ( ! has_filter( 'nxtcc_db_latest_settings_for_user' ) ) {
  * -------------------------------------------------------------------------
  */
 
-$nxtcc_current_user = wp_get_current_user();
-$nxtcc_user_mailid  = $nxtcc_current_user instanceof WP_User ? (string) ( $nxtcc_current_user->user_email ?? '' ) : '';
-$nxtcc_user_mailid  = sanitize_email( $nxtcc_user_mailid );
+$nxtcc_active_tenant = NXTCC_Access_Control::get_current_tenant_context();
+$nxtcc_user_mailid   = isset( $nxtcc_active_tenant['user_mailid'] ) ? sanitize_email( (string) $nxtcc_active_tenant['user_mailid'] ) : '';
 
 /**
  * Latest saved settings for this admin (via DAO filter).
  *
  * @var array|null
  */
-$nxtcc_settings = apply_filters( 'nxtcc_db_latest_settings_for_user', null, $nxtcc_user_mailid );
+$nxtcc_settings_row = NXTCC_Access_Control::get_settings_row_for_tenant( $nxtcc_active_tenant );
+$nxtcc_settings     = is_object( $nxtcc_settings_row ) ? get_object_vars( $nxtcc_settings_row ) : null;
+
+if ( ! is_array( $nxtcc_settings ) ) {
+	$nxtcc_settings = apply_filters( 'nxtcc_db_latest_settings_for_user', null, $nxtcc_user_mailid );
+}
 
 /**
  * Eligibility: require connection + webhook.
@@ -114,7 +122,7 @@ $nxtcc_login_page_url = isset( $nxtcc_opts['login_page_url'] ) ? sanitize_text_f
  *
  * @var int
  */
-$nxtcc_widget_branding         = isset( $nxtcc_policy['widget_branding'] ) ? (int) $nxtcc_policy['widget_branding'] : 0;
+$nxtcc_widget_branding         = isset( $nxtcc_policy['widget_branding'] ) ? (int) $nxtcc_policy['widget_branding'] : 1;
 $nxtcc_login_button_wp         = ! empty( $nxtcc_opts['login_button_wp'] ) ? 1 : 0;
 $nxtcc_login_button_wc         = ! empty( $nxtcc_opts['login_button_wc'] ) ? 1 : 0;
 $nxtcc_login_button_text       = isset( $nxtcc_opts['login_button_text'] ) ? sanitize_text_field( (string) $nxtcc_opts['login_button_text'] ) : (string) $nxtcc_auth_defaults['login_button_text'];

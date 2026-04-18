@@ -27,7 +27,28 @@ function nxtcc_get_current_tenant() {
  * @return void
  */
 function nxtcc_verify_caps( $cap = 'manage_options' ) {
-	if ( ! current_user_can( $cap ) ) {
+	$caps = is_array( $cap ) ? $cap : array( $cap );
+	$caps = array_map(
+		static function ( $item ): string {
+			return sanitize_key( (string) $item );
+		},
+		$caps
+	);
+	$caps = array_values( array_filter( $caps ) );
+
+	if ( in_array( 'manage_options', $caps, true ) ) {
+		$caps = array( 'nxtcc_manage_contacts' );
+	}
+
+	$allowed = false;
+
+	if ( class_exists( 'NXTCC_Access_Control' ) ) {
+		$allowed = NXTCC_Access_Control::current_user_can_any( $caps );
+	} elseif ( ! empty( $caps ) ) {
+		$allowed = current_user_can( (string) reset( $caps ) );
+	}
+
+	if ( ! $allowed ) {
 		wp_send_json_error( array( 'message' => 'Insufficient permissions.' ) );
 	}
 }

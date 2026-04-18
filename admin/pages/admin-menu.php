@@ -19,8 +19,14 @@ function nxtcc_register_admin_menu(): void {
 	// Custom SVG icon used for the top-level admin menu.
 	$icon_url = NXTCC_PLUGIN_URL . 'admin/assets/vendor/images/nxt-cloud-chat.svg';
 
-	// All plugin admin pages require administrator-level access.
-	$capability = 'manage_options';
+	// Capabilities are tenant-aware and resolved by the access control layer.
+	$capability    = NXTCC_Access_Control::access_plugin_capability();
+	$dashboard_cap = 'nxtcc_access_dashboard';
+	$chat_cap      = 'nxtcc_access_chat';
+	$contacts_cap  = 'nxtcc_view_contacts';
+	$groups_cap    = 'nxtcc_view_groups';
+	$history_cap   = 'nxtcc_view_history';
+	$auth_cap      = 'nxtcc_manage_authentication';
 
 	// Parent slug for the top-level menu (Dashboard).
 	$parent_slug = 'nxt-cloud-chat';
@@ -41,7 +47,7 @@ function nxtcc_register_admin_menu(): void {
 		$parent_slug,
 		__( 'Dashboard', 'nxt-cloud-chat' ),
 		__( 'Dashboard', 'nxt-cloud-chat' ),
-		$capability,
+		$dashboard_cap,
 		$parent_slug,
 		'nxtcc_render_dashboard_page'
 	);
@@ -51,7 +57,7 @@ function nxtcc_register_admin_menu(): void {
 		$parent_slug,
 		__( 'Chat Window', 'nxt-cloud-chat' ),
 		__( 'Chat Window', 'nxt-cloud-chat' ),
-		$capability,
+		$chat_cap,
 		'nxtcc-chat-window',
 		static function (): void {
 			require_once NXTCC_PLUGIN_DIR . 'admin/pages/received-messages-view.php';
@@ -63,7 +69,7 @@ function nxtcc_register_admin_menu(): void {
 		$parent_slug,
 		__( 'Contacts', 'nxt-cloud-chat' ),
 		__( 'Contacts', 'nxt-cloud-chat' ),
-		$capability,
+		$contacts_cap,
 		'nxtcc-contacts',
 		'nxtcc_render_contacts_page'
 	);
@@ -73,7 +79,7 @@ function nxtcc_register_admin_menu(): void {
 		$parent_slug,
 		__( 'Groups', 'nxt-cloud-chat' ),
 		__( 'Groups', 'nxt-cloud-chat' ),
-		$capability,
+		$groups_cap,
 		'nxtcc-groups',
 		'nxtcc_render_groups_page'
 	);
@@ -83,7 +89,7 @@ function nxtcc_register_admin_menu(): void {
 		$parent_slug,
 		__( 'History', 'nxt-cloud-chat' ),
 		__( 'History', 'nxt-cloud-chat' ),
-		$capability,
+		$history_cap,
 		'nxtcc-history',
 		'nxtcc_render_history_page'
 	);
@@ -93,7 +99,7 @@ function nxtcc_register_admin_menu(): void {
 		$parent_slug,
 		__( 'Authentication', 'nxt-cloud-chat' ),
 		__( 'Authentication', 'nxt-cloud-chat' ),
-		$capability,
+		$auth_cap,
 		'nxtcc-authentication',
 		'nxtcc_render_authentication_page'
 	);
@@ -103,7 +109,7 @@ function nxtcc_register_admin_menu(): void {
 		$parent_slug,
 		__( 'Settings', 'nxt-cloud-chat' ),
 		__( 'Settings', 'nxt-cloud-chat' ),
-		$capability,
+		NXTCC_Access_Control::access_settings_capability(),
 		'nxtcc-settings',
 		array( 'NXTCC_Admin_Settings', 'settings_page_html' )
 	);

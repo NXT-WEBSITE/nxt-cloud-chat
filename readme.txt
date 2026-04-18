@@ -1,24 +1,26 @@
 ﻿=== NXT Cloud Chat ===
 Contributors: nxtwebsite
-Tags: whatsapp, whatsapp cloud api, whatsapp chat, whatsapp login, woocommerce
+Tags: whatsapp, whatsapp cloud api, whatsapp business, whatsapp login, woocommerce
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.2
+Stable tag: 1.0.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-WordPress WhatsApp Cloud API plugin with chat, notifications, contacts, OTP login, and Pro features for WooCommerce, bulk messaging, and templates.
+WhatsApp Cloud API plugin for WordPress with inbox chat, contacts, message history, WhatsApp OTP login, and Pro-ready WooCommerce automation.
 
 == Description ==
 
-NXT Cloud Chat is a WhatsApp Cloud API plugin for WordPress. It helps you connect your WordPress site to the official WhatsApp Business Platform so you can manage WhatsApp chat, send notifications, organize contacts, and review message history from the WordPress admin.
+NXT Cloud Chat is a WhatsApp Cloud API plugin for WordPress that helps you run WhatsApp communication from your WordPress admin. Connect your site to the official WhatsApp Business Platform to manage 1-to-1 chat, organize contacts and groups, review message history, and handle WhatsApp-based customer communication from one place.
 
-The plugin also includes a WhatsApp login and authentication widget for WordPress users. Visitors can sign in using their phone number and a one-time password delivered through WhatsApp, while their accounts remain standard WordPress users.
+The plugin also includes a WhatsApp login and authentication widget for WordPress users. Visitors can sign in with their phone number and a one-time password delivered through WhatsApp while continuing to use standard WordPress user accounts.
 
-If you are looking for a WordPress WhatsApp plugin that combines WhatsApp Cloud API messaging with WhatsApp OTP login, NXT Cloud Chat is designed for that workflow.
+If you need a WordPress WhatsApp plugin that combines WhatsApp Cloud API messaging, a WhatsApp inbox, contact management, and WhatsApp OTP login, NXT Cloud Chat is built for that workflow.
 
-For businesses that need more growth and sales features, the optional Pro add-on extends NXT Cloud Chat with WooCommerce automations, workflow-based messaging, bulk WhatsApp campaigns, advanced template messaging, CTA buttons, and customer engagement flows.
+NXT Cloud Chat also includes team access controls so a tenant owner can assign user roles and permissions for selected WordPress users who need access to WhatsApp chat, contacts, groups, history, settings, or authentication features.
+
+For stores and growing businesses, the optional Pro add-on extends NXT Cloud Chat with WooCommerce automations, workflow-based messaging, bulk WhatsApp campaigns, advanced template messaging, CTA buttons, and customer engagement flows.
 
 Key goals:
 
@@ -81,6 +83,8 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 * Track subscription status and unsubscribe reasons.
 * Organize contacts into groups for easier targeting, such as leads, members, or customers.
 * Use group-based organization to support better WhatsApp messaging workflows inside WordPress.
+* Assign team access inside the plugin so selected WordPress users can work with WhatsApp data based on the permissions granted by the tenant owner.
+* Support user roles and permissions for WhatsApp operations such as chat access, contact management, group management, history review, authentication settings, and tenant tools.
 
 = Chat Window & History =
 
@@ -88,6 +92,7 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 * Review inbound and outbound WhatsApp messages with timestamps and contact details.
 * Download media attachments such as images and documents through a secure media proxy.
 * Store message history in dedicated tables with status fields and metadata for reporting and debugging.
+* Preserve reply context and reaction message history for better day-to-day conversation review inside the admin.
 
 = WhatsApp Login & Authentication =
 
@@ -98,6 +103,7 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 * Optional login buttons on the default WordPress login page and WooCommerce My Account login page.
 * Customizable login button text, colors, separator text, and corner style.
 * Admin screen to configure OTP length, resend cooldown, allowed countries, branding behavior, login button appearance, and login-page placement.
+* Sync verified WordPress users into contacts and keep verified group protection rules intact.
 
 = Admin Experience =
 
@@ -112,6 +118,8 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
   * Upgrade (integration info for optional extensions)
 * Admin actions protected with nonces and capability checks.
 * Installed Plugins screen links for documentation, community support, reviews, and feature suggestions.
+* Cleanup tools to control data-retention periods and safely remove old WhatsApp operational data when needed.
+* Team Access controls to let the tenant owner manage staff access by role and module permissions.
 
 = Available with the Optional Pro Add-on =
 
@@ -211,10 +219,6 @@ Yes. You must create and configure a WhatsApp Cloud API app in your Meta develop
 
 The plugin assumes you already have these values.
 
-=== Is this plugin an official WhatsApp product? ===
-
-No. NXT Cloud Chat is an independent WordPress plugin that integrates with the official WhatsApp Cloud API, but it is not created, maintained, or endorsed by WhatsApp or Meta.
-
 === Can I use this plugin just for WhatsApp login and not for messaging? ===
 
 Yes. You can focus on the WhatsApp login/authentication features by configuring the WhatsApp Cloud API and placing the `[nxtcc_login_whatsapp]` shortcode on a dedicated page. Use of additional messaging tools is optional.
@@ -231,9 +235,13 @@ Yes. You can enable a WhatsApp login button on the WooCommerce My Account login 
 
 Yes. Those advanced capabilities are available through the optional `NXT Cloud Chat Pro` add-on. Pro is designed for stores and businesses that need WooCommerce notifications, WhatsApp workflows, advanced template campaigns, and bulk broadcast messaging from WordPress.
 
+=== Can I assign different user roles and permissions for staff users? ===
+
+Yes. NXT Cloud Chat includes Team Access controls so the tenant owner can grant selected WordPress users access to specific plugin areas such as Chat Window, Contacts, Groups, History, Authentication, Settings, and cleanup tools based on the role and permissions you assign.
+
 === Does the plugin store WhatsApp messages? ===
 
-The plugin stores message metadata and content in custom tables (for history and debugging) within your WordPress database. If you have specific data retention requirements, you can implement your own cleanup policies via custom code or database tools.
+Yes. The plugin stores message metadata and content in custom tables inside your WordPress database so you can review history, delivery status, and chat activity. You can manage retention and cleanup rules from **NXT Cloud Chat -> Settings -> Tools**.
 
 === What happens on uninstall? ===
 
@@ -258,10 +266,18 @@ Use this with care in production environments.
 6. Login authentication management interface.
 7. WhatsApp login widget embedded on a WordPress page.
 8. WhatsApp login buttons for the default WordPress login page and WooCommerce My Account login page.
-9. Bulk WhatsApp messaging and campaign screen for sending messages to multiple contacts (Pro).
-10. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
+9. Template management interface for creating and managing WhatsApp message templates (Pro).
+10. Bulk WhatsApp messaging and campaign screen for sending messages to multiple contacts (Pro).
+11. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
 
 == Changelog ==
+
+= 1.0.3 =
+* Added Team Access management for tenant-owner controlled staff permissions inside the plugin.
+* Redesigned the Connection settings tab with a more compact branded layout while keeping the existing functionality intact.
+* Added cleanup and retention controls for operational data from the plugin.
+* Refined Contacts, Groups, History, and Chat Window behavior, including verified-group protections and improved live chat handling.
+* Removed development-only debug traces from Contacts admin scripts for a cleaner production build.
 
 = 1.0.2 =
 * Added the stable runtime compatibility contract and bridge wrappers used by the Pro workflow engine.

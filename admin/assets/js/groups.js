@@ -41,6 +41,9 @@ jQuery( function ( $ ) {
 	}
 
 	const hasConnection = Number( $widget.data( 'has-connection' ) ) === 1;
+	const $summaryTotal = $( '#nxtcc-groups-summary-total' );
+	const $summaryVerified = $( '#nxtcc-groups-summary-verified' );
+	const $summaryContacts = $( '#nxtcc-groups-summary-contacts' );
 
 	const selectedIds = new Set();
 
@@ -228,24 +231,19 @@ jQuery( function ( $ ) {
 	 * @return {void}
 	 */
 	function setTbodyMessage( text, tone ) {
-		const tones = {
-			neutral: '#667085',
-			danger: '#b91c1c',
-			warn: '#b45309',
-		};
-
-		const color = tones[ tone ] || tones.neutral;
-
 		const $tbody = $( '.nxtcc-groups-table tbody' );
 		safeEmpty( $tbody );
 
-		const $tr = $( '<tr/>' );
-		const $td = $( '<td/>' ).attr( 'colspan', 99 );
+		const $tr = $( '<tr/>' ).addClass( 'nxtcc-groups-state-row' );
+		const $td = $( '<td/>' )
+			.attr( 'colspan', 99 )
+			.addClass( 'nxtcc-groups-state-cell' );
 
-		$td.css( {
-			textAlign: 'center',
-			color: color,
-		} );
+		if ( 'danger' === tone ) {
+			$td.addClass( 'is-danger' );
+		} else if ( 'warn' === tone ) {
+			$td.addClass( 'is-warn' );
+		}
 
 		$td.text( toStr( text ) );
 
@@ -258,6 +256,30 @@ jQuery( function ( $ ) {
 		} );
 
 		$( '#nxtcc-groups-bulk-actions' ).hide();
+	}
+
+	/**
+	 * Update summary cards from the loaded rows.
+	 *
+	 * @param {Array} rows Group rows.
+	 * @return {void}
+	 */
+	function updateSummary( rows ) {
+		const items = Array.isArray( rows ) ? rows : [];
+		let verifiedCount = 0;
+		let contactCount = 0;
+
+		items.forEach( ( row ) => {
+			if ( toBool( row.is_verified || 0 ) ) {
+				verifiedCount += 1;
+			}
+
+			contactCount += toInt( row.count );
+		} );
+
+		$summaryTotal.text( String( items.length ) );
+		$summaryVerified.text( String( verifiedCount ) );
+		$summaryContacts.text( String( contactCount ) );
 	}
 
 	/**
@@ -315,7 +337,7 @@ jQuery( function ( $ ) {
 
 	$widget.on(
 		'click.nxtcc',
-		'.nxtcc-groups-modal-close, .nxtcc-groups-modal-overlay',
+		'.nxtcc-groups-modal-dismiss, .nxtcc-groups-modal-overlay',
 		closeGroupModal
 	);
 
@@ -361,21 +383,21 @@ jQuery( function ( $ ) {
 
 		const $nameCol = $( '<td/>' ).addClass( 'group-name' );
 
-		safeAppend(
-			$nameCol,
-			$( '<span/>' )
-				.addClass( 'nxtcc-group-name-text' )
-				.text( toStr( row.group_name ) )
-		);
-
 		if ( isVerified ) {
 			const $badge = $( '<span/>' )
-				.addClass( 'nxtcc-lock-badge' )
-				.attr( 'title', __( 'Verified group — locked', 'nxt-cloud-chat' ) )
-				.text( '🔒' )
-				.css( { marginLeft: '6px' } );
+				.addClass( 'nxtcc-lock-badge nxtcc-lock-badge-verified' )
+				.attr( 'title', __( 'Verified group - locked', 'nxt-cloud-chat' ) )
+				.attr( 'aria-label', __( 'Verified group - locked', 'nxt-cloud-chat' ) )
+				.text( toStr( row.group_name ) );
 
 			safeAppend( $nameCol, $badge );
+		} else {
+			safeAppend(
+				$nameCol,
+				$( '<span/>' )
+					.addClass( 'nxtcc-group-name-text' )
+					.text( toStr( row.group_name ) )
+			);
 		}
 
 		safeAppend( $tr, $nameCol );
@@ -394,6 +416,13 @@ jQuery( function ( $ ) {
 				.text( toStr( row.created_by ) )
 		);
 
+		safeAppend(
+			$tr,
+			$( '<td/>' )
+				.addClass( 'group-updated-by' )
+				.text( toStr( row.updated_by ) )
+		);
+
 		const disableActions = ! hasConnection || isVerified;
 
 		const $renameBtn = $( '<button/>' )
@@ -409,10 +438,11 @@ jQuery( function ( $ ) {
 			.text( __( 'Delete', 'nxt-cloud-chat' ) );
 
 		const $actionsCol = $( '<td/>' ).addClass( 'actions-col' );
+		const $actionsWrap = $( '<div/>' ).addClass( 'nxtcc-groups-row-actions' );
 
-		safeAppend( $actionsCol, $renameBtn );
-		safeAppend( $actionsCol, $( '<span/>' ).text( ' ' ) );
-		safeAppend( $actionsCol, $deleteBtn );
+		safeAppend( $actionsWrap, $renameBtn );
+		safeAppend( $actionsWrap, $deleteBtn );
+		safeAppend( $actionsCol, $actionsWrap );
 
 		safeAppend( $tr, $actionsCol );
 
@@ -439,9 +469,12 @@ jQuery( function ( $ ) {
 		}
 
 		if ( ! Array.isArray( rows ) || ! rows.length ) {
+			updateSummary( [] );
 			setTbodyMessage( __( 'No groups found.', 'nxt-cloud-chat' ), 'neutral' );
 			return;
 		}
+
+		updateSummary( rows );
 
 		rows.forEach( ( row ) => {
 			safeAppend( $tbody, buildRow( row ) );
@@ -453,25 +486,19 @@ jQuery( function ( $ ) {
 	/**
 	 * Load groups list from the server (abortable).
 	 *
-	 * @param {Object} extra Extra args.
 	 * @return {void}
 	 */
-	function loadGroups( extra ) {
-		const extraArgs = extra && typeof extra === 'object' ? extra : {};
-
+	function loadGroups() {
 		abortInflightList();
 
-		const params = Object.assign(
-			{
-				action: 'nxtcc_fetch_groups_list',
-				search: state.search,
-				sort_key: state.sort_key,
-				sort_dir: state.sort_dir,
-			},
-			extraArgs
-		);
+		const params = {
+			action: 'nxtcc_fetch_groups_list',
+			search: state.search,
+			sort_key: state.sort_key,
+			sort_dir: state.sort_dir,
+		};
 
-		setTbodyMessage( __( 'Loading groups…', 'nxt-cloud-chat' ), 'neutral' );
+		setTbodyMessage( __( 'Loading groups...', 'nxt-cloud-chat' ), 'neutral' );
 
 		inflightListXHR = postAjax(
 			params,
@@ -483,12 +510,14 @@ jQuery( function ( $ ) {
 						resp && resp.data && resp.data.message
 							? toStr( resp.data.message )
 							: __( 'Failed to load groups.', 'nxt-cloud-chat' );
+					updateSummary( [] );
 					setTbodyMessage( msg, 'danger' );
 					applySortHeaderUI();
 					return;
 				}
 
 				if ( resp.data && resp.data.has_tenant === false ) {
+					updateSummary( [] );
 					setTbodyMessage(
 						__( 'Connect your WhatsApp Business account and phone number to manage groups.', 'nxt-cloud-chat' ),
 						'warn'
@@ -507,6 +536,7 @@ jQuery( function ( $ ) {
 			},
 			function () {
 				inflightListXHR = null;
+				updateSummary( [] );
 				setTbodyMessage( __( 'Failed to load groups.', 'nxt-cloud-chat' ), 'danger' );
 			}
 		);
@@ -579,7 +609,7 @@ jQuery( function ( $ ) {
 
 		const $save = $( '.nxtcc-groups-modal-content .nxtcc-groups-btn-green' )
 			.prop( 'disabled', true )
-			.text( __( 'Saving…', 'nxt-cloud-chat' ) );
+			.text( __( 'Saving...', 'nxt-cloud-chat' ) );
 
 		postAjax(
 			formData,
@@ -622,7 +652,7 @@ jQuery( function ( $ ) {
 
 		selectedIds.delete( groupId );
 
-		$btn.prop( 'disabled', true ).text( __( 'Deleting…', 'nxt-cloud-chat' ) );
+		$btn.prop( 'disabled', true ).text( __( 'Deleting...', 'nxt-cloud-chat' ) );
 
 		postAjax(
 			{ action: 'nxtcc_delete_group', group_id: groupId },
@@ -729,7 +759,7 @@ jQuery( function ( $ ) {
 			}
 		}
 
-		$apply.prop( 'disabled', true ).text( __( 'Working…', 'nxt-cloud-chat' ) );
+		$apply.prop( 'disabled', true ).text( __( 'Working...', 'nxt-cloud-chat' ) );
 
 		postAjax(
 			{

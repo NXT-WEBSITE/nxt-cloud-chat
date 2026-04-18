@@ -385,7 +385,7 @@ jQuery( function ( $ ) {
 		const branding =
 			POLICY.widget_branding !== undefined
 				? Boolean( parseInt( POLICY.widget_branding, 10 ) )
-				: false;
+				: true;
 
 		$( '#nxtcc-widget-branding' ).prop( 'checked', branding );
 		$( '#nxtcc-widget-branding' ).prop( 'disabled', false );
@@ -1029,6 +1029,7 @@ jQuery( function ( $ ) {
 			postJSON( AJAX, {
 				action: 'nxtcc_sync_verified_bindings',
 				nonce: NONCE,
+				owner_mailid: currentOwner(),
 			} )
 				.done( function ( resp ) {
 					if ( resp && resp.success && resp.data ) {

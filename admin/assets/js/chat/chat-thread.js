@@ -7,7 +7,7 @@
  * - Loads initial thread, polls for new messages, and prepends older messages on scroll.
  * - Calls the media proxy route for media_id-based attachments.
  * - Keeps per-thread state (selected contact, last/oldest ids, load locks).
- * - Exposes a small API used by other modules (actions/inbox).
+ * - Exposes only the thread hooks used by the inbox/actions modules.
  *
  * @package NXTCC
  */
@@ -26,7 +26,7 @@ jQuery( function ( $ ) {
 	Chat.thread = Chat.thread || {};
 
 	Chat.thread.start = function ( ctx ) {
-		if ( ! ctx || ! ctx.$widget || ! ctx.$chatThread || ! ctx.$chatList ) {
+		if ( ! ctx || ! ctx.$chatThread || ! ctx.$chatList || ! ctx.$chatHeader ) {
 			return;
 		}
 
@@ -50,6 +50,8 @@ jQuery( function ( $ ) {
 		let pollInFlight      = false;
 		let pollErrorCount    = 0;
 		let activeThreadToken = 0; // increments when contact changes to ignore stale callbacks.
+		let loadRequestId     = 0;
+		let activeInboxKey    = '';
 
 		// NEW: Pause thread polling while user is reading older messages (not at bottom).
 		let threadPollPaused = false;
@@ -85,46 +87,6 @@ jQuery( function ( $ ) {
 			if ( ctx.api.actions && ctx.api.actions.updateScrollButton ) {
 				ctx.api.actions.updateScrollButton();
 			}
-		}
-
-		function findBubbleById( id ) {
-			const msgId = parseInt( id, 10 ) || 0;
-			if ( msgId <= 0 ) {
-				return $();
-			}
-			return $chatThread.find( '.nxtcc-chat-bubble[data-msg-id="' + msgId + '"]' );
-		}
-
-		/**
-		 * Optionally used by actions module: return selected bubble ids.
-		 *
-		 * Selection checkmark is a simple .nxtcc-check element inside bubble.
-		 * Your actions module likely sets a class; we support both.
-		 *
-		 * @return {number[]} ids
-		 */
-		function getSelectedMessageIds() {
-			const ids = [];
-
-			$chatThread.find( '.nxtcc-chat-bubble' ).each( function () {
-				const $b       = $( this );
-				const selected =
-					$b.hasClass( 'selected' ) ||
-					$b.attr( 'data-selected' ) === '1' ||
-					$b.find( '.nxtcc-check' ).hasClass( 'active' );
-
-				if ( ! selected ) {
-					return;
-				}
-
-				const raw = $b.attr( 'data-msg-id' );
-				const id  = parseInt( raw, 10 ) || 0;
-				if ( id > 0 ) {
-					ids.push( id );
-				}
-			} );
-
-			return ids;
 		}
 
 		/**
@@ -394,55 +356,6 @@ jQuery( function ( $ ) {
 		}
 
 		/**
-		 * Apply favorite UI state to a bubble element.
-		 *
-		 * @param {jQuery} $bub Bubble.
-		 * @param {boolean} isFav Favorite?
-		 * @return {void}
-		 */
-		function applyFavoriteToBubble( $bub, isFav ) {
-			if ( ! $bub || ! $bub.length ) {
-				return;
-			}
-
-			const favVal = isFav ? 1 : 0;
-
-			$bub.data( 'fav', favVal );
-			$bub.attr( 'data-fav', isFav ? '1' : '0' );
-
-			const $meta = $bub.find( '.nxtcc-msg-meta' ).first();
-			if ( ! $meta.length ) {
-				return;
-			}
-
-			const metaEl = $meta.get( 0 );
-			if ( ! metaEl ) {
-				return;
-			}
-
-			const existing = metaEl.querySelector( '.nxtcc-fav-star-inline' );
-
-			if ( isFav ) {
-				if ( ! existing ) {
-					const star             = U.el(
-						'span',
-						{ class: 'nxtcc-fav-star-inline', title: 'Favorited' },
-						'★'
-					);
-					star.style.marginRight = '4px';
-
-					// IMPORTANT: Avoid jQuery .prepend() (VIP warns it can execute HTML).
-					U.safeInsertAtStart( metaEl, star );
-				}
-				return;
-			}
-
-			if ( existing ) {
-				metaEl.removeChild( existing );
-			}
-		}
-
-		/**
 		 * Build a message bubble element (no HTML string injection).
 		 *
 		 * @param {Object} msg Message row.
@@ -584,6 +497,20 @@ jQuery( function ( $ ) {
 			ctx.api.actions.setComposerEnabled( true );
 		}
 
+		function markCurrentChatRead() {
+			if ( ! ctx.state.chatContactId ) {
+				return;
+			}
+
+			$.post( Chat.cfg.ajaxurl, {
+				action: 'nxtcc_mark_chat_read',
+				contact_id: ctx.state.chatContactId,
+				business_account_id: ctx.businessAccountId,
+				phone_number_id: ctx.phoneNumberId,
+				nonce: ctx.nonce,
+			} );
+		}
+
 		function isThreadEligibleForPolling() {
 			const threadEl = $chatThread.get( 0 );
 			if ( ! threadEl ) {
@@ -626,8 +553,9 @@ jQuery( function ( $ ) {
 				return;
 			}
 
-			const myToken  = activeThreadToken;
-			const threadEl = $chatThread.get( 0 );
+			const myToken   = activeThreadToken;
+			const requestId = ++loadRequestId;
+			const threadEl  = $chatThread.get( 0 );
 
 			threadPollPaused = false;
 			pollNeedsCatchup = false;
@@ -653,13 +581,7 @@ jQuery( function ( $ ) {
 						patchChatThread( resp.data.messages );
 						setComposerEnabledFromResp( resp );
 
-						$.post( Chat.cfg.ajaxurl, {
-							action: 'nxtcc_mark_chat_read',
-							contact_id: ctx.state.chatContactId,
-							business_account_id: ctx.businessAccountId,
-							phone_number_id: ctx.phoneNumberId,
-							nonce: ctx.nonce,
-						} );
+						markCurrentChatRead();
 
 						return;
 					}
@@ -682,7 +604,29 @@ jQuery( function ( $ ) {
 					}
 
 					updateScrollButton();
+				} )
+				.always( function () {
+					if ( requestId === loadRequestId ) {
+						loadRequestId = 0;
+					}
 				} );
+		}
+
+		function reloadChatThread() {
+			if ( ! ctx.state.chatContactId ) {
+				return;
+			}
+
+			activeThreadToken++;
+			stopChatPolling();
+			resetThreadStateForContact();
+			loadChatThread();
+
+			setTimeout( function () {
+				if ( ctx.state.chatContactId ) {
+					startChatPolling();
+				}
+			}, 150 );
 		}
 
 		function computeNextPollDelayMs() {
@@ -797,6 +741,7 @@ jQuery( function ( $ ) {
 					} );
 
 					U.safeAppend( threadEl, frag );
+					markCurrentChatRead();
 
 					if ( wasNear ) {
 						threadEl.scrollTo( { top: threadEl.scrollHeight, behavior: 'smooth' } );
@@ -819,6 +764,67 @@ jQuery( function ( $ ) {
 
 					scheduleNextPoll();
 				} );
+		}
+
+		function syncSelectedContactFromInbox( contacts ) {
+			if ( ! ctx.state.chatContactId || ! Array.isArray( contacts ) || ! contacts.length ) {
+				return;
+			}
+
+			const selectedId = Number( ctx.state.chatContactId );
+			const activeChat = contacts.find( function ( chat ) {
+				return Number( chat && chat.contact_id ? chat.contact_id : 0 ) === selectedId;
+			} );
+
+			if ( ! activeChat ) {
+				return;
+			}
+
+			const cc        = activeChat.country_code ? U.toStr( activeChat.country_code ) : '';
+			const ph        = activeChat.phone_number ? U.toStr( activeChat.phone_number ) : '';
+			const fullPhone = cc ? '+' + cc + ( ph ? ' ' + ph : '' ) : ph;
+			const nameText  =
+				( activeChat.name ? U.toStr( activeChat.name ) : '' ) ||
+				fullPhone ||
+				'Unknown';
+
+			$chatHeader.find( '.nxtcc-chat-contact-name' ).text( nameText );
+			$chatHeader.find( '.nxtcc-chat-contact-number' ).text( fullPhone );
+
+			const nextKey =
+				String( selectedId ) +
+				'|' +
+				U.toStr( activeChat.last_msg_time || '' ) +
+				'|' +
+				U.toStr( activeChat.message_preview || '' ) +
+				'|' +
+				String( Number( activeChat.unread_count || 0 ) );
+
+			if ( nextKey === activeInboxKey ) {
+				return;
+			}
+
+			activeInboxKey = nextKey;
+
+			if ( 0 !== loadRequestId || pollInFlight ) {
+				return;
+			}
+
+			if ( ! ctx.state.lastMessageId ) {
+				reloadChatThread();
+				return;
+			}
+
+			if ( 'hidden' === document.visibilityState ) {
+				return;
+			}
+
+			if ( ! isThreadEligibleForPolling() ) {
+				pollNeedsCatchup = true;
+				return;
+			}
+
+			pollChatThread();
 		}
 
 		function startChatPolling() {
@@ -937,39 +943,12 @@ jQuery( function ( $ ) {
 			}
 		} );
 
-		/**
-		 * Exposed methods for the actions module:
-		 * - applyFavoriteState(ids, isFav)
-		 * - removeMessagesByIds(ids)
-		 * - getSelectedMessageIds()
-		 */
-		function applyFavoriteState( ids, isFav ) {
-			const list = Array.isArray( ids ) ? ids : [];
-			list.forEach( function ( id ) {
-				const $b = findBubbleById( id );
-				applyFavoriteToBubble( $b, Boolean( isFav ) );
-			} );
-		}
-
-		function removeMessagesByIds( ids ) {
-			const list = Array.isArray( ids ) ? ids : [];
-			list.forEach( function ( id ) {
-				findBubbleById( id ).remove();
-			} );
-			updateScrollButton();
-		}
-
 		// Expose API for other modules.
-		ctx.api.thread.mediaProxyUrl         = mediaProxyUrl;
-		ctx.api.thread.isNearBottom          = isNearBottom;
-		ctx.api.thread.patchChatThread       = patchChatThread;
-		ctx.api.thread.loadChatThread        = loadChatThread;
-		ctx.api.thread.pollChatThread        = pollChatThread;
-		ctx.api.thread.startChatPolling      = startChatPolling;
-		ctx.api.thread.stopChatPolling       = stopChatPolling;
-		ctx.api.thread.applyFavoriteState    = applyFavoriteState;
-		ctx.api.thread.removeMessagesByIds   = removeMessagesByIds;
-		ctx.api.thread.getSelectedMessageIds = getSelectedMessageIds;
+		ctx.api.thread.isNearBottom        = isNearBottom;
+		ctx.api.thread.loadChatThread      = loadChatThread;
+		ctx.api.thread.reloadChatThread    = reloadChatThread;
+		ctx.api.thread.stopChatPolling     = stopChatPolling;
+		ctx.api.thread.syncSelectedContact = syncSelectedContactFromInbox;
 
 		// Contact selection: load the thread and start polling (namespaced).
 		$chatList.off( 'click' + ns, '.nxtcc-chat-head' );
@@ -983,6 +962,7 @@ jQuery( function ( $ ) {
 			const contactId    = parseInt( contactIdRaw, 10 ) || 0;
 
 			ctx.state.chatContactId = contactId;
+			activeInboxKey          = '';
 
 			const name  = $row.find( '.nxtcc-chat-head-name' ).text();
 			const phone = U.toStr( $row.attr( 'data-phone' ) || $row.data( 'phone' ) || '' );
@@ -994,17 +974,7 @@ jQuery( function ( $ ) {
 				ctx.api.actions.enterChatView( $row );
 			}
 
-			// Invalidate old in-flight callbacks.
-			activeThreadToken++;
-
-			stopChatPolling();
-			resetThreadStateForContact();
-
-			loadChatThread();
-
-			setTimeout( function () {
-				startChatPolling();
-			}, 150 );
+			reloadChatThread();
 
 			$row.find( '.nxtcc-chat-head-unread' ).fadeOut( 200, function () {
 				$( this ).remove();

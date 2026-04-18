@@ -25,8 +25,8 @@ function nxtcc_fm_get_options(): array {
 		'grace_enabled'     => 0,
 		'grace_days'        => 7,
 		'redirect_wp_login' => 0,
-		// Explicit opt-in only: do not show frontend attribution by default.
-		'widget_branding'   => 0,
+		// Show frontend attribution by default unless an admin turns it off.
+		'widget_branding'   => 1,
 		'allowed_countries' => array(),
 	);
 
@@ -41,7 +41,7 @@ function nxtcc_fm_get_options(): array {
 /**
  * Whether frontend widget branding is explicitly enabled.
  *
- * Default remains opt-in (disabled) unless the admin enables it.
+ * Default remains enabled unless the admin disables it.
  *
  * @return bool True when branding is enabled by policy.
  */

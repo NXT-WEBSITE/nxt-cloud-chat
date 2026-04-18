@@ -110,12 +110,22 @@ function nxtcc_auth_pick_settings_row( ?string $owner_mail = null ): ?array {
 	if ( null !== $owner_mail && '' !== $owner_mail ) {
 		$mail = sanitize_email( $owner_mail );
 	} else {
-		$saved = nxtcc_auth_get_default_owner_mail();
-		if ( '' !== $saved ) {
-			$mail = sanitize_email( $saved );
+		$tenant_mail = '';
+		if ( class_exists( 'NXTCC_Access_Control' ) ) {
+			$tenant      = NXTCC_Access_Control::get_current_tenant_context();
+			$tenant_mail = isset( $tenant['user_mailid'] ) ? sanitize_email( (string) $tenant['user_mailid'] ) : '';
+		}
+
+		if ( '' !== $tenant_mail ) {
+			$mail = $tenant_mail;
 		} else {
-			$user = wp_get_current_user();
-			$mail = ( $user && ! empty( $user->user_email ) ) ? sanitize_email( (string) $user->user_email ) : '';
+			$saved = nxtcc_auth_get_default_owner_mail();
+			if ( '' !== $saved ) {
+				$mail = sanitize_email( $saved );
+			} else {
+				$user = wp_get_current_user();
+				$mail = ( $user && ! empty( $user->user_email ) ) ? sanitize_email( (string) $user->user_email ) : '';
+			}
 		}
 	}
 
@@ -273,22 +283,16 @@ add_action( 'init', 'nxtcc_auth_register_admin_ajax' );
  * @return void
  */
 function nxtcc_ajax_list_owners(): void {
-	if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+	if ( ! is_user_logged_in() || ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_authentication' ) ) ) {
 		wp_send_json_error( array( 'message' => 'Unauthorized.' ), 403 );
 	}
 
 	check_ajax_referer( 'nxtcc_auth_admin', 'nonce', true );
 
-	$rows = NXTCC_Auth_DAO::latest_rows_per_owner();
-
 	$owners = array();
-	foreach ( $rows as $row ) {
-		if ( ! is_array( $row ) ) {
-			continue;
-		}
-		if ( ! nxtcc_auth_has_connection( $row ) ) {
-			continue;
-		}
+
+	$row = nxtcc_auth_pick_settings_row();
+	if ( nxtcc_auth_has_connection( $row ) ) {
 		$owners[] = array(
 			'mail'  => (string) $row['user_mailid'],
 			'label' => (string) $row['user_mailid'],
@@ -298,7 +302,7 @@ function nxtcc_ajax_list_owners(): void {
 	wp_send_json_success(
 		array(
 			'owners'             => $owners,
-			'default_tenant_key' => nxtcc_auth_get_default_owner_mail(),
+			'default_tenant_key' => ! empty( $owners[0]['mail'] ) ? (string) $owners[0]['mail'] : '',
 		)
 	);
 }
@@ -309,7 +313,7 @@ function nxtcc_ajax_list_owners(): void {
  * @return void
  */
 function nxtcc_ajax_list_auth_templates(): void {
-	if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+	if ( ! is_user_logged_in() || ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_authentication' ) ) ) {
 		wp_send_json_error( array( 'message' => 'Unauthorized.' ), 403 );
 	}
 
@@ -392,7 +396,7 @@ function nxtcc_auth_build_default_components( int $expiry_minutes = 10 ): array 
  * @return void
  */
 function nxtcc_ajax_generate_default_template(): void {
-	if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+	if ( ! is_user_logged_in() || ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_authentication' ) ) ) {
 		wp_send_json_error( array( 'message' => 'Unauthorized.' ), 403 );
 	}
 
@@ -529,7 +533,7 @@ function nxtcc_ajax_generate_default_template(): void {
  * @return void
  */
 function nxtcc_ajax_save_auth_options(): void {
-	if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+	if ( ! is_user_logged_in() || ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_authentication' ) ) ) {
 		wp_send_json_error( array( 'message' => 'Unauthorized.' ), 403 );
 	}
 
@@ -678,7 +682,7 @@ function nxtcc_ajax_save_auth_options(): void {
 				'grace_enabled'     => (int) ( $policy['grace_enabled'] ?? 0 ),
 				'grace_days'        => (int) ( $policy['grace_days'] ?? 7 ),
 				'redirect_wp_login' => (int) ( $policy['redirect_wp_login'] ?? 0 ),
-				'widget_branding'   => (int) ( $policy['widget_branding'] ?? 0 ),
+				'widget_branding'   => isset( $policy['widget_branding'] ) ? (int) $policy['widget_branding'] : 1,
 				'allowed_countries' => array_map( 'strval', (array) ( $policy['allowed_countries'] ?? array() ) ),
 			),
 		)
@@ -758,29 +762,18 @@ function nxtcc_auth_pick_template_pair( array $settings ) {
  * Resolve an "active" settings row for public OTP sends.
  *
  * Priority:
- * - Default owner (if configured and complete).
- * - Latest settings row where webhook is subscribed.
- * - Latest settings row overall.
+ * - Saved default profile from Authentication settings.
+ * - Current tenant or current WordPress user fallback via pick_settings_row().
  *
  * @return array|null Settings row or null.
  */
 function nxtcc_auth_get_active_settings_row(): ?array {
 	$owner = nxtcc_auth_get_default_owner_mail();
 	if ( '' !== $owner ) {
-		$r = nxtcc_auth_pick_settings_row( $owner );
-		if ( nxtcc_auth_has_connection( $r ) ) {
-			return $r;
-		}
+		return nxtcc_auth_pick_settings_row( $owner );
 	}
 
-	$row = NXTCC_Auth_DAO::latest_settings_with_webhook();
-	if ( is_array( $row ) ) {
-		return $row;
-	}
-
-	$row = NXTCC_Auth_DAO::latest_settings_any();
-
-	return is_array( $row ) ? $row : null;
+	return nxtcc_auth_pick_settings_row();
 }
 
 /**
@@ -1054,6 +1047,8 @@ function nxtcc_auth_log_history( array $settings, string $tpl_name, string $tpl_
 					'sent' => current_time( 'mysql', 1 ),
 				)
 			),
+			'origin_type'         => 'system',
+			'origin_ref'          => 'auth_template',
 			'created_at'          => current_time( 'mysql', 1 ),
 			'sent_at'             => current_time( 'mysql', 1 ),
 			'meta_message_id'     => (string) $wamid,
@@ -1148,7 +1143,8 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 
 	$session_id  = sanitize_text_field( (string) ( $body['session_id'] ?? '' ) );
 	$phone_e164  = '+' . (string) preg_replace( '/\D+/', '', (string) ( $body['phone_e164'] ?? '' ) );
-	$otp_context = nxtcc_auth_build_event_context( $session_id, $phone_e164 );
+	$settings    = nxtcc_auth_get_active_settings_row();
+	$otp_context = nxtcc_auth_build_event_context( $session_id, $phone_e164, $settings );
 
 	if ( '' === $session_id || strlen( $phone_e164 ) < 7 ) {
 		nxtcc_auth_emit_otp_failed( 'request', 'invalid_parameters', $otp_context );
@@ -1262,7 +1258,6 @@ function nxtcc_auth_request_otp( WP_REST_Request $req ) {
 		);
 	}
 
-	$settings = nxtcc_auth_get_active_settings_row();
 	if ( ! $settings || ! nxtcc_auth_has_connection( $settings ) ) {
 		nxtcc_auth_emit_otp_failed( 'request', 'connection_not_configured', $otp_context );
 
@@ -1397,7 +1392,8 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 	$session_id    = sanitize_text_field( (string) ( $body['session_id'] ?? '' ) );
 	$phone_e164    = '+' . (string) preg_replace( '/\D+/', '', (string) ( $body['phone_e164'] ?? '' ) );
 	$code          = (string) preg_replace( '/\D+/', '', (string) ( $body['code'] ?? '' ) );
-	$login_context = nxtcc_auth_build_event_context( $session_id, $phone_e164 );
+	$settings      = nxtcc_auth_get_active_settings_row();
+	$login_context = nxtcc_auth_build_event_context( $session_id, $phone_e164, $settings );
 
 	if ( '' === $session_id || strlen( $phone_e164 ) < 7 || '' === $code ) {
 		nxtcc_auth_emit_otp_failed( 'verify', 'invalid_parameters', $login_context );
@@ -1571,8 +1567,6 @@ function nxtcc_auth_verify_otp( WP_REST_Request $req ) {
 		$user_to_login   = (int) $new_uid;
 		$login_user_type = 'new';
 	}
-
-	$settings = nxtcc_auth_get_active_settings_row();
 
 	$ctx = array(
 		'business_account_id' => is_array( $settings ) ? (string) ( $settings['business_account_id'] ?? '' ) : '',

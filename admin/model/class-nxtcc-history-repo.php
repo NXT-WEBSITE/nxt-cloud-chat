@@ -52,6 +52,13 @@ final class NXTCC_History_Repo {
 	private string $cont_tbl;
 
 	/**
+	 * Broadcast runs table name.
+	 *
+	 * @var string
+	 */
+	private string $runs_tbl;
+
+	/**
 	 * Constructor.
 	 */
 	private function __construct() {
@@ -62,6 +69,7 @@ final class NXTCC_History_Repo {
 		$this->hist_tbl  = $prefix . 'nxtcc_message_history';
 		$this->queue_tbl = $prefix . 'nxtcc_broadcast_queue';
 		$this->cont_tbl  = $prefix . 'nxtcc_contacts';
+		$this->runs_tbl  = $prefix . 'nxtcc_broadcast_runs';
 	}
 
 	/**
@@ -208,6 +216,123 @@ final class NXTCC_History_Repo {
 	}
 
 	/**
+	 * Normalize the message-type filter for history queries.
+	 *
+	 * @param array $filters Filter data.
+	 * @return string
+	 */
+	private function normalize_message_type( array $filters ): string {
+		$message_type = isset( $filters['message_type'] ) ? sanitize_key( (string) $filters['message_type'] ) : '';
+
+		if ( ! in_array( $message_type, array( 'broadcast', 'individual' ), true ) ) {
+			return '';
+		}
+
+		return $message_type;
+	}
+
+	/**
+	 * Build a broadcast-id => creator-id map for one tenant.
+	 *
+	 * @param array<string,string> $tenant        Tenant context.
+	 * @param array<int,mixed>     $broadcast_ids Broadcast IDs.
+	 * @return array<string,string>
+	 */
+	public function broadcast_creator_map( array $tenant, array $broadcast_ids ): array {
+		$tenant = array(
+			'user_mailid'         => isset( $tenant['user_mailid'] ) ? sanitize_email( (string) $tenant['user_mailid'] ) : '',
+			'business_account_id' => isset( $tenant['business_account_id'] ) ? sanitize_text_field( (string) $tenant['business_account_id'] ) : '',
+			'phone_number_id'     => isset( $tenant['phone_number_id'] ) ? sanitize_text_field( (string) $tenant['phone_number_id'] ) : '',
+		);
+
+		$broadcast_ids = array_values(
+			array_unique(
+				array_filter(
+					array_map(
+						static function ( $broadcast_id ) {
+							return sanitize_text_field( (string) $broadcast_id );
+						},
+						$broadcast_ids
+					)
+				)
+			)
+		);
+
+		if (
+			empty( $broadcast_ids )
+			|| '' === $tenant['user_mailid']
+			|| '' === $tenant['business_account_id']
+			|| '' === $tenant['phone_number_id']
+			|| ! $this->table_exists( $this->runs_tbl )
+		) {
+			return array();
+		}
+
+		$cache_key = 'broadcast_creators:' . md5(
+			$tenant['user_mailid'] . '|' . $tenant['business_account_id'] . '|' . $tenant['phone_number_id'] . '|' . implode( ',', $broadcast_ids )
+		);
+		$cached    = wp_cache_get( $cache_key, 'nxtcc_history' );
+
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$runs_tbl     = $this->quote_table( $this->runs_tbl );
+		$users_tbl    = $this->quote_table( $this->db->users );
+		$placeholders = implode( ',', array_fill( 0, count( $broadcast_ids ), '%s' ) );
+		$query        = $this->prepare_with_table_tokens(
+			"SELECT r.broadcast_id,
+			        actor.display_name AS actor_display_name,
+			        actor.user_email   AS actor_user_email
+			   FROM {runs} r
+			   LEFT JOIN {users} actor ON actor.ID = COALESCE(NULLIF(r.updated_by, 0), NULLIF(r.created_by, 0))
+			  WHERE user_mailid = %s
+			    AND business_account_id = %s
+			    AND phone_number_id = %s
+			    AND broadcast_id IN ({$placeholders})",
+			array(
+				'runs'  => $runs_tbl,
+				'users' => $users_tbl,
+			),
+			array_merge(
+				array(
+					$tenant['user_mailid'],
+					$tenant['business_account_id'],
+					$tenant['phone_number_id'],
+				),
+				$broadcast_ids
+			)
+		);
+		$rows         = '' !== $query ? $this->db->get_results( $query, ARRAY_A ) : array();
+		$map          = array();
+
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$broadcast_id   = sanitize_text_field( (string) ( $row['broadcast_id'] ?? '' ) );
+			$display_name   = sanitize_text_field( (string) ( $row['actor_display_name'] ?? '' ) );
+			$actor_usermail = sanitize_email( (string) ( $row['actor_user_email'] ?? '' ) );
+			$label          = '';
+
+			if ( class_exists( 'NXTCC_Actor_Audit' ) ) {
+				$label = NXTCC_Actor_Audit::format_user_label( $display_name, $actor_usermail, '' );
+			}
+
+			if ( '' === $label ) {
+				$label = '' !== $actor_usermail ? $actor_usermail : $display_name;
+			}
+
+			if ( '' !== $broadcast_id && '' !== $label ) {
+				$map[ $broadcast_id ] = $label;
+			}
+		}
+
+		if ( ! empty( $map ) ) {
+			wp_cache_set( $cache_key, $map, 'nxtcc_history', 300 );
+		}
+
+		return $map;
+	}
+
+	/**
 	 * Combine UNION SQL arms without using dynamic implode patterns.
 	 *
 	 * @param string[] $parts SQL arms.
@@ -237,6 +362,7 @@ final class NXTCC_History_Repo {
 	 * @param array  $params        Prepared statement params (by reference).
 	 * @param bool   $with_like     Whether to include search LIKE clause.
 	 * @param bool   $with_phone_id Whether to include phone_number_id filter.
+	 * @param bool   $with_queue_join Whether the queue table is joined in the query.
 	 * @return string WHERE clause without the "WHERE" keyword.
 	 */
 	private function build_where_history(
@@ -244,7 +370,8 @@ final class NXTCC_History_Repo {
 		string $user_mail,
 		array &$params,
 		bool $with_like,
-		bool $with_phone_id
+		bool $with_phone_id,
+		bool $with_queue_join
 	): string {
 
 		$where = array(
@@ -276,16 +403,34 @@ final class NXTCC_History_Repo {
 			$params[] = (string) $filters['phone_number_id'];
 		}
 
+		$message_type = $this->normalize_message_type( $filters );
+
+		if ( 'broadcast' === $message_type ) {
+			$where[] = 'h.queue_id IS NOT NULL';
+		} elseif ( 'individual' === $message_type ) {
+			$where[] = 'h.queue_id IS NULL';
+		}
+
 		if ( $with_like && ! empty( $filters['search_like'] ) ) {
-			$where[] = '(c.name LIKE %s OR CONCAT(c.country_code,c.phone_number) LIKE %s OR h.template_name LIKE %s OR h.message_content LIKE %s)';
+			$where[] = $with_queue_join
+				? '(c.name LIKE %s OR CONCAT(c.country_code,c.phone_number) LIKE %s OR h.template_name LIKE %s OR h.message_content LIKE %s OR q.broadcast_id LIKE %s)'
+				: '(c.name LIKE %s OR CONCAT(c.country_code,c.phone_number) LIKE %s OR h.template_name LIKE %s OR h.message_content LIKE %s)';
 			$params  = array_merge(
 				$params,
-				array(
-					(string) $filters['search_like'],
-					(string) $filters['search_like'],
-					(string) $filters['search_like'],
-					(string) $filters['search_like'],
-				)
+				$with_queue_join
+					? array(
+						(string) $filters['search_like'],
+						(string) $filters['search_like'],
+						(string) $filters['search_like'],
+						(string) $filters['search_like'],
+						(string) $filters['search_like'],
+					)
+					: array(
+						(string) $filters['search_like'],
+						(string) $filters['search_like'],
+						(string) $filters['search_like'],
+						(string) $filters['search_like'],
+					)
 			);
 		}
 
@@ -339,11 +484,20 @@ final class NXTCC_History_Repo {
 			$params[] = (string) $filters['phone_number_id'];
 		}
 
+		$message_type = $this->normalize_message_type( $filters );
+
+		if ( 'individual' === $message_type ) {
+			$where[] = '1 = 0';
+		} elseif ( 'broadcast' === $message_type ) {
+			$where[] = "q.broadcast_id <> ''";
+		}
+
 		if ( $with_like && ! empty( $filters['search_like'] ) ) {
-			$where[] = '(c.name LIKE %s OR CONCAT(c.country_code,c.phone_number) LIKE %s OR q.template_name LIKE %s)';
+			$where[] = '(c.name LIKE %s OR CONCAT(c.country_code,c.phone_number) LIKE %s OR q.template_name LIKE %s OR q.broadcast_id LIKE %s)';
 			$params  = array_merge(
 				$params,
 				array(
+					(string) $filters['search_like'],
 					(string) $filters['search_like'],
 					(string) $filters['search_like'],
 					(string) $filters['search_like'],
@@ -389,12 +543,14 @@ final class NXTCC_History_Repo {
 		$hist_tbl               = $this->quote_table( $this->hist_tbl );
 		$queue_tbl              = $this->quote_table( $this->queue_tbl );
 		$cont_tbl               = $this->quote_table( $this->cont_tbl );
+		$users_tbl              = $this->quote_table( $this->db->users );
 		$h_order                = $this->normalize_order( $h_order );
 		$q_order                = $this->normalize_order( $q_order );
 		$table_map              = array(
 			'history'  => $hist_tbl,
 			'queue'    => $queue_tbl,
 			'contacts' => $cont_tbl,
+			'users'    => $users_tbl,
 		);
 
 		$union_sql = array();
@@ -402,7 +558,7 @@ final class NXTCC_History_Repo {
 		// LEFT ARM (history).
 		if ( $hist_exists ) {
 			$left_params = array();
-			$left_where  = $this->build_where_history( $filters, $user_mail, $left_params, true, true );
+			$left_where  = $this->build_where_history( $filters, $user_mail, $left_params, true, true, $queue_exists );
 
 			if ( $queue_exists ) {
 				$prepared = $this->prepare_with_table_tokens(
@@ -413,18 +569,26 @@ final class NXTCC_History_Repo {
 						h.created_at                     AS h_created_at,
 						COALESCE(q.created_at, h.created_at) AS display_created_at,
 						COALESCE(h.contact_id, q.contact_id) AS contact_id,
+						q.broadcast_id                    AS broadcast_id,
 						COALESCE(h.template_name, q.template_name) AS template_name,
 						h.message_content                 AS message_content,
 						COALESCE(h.status, q.status)      AS status,
 						h.sent_at, h.delivered_at, h.read_at, h.failed_at,
+						COALESCE(h.status_timestamps, q.status_timestamps) AS status_timestamps,
+						COALESCE(h.last_error, q.last_error) AS last_error,
 						q.scheduled_at                    AS scheduled_at,
 						COALESCE(h.user_mailid, q.user_mailid) AS created_by,
+						h.origin_type,
+						h.origin_user_id,
+						creator.display_name               AS origin_user_name,
+						creator.user_email                 AS origin_user_email,
 						h.meta_message_id,
 						h.display_phone_number,
 						'history'                         AS source
 					FROM {history} h
 					LEFT JOIN {queue} q ON q.id = h.queue_id
 					LEFT JOIN {contacts} c ON c.id = COALESCE(h.contact_id, q.contact_id)
+					LEFT JOIN {users} creator ON creator.ID = h.origin_user_id
 					WHERE {$left_where}",
 					$table_map,
 					$left_params
@@ -441,17 +605,25 @@ final class NXTCC_History_Repo {
 						h.created_at         AS h_created_at,
 						h.created_at         AS display_created_at,
 						h.contact_id         AS contact_id,
+						NULL                 AS broadcast_id,
 						h.template_name      AS template_name,
 						h.message_content    AS message_content,
 						h.status             AS status,
 						h.sent_at, h.delivered_at, h.read_at, h.failed_at,
+						h.status_timestamps  AS status_timestamps,
+						h.last_error         AS last_error,
 						NULL                 AS scheduled_at,
 						h.user_mailid        AS created_by,
+						h.origin_type,
+						h.origin_user_id,
+						creator.display_name AS origin_user_name,
+						creator.user_email   AS origin_user_email,
 						h.meta_message_id,
 						h.display_phone_number,
 						'history'            AS source
 					FROM {history} h
 					LEFT JOIN {contacts} c ON c.id = h.contact_id
+					LEFT JOIN {users} creator ON creator.ID = h.origin_user_id
 					WHERE {$left_where}",
 					$table_map,
 					$left_params
@@ -478,12 +650,19 @@ final class NXTCC_History_Repo {
 					NULL                AS h_created_at,
 					q.created_at        AS display_created_at,
 					q.contact_id        AS contact_id,
+					q.broadcast_id      AS broadcast_id,
 					q.template_name     AS template_name,
 					NULL                AS message_content,
 					q.status            AS status,
 					NULL AS sent_at, NULL AS delivered_at, NULL AS read_at, NULL AS failed_at,
+					q.status_timestamps AS status_timestamps,
+					q.last_error        AS last_error,
 					q.scheduled_at      AS scheduled_at,
 					q.user_mailid       AS created_by,
+					NULL                AS origin_type,
+					NULL                AS origin_user_id,
+					NULL                AS origin_user_name,
+					NULL                AS origin_user_email,
 					NULL                AS meta_message_id,
 					NULL                AS display_phone_number,
 					'queue'             AS source
@@ -521,9 +700,8 @@ final class NXTCC_History_Repo {
 			) T
 			LEFT JOIN {contacts} c ON c.id = T.contact_id
 			ORDER BY
-				(T.q_created_at IS NULL) ASC,
-				T.q_created_at {$q_order},
-				T.h_created_at {$h_order}
+				T.display_created_at {$h_order},
+				COALESCE(T.history_id, T.queue_id, 0) {$q_order}
 			LIMIT %d OFFSET %d",
 			array(
 				'contacts' => $cont_tbl,
@@ -552,10 +730,12 @@ final class NXTCC_History_Repo {
 		$hist_tbl     = $this->quote_table( $this->hist_tbl );
 		$queue_tbl    = $this->quote_table( $this->queue_tbl );
 		$cont_tbl     = $this->quote_table( $this->cont_tbl );
+		$users_tbl    = $this->quote_table( $this->db->users );
 		$table_map    = array(
 			'history'  => $hist_tbl,
 			'queue'    => $queue_tbl,
 			'contacts' => $cont_tbl,
+			'users'    => $users_tbl,
 		);
 
 		if ( 'history' === $source ) {
@@ -563,15 +743,20 @@ final class NXTCC_History_Repo {
 				$query = $this->prepare_with_table_tokens(
 					'SELECT
 						h.id AS history_id, h.queue_id, h.contact_id,
+						q.broadcast_id,
 						h.display_phone_number, h.template_name, h.message_content, h.status,
-						h.sent_at, h.delivered_at, h.read_at, h.failed_at,
+						h.sent_at, h.delivered_at, h.read_at, h.failed_at, h.status_timestamps,
+						COALESCE(h.last_error, q.last_error) AS last_error,
 						h.created_at AS h_created_at, q.created_at AS q_created_at,
 						q.scheduled_at,
-						h.meta_message_id, h.user_mailid AS created_by,
+						h.meta_message_id, h.user_mailid AS created_by, h.origin_type, h.origin_user_id,
+						creator.display_name AS origin_user_name,
+						creator.user_email AS origin_user_email,
 						c.name AS contact_name, c.country_code, c.phone_number
 					FROM {history} h
 					LEFT JOIN {queue} q ON q.id = h.queue_id
 					LEFT JOIN {contacts} c ON c.id = COALESCE(h.contact_id, q.contact_id)
+					LEFT JOIN {users} creator ON creator.ID = h.origin_user_id
 					WHERE h.user_mailid = %s AND h.id = %d
 					LIMIT 1',
 					$table_map,
@@ -589,14 +774,19 @@ final class NXTCC_History_Repo {
 			$query = $this->prepare_with_table_tokens(
 				'SELECT
 					h.id AS history_id, h.queue_id, h.contact_id,
+					NULL AS broadcast_id,
 					h.display_phone_number, h.template_name, h.message_content, h.status,
-					h.sent_at, h.delivered_at, h.read_at, h.failed_at,
+					h.sent_at, h.delivered_at, h.read_at, h.failed_at, h.status_timestamps,
+					h.last_error AS last_error,
 					h.created_at AS h_created_at, NULL AS q_created_at,
 					NULL AS scheduled_at,
-					h.meta_message_id, h.user_mailid AS created_by,
+					h.meta_message_id, h.user_mailid AS created_by, h.origin_type, h.origin_user_id,
+					creator.display_name AS origin_user_name,
+					creator.user_email AS origin_user_email,
 					c.name AS contact_name, c.country_code, c.phone_number
 				FROM {history} h
 				LEFT JOIN {contacts} c ON c.id = h.contact_id
+				LEFT JOIN {users} creator ON creator.ID = h.origin_user_id
 				WHERE h.user_mailid = %s AND h.id = %d
 				LIMIT 1',
 				$table_map,
@@ -617,14 +807,18 @@ final class NXTCC_History_Repo {
 
 		$query = $this->prepare_with_table_tokens(
 			'SELECT
-				q.id AS queue_id, q.contact_id, q.template_name, q.status,
+				q.id AS queue_id, q.contact_id, q.broadcast_id, q.template_name, q.status,
 				q.scheduled_at, q.created_at AS q_created_at, q.user_mailid AS created_by,
 				h.id AS history_id, h.message_content, h.sent_at, h.delivered_at, h.read_at, h.failed_at,
-				h.created_at AS h_created_at, h.meta_message_id, h.display_phone_number,
+				COALESCE(h.status_timestamps, q.status_timestamps) AS status_timestamps,
+				COALESCE(h.last_error, q.last_error) AS last_error,
+				h.created_at AS h_created_at, h.meta_message_id, h.display_phone_number, h.origin_type, h.origin_user_id,
+				creator.display_name AS origin_user_name, creator.user_email AS origin_user_email,
 				c.name AS contact_name, c.country_code, c.phone_number
 			FROM {queue} q
 			LEFT JOIN {history} h ON h.queue_id = q.id AND h.user_mailid = q.user_mailid
 			LEFT JOIN {contacts} c ON c.id = q.contact_id
+			LEFT JOIN {users} creator ON creator.ID = h.origin_user_id
 			WHERE q.user_mailid = %s AND q.id = %d
 			LIMIT 1',
 			$table_map,
@@ -731,7 +925,7 @@ final class NXTCC_History_Repo {
 		// History arm.
 		if ( $hist_exists ) {
 			$left_params = array();
-			$left_where  = $this->build_where_history( $filters, $user_mail, $left_params, true, true );
+			$left_where  = $this->build_where_history( $filters, $user_mail, $left_params, true, true, $queue_exists );
 
 			if ( $queue_exists ) {
 				$prepared = $this->prepare_with_table_tokens(
@@ -742,12 +936,17 @@ final class NXTCC_History_Repo {
 						h.created_at                     AS h_created_at,
 						COALESCE(q.created_at, h.created_at) AS display_created_at,
 						COALESCE(h.contact_id, q.contact_id) AS contact_id,
+						q.broadcast_id                    AS broadcast_id,
 						COALESCE(h.template_name, q.template_name) AS template_name,
 						h.message_content                 AS message_content,
 						COALESCE(h.status, q.status)      AS status,
 						h.sent_at, h.delivered_at, h.read_at, h.failed_at,
+						COALESCE(h.status_timestamps, q.status_timestamps) AS status_timestamps,
+						COALESCE(h.last_error, q.last_error) AS last_error,
 						q.scheduled_at                    AS scheduled_at,
 						COALESCE(h.user_mailid, q.user_mailid) AS created_by,
+						h.origin_type,
+						h.origin_user_id,
 						h.meta_message_id,
 						h.display_phone_number,
 						'history'                         AS source
@@ -770,12 +969,17 @@ final class NXTCC_History_Repo {
 						h.created_at         AS h_created_at,
 						h.created_at         AS display_created_at,
 						h.contact_id         AS contact_id,
+						NULL                 AS broadcast_id,
 						h.template_name      AS template_name,
 						h.message_content    AS message_content,
 						h.status             AS status,
 						h.sent_at, h.delivered_at, h.read_at, h.failed_at,
+						h.status_timestamps  AS status_timestamps,
+						h.last_error         AS last_error,
 						NULL                 AS scheduled_at,
 						h.user_mailid        AS created_by,
+						h.origin_type,
+						h.origin_user_id,
 						h.meta_message_id,
 						h.display_phone_number,
 						'history'            AS source
@@ -807,12 +1011,17 @@ final class NXTCC_History_Repo {
 					NULL                AS h_created_at,
 					q.created_at        AS display_created_at,
 					q.contact_id        AS contact_id,
+					q.broadcast_id      AS broadcast_id,
 					q.template_name     AS template_name,
 					NULL                AS message_content,
 					q.status            AS status,
 					NULL AS sent_at, NULL AS delivered_at, NULL AS read_at, NULL AS failed_at,
+					q.status_timestamps AS status_timestamps,
+					q.last_error        AS last_error,
 					q.scheduled_at      AS scheduled_at,
 					q.user_mailid       AS created_by,
+					NULL                AS origin_type,
+					NULL                AS origin_user_id,
 					NULL                AS meta_message_id,
 					NULL                AS display_phone_number,
 					'queue'             AS source
@@ -845,9 +1054,8 @@ final class NXTCC_History_Repo {
 			FROM ({$inner_union_sql}) T
 			LEFT JOIN {contacts} c ON c.id = T.contact_id
 			ORDER BY
-				(T.q_created_at IS NULL) ASC,
-				T.q_created_at {$q_order},
-				T.h_created_at {$h_order}
+				T.display_created_at {$h_order},
+				COALESCE(T.history_id, T.queue_id, 0) {$q_order}
 			LIMIT %d",
 			array(
 				'contacts' => $cont_tbl,

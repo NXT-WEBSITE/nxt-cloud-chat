@@ -440,6 +440,123 @@ function nxtcc_contacts_read_filters(): array {
 }
 
 /**
+ * Build a display label for a contact actor row.
+ *
+ * @param object $row Contact row object.
+ * @param string $key Actor field prefix.
+ * @return string
+ */
+function nxtcc_contacts_actor_label( object $row, string $key ): string {
+	$login_key    = $key . '_login';
+	$name_key     = $key . '_name';
+	$email_key    = $key . '_email';
+	$user_login   = isset( $row->{$login_key} ) ? sanitize_user( (string) $row->{$login_key}, true ) : '';
+	$display_name = isset( $row->{$name_key} ) ? (string) $row->{$name_key} : '';
+	$user_email   = isset( $row->{$email_key} ) ? (string) $row->{$email_key} : '';
+	$fallback     = '';
+
+	if ( '' !== $user_login ) {
+		return $user_login;
+	}
+
+	if ( class_exists( 'NXTCC_Actor_Audit' ) ) {
+		return NXTCC_Actor_Audit::format_user_label( $display_name, $user_email, $fallback );
+	}
+
+	return $user_email;
+}
+
+/**
+ * Build a filter key for a contact actor row.
+ *
+ * @param object $row Contact row object.
+ * @param string $key Actor field prefix.
+ * @return string
+ */
+function nxtcc_contacts_actor_key( object $row, string $key ): string {
+	$email_key  = $key . '_email';
+	$user_email = isset( $row->{$email_key} ) ? sanitize_email( (string) $row->{$email_key} ) : '';
+
+	return $user_email;
+}
+
+/**
+ * Build a display label for a contact creator row.
+ *
+ * @param object $row Contact row object.
+ * @return string
+ */
+function nxtcc_contacts_created_by_label( object $row ): string {
+	return nxtcc_contacts_actor_label( $row, 'created_by' );
+}
+
+/**
+ * Build a filter key for a contact creator row.
+ *
+ * @param object $row Contact row object.
+ * @return string
+ */
+function nxtcc_contacts_created_by_key( object $row ): string {
+	return nxtcc_contacts_actor_key( $row, 'created_by' );
+}
+
+/**
+ * Build a display label for a contact updater row.
+ *
+ * @param object $row Contact row object.
+ * @return string
+ */
+function nxtcc_contacts_updated_by_label( object $row ): string {
+	return nxtcc_contacts_actor_label( $row, 'updated_by' );
+}
+
+/**
+ * Build a filter key for a contact updater row.
+ *
+ * @param object $row Contact row object.
+ * @return string
+ */
+function nxtcc_contacts_updated_by_key( object $row ): string {
+	return nxtcc_contacts_actor_key( $row, 'updated_by' );
+}
+
+/**
+ * Normalize requested group IDs for contacts while preserving locked verified groups.
+ *
+ * Verified groups cannot be newly assigned through Contacts editing/import flows,
+ * but contacts that already belong to a verified group keep that membership.
+ *
+ * @param NXTCC_Contacts_Handler_Repo $repo Contact repository.
+ * @param string                      $user_mailid Tenant owner email.
+ * @param array<int|string>           $group_ids Requested group ids.
+ * @param int                         $existing_contact_id Existing contact id.
+ * @return array<int>
+ */
+function nxtcc_contacts_normalize_group_ids(
+	NXTCC_Contacts_Handler_Repo $repo,
+	string $user_mailid,
+	array $group_ids,
+	int $existing_contact_id = 0
+): array {
+	$normalized = nxtcc_contacts_int_list( $group_ids );
+	$normalized = $repo->allowlist_user_groups( $user_mailid, $normalized );
+	$normalized = $repo->strip_verified_groups( $normalized );
+
+	if ( $existing_contact_id > 0 ) {
+		$normalized = array_values(
+			array_unique(
+				array_merge(
+					$normalized,
+					$repo->verified_group_ids_for_contact( $existing_contact_id )
+				)
+			)
+		);
+	}
+
+	return nxtcc_contacts_int_list( $normalized );
+}
+
+/**
  * AJAX: List contacts (tenant-scoped).
  *
  * Response:
@@ -452,7 +569,7 @@ function nxtcc_contacts_read_filters(): array {
  */
 function nxtcc_ajax_contacts_list(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $user_mailid ) || empty( $baid ) || empty( $pnid ) ) {
@@ -475,6 +592,17 @@ function nxtcc_ajax_contacts_list(): void {
 
 	$ids = array();
 	foreach ( (array) $rows as $r ) {
+		if ( is_object( $r ) ) {
+			$r->created_by_key   = nxtcc_contacts_created_by_key( $r );
+			$r->created_by_email = $r->created_by_key;
+			$r->created_by       = nxtcc_contacts_created_by_label( $r );
+			$r->created_by_label = $r->created_by;
+			$r->updated_by_key   = nxtcc_contacts_updated_by_key( $r );
+			$r->updated_by_email = $r->updated_by_key;
+			$r->updated_by       = nxtcc_contacts_updated_by_label( $r );
+			$r->updated_by_label = $r->updated_by;
+		}
+
 		$ids[] = (int) $r->id;
 	}
 
@@ -509,7 +637,7 @@ add_action( 'wp_ajax_nxtcc_contacts_list', 'nxtcc_ajax_contacts_list' );
  */
 function nxtcc_ajax_contacts_get(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {
@@ -553,7 +681,7 @@ add_action( 'wp_ajax_nxtcc_contacts_get', 'nxtcc_ajax_contacts_get' );
  */
 function nxtcc_ajax_contacts_save(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $user_mailid ) || empty( $baid ) || empty( $pnid ) ) {
@@ -577,13 +705,6 @@ function nxtcc_ajax_contacts_save(): void {
 
 	$repo = NXTCC_Contacts_Handler_Repo::instance();
 
-	// Restrict group IDs to groups owned/visible to the current user.
-	$group_ids = nxtcc_contacts_int_list( $group_ids );
-	$group_ids = $repo->allowlist_user_groups( $user_mailid, $group_ids );
-
-	// Verified flag is derived from membership in verified groups.
-	$is_verified = $repo->contact_verified_flag_from_groups( $group_ids );
-
 	// Duplicate detection is tenant-scoped and excludes the current contact when updating.
 	$dup_id = $repo->duplicate_contact_id( $baid, $pnid, $country_code, $phone_number, $id ? $id : null );
 	if ( $dup_id ) {
@@ -595,13 +716,17 @@ function nxtcc_ajax_contacts_save(): void {
 		);
 	}
 
-	$now = current_time( 'mysql', 1 );
+	$now      = current_time( 'mysql', 1 );
+	$actor_id = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::current_user_id() : (int) get_current_user_id();
 
 	if ( $id > 0 ) {
 		$existing = $repo->find_contact_in_tenant( $id, $baid, $pnid );
 		if ( ! $existing ) {
 			wp_send_json_error( array( 'message' => 'Contact not found.' ) );
 		}
+
+		$group_ids   = nxtcc_contacts_normalize_group_ids( $repo, $user_mailid, $group_ids, $id );
+		$is_verified = $repo->contact_verified_flag_from_groups( $group_ids );
 
 		$merged_json = nxtcc_merge_custom_fields( $existing->custom_fields, $incoming_custom_fields );
 
@@ -616,6 +741,7 @@ function nxtcc_ajax_contacts_save(): void {
 				'is_subscribed'       => $is_subscribed,
 				'business_account_id' => $baid,
 				'phone_number_id'     => $pnid,
+				'updated_by'          => $actor_id > 0 ? $actor_id : null,
 				'updated_at'          => $now,
 			)
 		);
@@ -635,6 +761,9 @@ function nxtcc_ajax_contacts_save(): void {
 		);
 	}
 
+	$group_ids   = nxtcc_contacts_normalize_group_ids( $repo, $user_mailid, $group_ids );
+	$is_verified = $repo->contact_verified_flag_from_groups( $group_ids );
+
 	$merged_json = nxtcc_merge_custom_fields( '', $incoming_custom_fields );
 
 	$data = array(
@@ -647,6 +776,8 @@ function nxtcc_ajax_contacts_save(): void {
 		'custom_fields'       => $merged_json,
 		'is_verified'         => $is_verified,
 		'is_subscribed'       => $is_subscribed,
+		'created_by'          => $actor_id > 0 ? $actor_id : null,
+		'updated_by'          => $actor_id > 0 ? $actor_id : null,
 		'created_at'          => $now,
 		'updated_at'          => $now,
 	);
@@ -675,7 +806,7 @@ add_action( 'wp_ajax_nxtcc_contacts_save', 'nxtcc_ajax_contacts_save' );
  */
 function nxtcc_ajax_contacts_delete(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {
@@ -688,6 +819,10 @@ function nxtcc_ajax_contacts_delete(): void {
 	}
 
 	$repo = NXTCC_Contacts_Handler_Repo::instance();
+	if ( $repo->contact_has_verified_group( $id ) ) {
+		wp_send_json_error( array( 'message' => 'Contacts assigned to a verified group cannot be deleted.' ) );
+	}
+
 	$repo->delete_contact_with_mappings( $id, $baid, $pnid );
 
 	wp_send_json_success( array( 'message' => 'Contact deleted.' ) );
@@ -701,7 +836,7 @@ add_action( 'wp_ajax_nxtcc_contacts_delete', 'nxtcc_ajax_contacts_delete' );
  */
 function nxtcc_ajax_contacts_bulk_delete(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {
@@ -721,12 +856,20 @@ function nxtcc_ajax_contacts_bulk_delete(): void {
 		wp_send_json_error( array( 'message' => 'No valid contacts selected.' ) );
 	}
 
-	$repo->bulk_delete_contacts( $allowed, $baid, $pnid );
+	$protected = $repo->protected_contact_ids_in_tenant( $allowed, $baid, $pnid );
+	$deletable = array_values( array_diff( $allowed, $protected ) );
+
+	if ( ! $deletable ) {
+		wp_send_json_error( array( 'message' => 'Selected contacts belong to a verified group and cannot be deleted.' ) );
+	}
+
+	$repo->bulk_delete_contacts( $deletable, $baid, $pnid );
 
 	wp_send_json_success(
 		array(
-			'message' => 'Contacts deleted.',
-			'deleted' => $allowed,
+			'message'        => $protected ? 'Contacts deleted. Verified-group contacts were skipped.' : 'Contacts deleted.',
+			'deleted'        => $deletable,
+			'skipped_locked' => array_values( $protected ),
 		)
 	);
 }
@@ -739,7 +882,7 @@ add_action( 'wp_ajax_nxtcc_contacts_bulk_delete', 'nxtcc_ajax_contacts_bulk_dele
  */
 function nxtcc_ajax_contacts_bulk_update_subscription(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {
@@ -781,7 +924,7 @@ add_action( 'wp_ajax_nxtcc_contacts_bulk_update_subscription', 'nxtcc_ajax_conta
  */
 function nxtcc_ajax_contacts_bulk_update_groups(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $user_mailid ) || empty( $baid ) || empty( $pnid ) ) {
@@ -803,12 +946,18 @@ function nxtcc_ajax_contacts_bulk_update_groups(): void {
 		wp_send_json_error( array( 'message' => 'No valid contacts selected.' ) );
 	}
 
-	$group_ids = $repo->allowlist_user_groups( $user_mailid, $group_ids );
+	$requested_group_ids = nxtcc_contacts_normalize_group_ids( $repo, $user_mailid, $group_ids );
 
 	foreach ( $allowed_contacts as $cid ) {
-		$is_verified = $repo->contact_verified_flag_from_groups( $group_ids );
+		$final_group_ids = nxtcc_contacts_normalize_group_ids(
+			$repo,
+			$user_mailid,
+			$requested_group_ids,
+			(int) $cid
+		);
+		$is_verified     = $repo->contact_verified_flag_from_groups( $final_group_ids );
 
-		$repo->replace_contact_groups( (int) $cid, $group_ids );
+		$repo->replace_contact_groups( (int) $cid, $final_group_ids );
 
 		// Keep the verified flag consistent with the assigned groups.
 		$repo->update_contact_basic(
@@ -826,7 +975,7 @@ function nxtcc_ajax_contacts_bulk_update_groups(): void {
 		array(
 			'message'  => 'Groups updated.',
 			'contacts' => $allowed_contacts,
-			'groups'   => $group_ids,
+			'groups'   => $requested_group_ids,
 		)
 	);
 }
@@ -839,7 +988,7 @@ add_action( 'wp_ajax_nxtcc_contacts_bulk_update_groups', 'nxtcc_ajax_contacts_bu
  */
 function nxtcc_ajax_contacts_creators(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {
@@ -860,7 +1009,7 @@ add_action( 'wp_ajax_nxtcc_contacts_creators', 'nxtcc_ajax_contacts_creators' );
  */
 function nxtcc_ajax_contacts_country_codes(): void {
 	nxtcc_contacts_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {

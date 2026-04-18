@@ -357,22 +357,32 @@ final class NXTCC_Auth_DAO {
 	public static function history_insert( array $data ): void {
 		global $wpdb;
 
+		$fmt_map = array(
+			'user_mailid'         => '%s',
+			'business_account_id' => '%s',
+			'phone_number_id'     => '%s',
+			'template_name'       => '%s',
+			'template_type'       => '%s',
+			'template_data'       => '%s',
+			'status'              => '%s',
+			'status_timestamps'   => '%s',
+			'origin_type'         => '%s',
+			'origin_user_id'      => '%d',
+			'origin_ref'          => '%s',
+			'created_at'          => '%s',
+			'sent_at'             => '%s',
+			'meta_message_id'     => '%s',
+		);
+		$format  = array();
+
+		foreach ( array_keys( $data ) as $key ) {
+			$format[] = isset( $fmt_map[ $key ] ) ? $fmt_map[ $key ] : '%s';
+		}
+
 		self::insert(
 			$wpdb->prefix . 'nxtcc_message_history',
 			$data,
-			array(
-				'%s', // user_mailid.
-				'%s', // business_account_id.
-				'%s', // phone_number_id.
-				'%s', // template_name.
-				'%s', // template_type.
-				'%s', // template_data.
-				'%s', // status.
-				'%s', // status_timestamps.
-				'%s', // created_at.
-				'%s', // sent_at.
-				'%s', // meta_message_id.
-			)
+			$format
 		);
 	}
 }

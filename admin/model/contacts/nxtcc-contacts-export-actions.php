@@ -210,7 +210,7 @@ function nxtcc_contacts_export_output( string $filename, array $rows ): void {
  */
 function nxtcc_ajax_contacts_export_filtered(): void {
 	nxtcc_export_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	unset( $user_mailid );
@@ -266,7 +266,7 @@ add_action( 'wp_ajax_nxtcc_contacts_export_filtered', 'nxtcc_ajax_contacts_expor
  */
 function nxtcc_ajax_contacts_export_selected(): void {
 	nxtcc_export_check_nonce();
-	nxtcc_verify_caps( 'manage_options' );
+	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	unset( $user_mailid );

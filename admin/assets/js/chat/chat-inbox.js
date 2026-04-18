@@ -5,7 +5,7 @@
  * - Polls the server for the inbox summary (latest chat heads + unread counts).
  * - Renders each chat head as a DOM-only row (no HTML string injection).
  * - Supports client-side filtering by name/phone; pauses polling while filtering.
- * - Exposes a small API for other modules (manual refresh / start-stop polling).
+ * - Syncs the currently selected conversation with the thread module.
  *
  * @package NXTCC
  */
@@ -33,9 +33,8 @@ jQuery( function ( $ ) {
 		const $chatList = ctx.$chatList;
 
 		// Shared state/API containers across chat modules.
-		ctx.state     = ctx.state || {};
-		ctx.api       = ctx.api || {};
-		ctx.api.inbox = ctx.api.inbox || {};
+		ctx.state = ctx.state || {};
+		ctx.api   = ctx.api || {};
 
 		const ns = '.nxtccInbox' + U.toStr( ctx.instanceId || '' );
 
@@ -144,6 +143,12 @@ jQuery( function ( $ ) {
 			} );
 
 			U.safeAppend( listEl, frag );
+
+			if ( ctx.state.chatContactId ) {
+				$chatList
+					.find( '.nxtcc-chat-head[data-contact="' + String( ctx.state.chatContactId ) + '"]' )
+					.addClass( 'active' );
+			}
 		}
 
 		/**
@@ -166,6 +171,11 @@ jQuery( function ( $ ) {
 				.done( function ( resp ) {
 					if ( resp && resp.success && resp.data && resp.data.contacts ) {
 						patchInbox( resp.data.contacts );
+
+						if ( ctx.api.thread && ctx.api.thread.syncSelectedContact ) {
+							ctx.api.thread.syncSelectedContact( resp.data.contacts );
+						}
+
 						return;
 					}
 
@@ -236,12 +246,6 @@ jQuery( function ( $ ) {
 				startInboxPolling();
 			}
 		}
-
-		// Expose API.
-		ctx.api.inbox.pollInbox         = pollInbox;
-		ctx.api.inbox.startInboxPolling = startInboxPolling;
-		ctx.api.inbox.stopInboxPolling  = stopInboxPolling;
-		ctx.api.inbox.patchInbox        = patchInbox;
 
 		// Client-side filter: pause polling while user is typing (debounced).
 		$widget

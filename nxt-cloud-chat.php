@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       Integrates WhatsApp Cloud API with WordPress to enable real-time messaging, automated notifications, customer communication, contact management, and secure WhatsApp-based user authentication and login.
- * Version:           1.0.2
+ * Version:           1.0.3
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.0.2' );
+	define( 'NXTCC_VERSION', '1.0.3' );
 }
 
 /**
@@ -136,6 +136,8 @@ function nxtcc_is_pro_active(): bool {
 	return false;
 }
 
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-integrity.php';
+
 /**
  * Run plugin activation tasks (database schema install).
  *
@@ -151,8 +153,41 @@ function nxtcc_activate_plugin(): void {
 			nxtcc_install_db_schema();
 		}
 	}
+
+	if ( ! class_exists( 'NXTCC_Access_Control' ) ) {
+		$access_file = NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-access-control.php';
+
+		if ( file_exists( $access_file ) ) {
+			require_once $access_file;
+		}
+	}
+
+	if ( class_exists( 'NXTCC_Access_Control' ) ) {
+		NXTCC_Access_Control::register_team_role();
+	}
 }
 register_activation_hook( __FILE__, 'nxtcc_activate_plugin' );
+
+/**
+ * Ensure the Free schema exists for both new and existing installs.
+ *
+ * @return void
+ */
+function nxtcc_maybe_install_db_schema(): void {
+	$schema_file = NXTCC_PLUGIN_DIR . 'includes/db-schema.php';
+
+	if ( ! file_exists( $schema_file ) ) {
+		return;
+	}
+
+	require_once $schema_file;
+
+	if ( function_exists( 'nxtcc_schema_needs_install' ) && nxtcc_schema_needs_install() && function_exists( 'nxtcc_install_db_schema' ) ) {
+		nxtcc_install_db_schema();
+	}
+}
+
+nxtcc_maybe_install_db_schema();
 
 /**
  * Load core plugin modules.
@@ -165,6 +200,12 @@ require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-api-connection.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-helpers.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-helpers-functions.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-dao.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-db-adminsettings.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-actor-audit.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-settings-dao.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-tenant-access-dao.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-access-control.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-data-cleanup.php';
 
 require_once NXTCC_PLUGIN_DIR . '/includes/pages-dao/class-nxtcc-pages-dao.php';
 
@@ -204,6 +245,10 @@ require_once NXTCC_PLUGIN_DIR . 'includes/auth-otp-pruner.php';
 
 require_once NXTCC_PLUGIN_DIR . 'includes/widgets/class-nxtcc-login-whatsapp-widget.php';
 require_once NXTCC_PLUGIN_DIR . 'blocks/register-whatsapp-login-block.php';
+
+if ( class_exists( 'NXTCC_Data_Cleanup' ) ) {
+	NXTCC_Data_Cleanup::init();
+}
 
 
 /**
@@ -405,29 +450,99 @@ add_action(
 			return;
 		}
 
+		$settings_css_path    = NXTCC_PLUGIN_DIR . 'admin/assets/css/settings.css';
+		$settings_js_path     = NXTCC_PLUGIN_DIR . 'admin/assets/js/settings.js';
+		$connection_css_path  = NXTCC_PLUGIN_DIR . 'admin/assets/css/settings-connection.css';
+		$connection_js_path   = NXTCC_PLUGIN_DIR . 'admin/assets/js/settings-connection.js';
+		$tools_css_path       = NXTCC_PLUGIN_DIR . 'admin/assets/css/settings-tools.css';
+		$tools_js_path        = NXTCC_PLUGIN_DIR . 'admin/assets/js/settings-tools.js';
+		$team_access_css_path = NXTCC_PLUGIN_DIR . 'admin/assets/css/team-access.css';
+		$team_access_js_path  = NXTCC_PLUGIN_DIR . 'admin/assets/js/team-access.js';
+		$settings_css_ver     = file_exists( $settings_css_path ) ? (string) filemtime( $settings_css_path ) : NXTCC_VERSION;
+		$settings_js_ver      = file_exists( $settings_js_path ) ? (string) filemtime( $settings_js_path ) : NXTCC_VERSION;
+		$connection_css_ver   = file_exists( $connection_css_path ) ? (string) filemtime( $connection_css_path ) : NXTCC_VERSION;
+		$connection_js_ver    = file_exists( $connection_js_path ) ? (string) filemtime( $connection_js_path ) : NXTCC_VERSION;
+		$tools_css_ver        = file_exists( $tools_css_path ) ? (string) filemtime( $tools_css_path ) : NXTCC_VERSION;
+		$tools_js_ver         = file_exists( $tools_js_path ) ? (string) filemtime( $tools_js_path ) : NXTCC_VERSION;
+		$team_access_css_ver  = file_exists( $team_access_css_path ) ? (string) filemtime( $team_access_css_path ) : NXTCC_VERSION;
+		$team_access_js_ver   = file_exists( $team_access_js_path ) ? (string) filemtime( $team_access_js_path ) : NXTCC_VERSION;
+
 		wp_enqueue_style(
 			'nxtcc-settings',
 			NXTCC_PLUGIN_URL . 'admin/assets/css/settings.css',
 			array(),
-			NXTCC_VERSION
+			$settings_css_ver
+		);
+
+		wp_enqueue_style(
+			'nxtcc-settings-connection',
+			NXTCC_PLUGIN_URL . 'admin/assets/css/settings-connection.css',
+			array( 'nxtcc-settings' ),
+			$connection_css_ver
+		);
+
+		wp_enqueue_style(
+			'nxtcc-settings-tools',
+			NXTCC_PLUGIN_URL . 'admin/assets/css/settings-tools.css',
+			array( 'nxtcc-settings' ),
+			$tools_css_ver
+		);
+
+		wp_enqueue_style(
+			'nxtcc-team-access',
+			NXTCC_PLUGIN_URL . 'admin/assets/css/team-access.css',
+			array( 'nxtcc-settings' ),
+			$team_access_css_ver
 		);
 
 		wp_enqueue_script(
 			'nxtcc-settings',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/settings.js',
 			array( 'jquery' ),
-			NXTCC_VERSION,
+			$settings_js_ver,
+			true
+		);
+
+		wp_enqueue_script(
+			'nxtcc-settings-connection',
+			NXTCC_PLUGIN_URL . 'admin/assets/js/settings-connection.js',
+			array( 'jquery', 'nxtcc-settings' ),
+			$connection_js_ver,
 			true
 		);
 
 		wp_localize_script(
-			'nxtcc-settings',
+			'nxtcc-settings-connection',
 			'NXTCC_ADMIN',
 			array(
 				'ajax_url'     => admin_url( 'admin-ajax.php' ),
 				'nonce'        => wp_create_nonce( 'nxtcc_admin_ajax' ),
 				'callback_url' => set_url_scheme( site_url( '/wp-json/nxtcc/v1/webhook/' ), 'https' ),
 			)
+		);
+
+		wp_enqueue_script(
+			'nxtcc-settings-tools',
+			NXTCC_PLUGIN_URL . 'admin/assets/js/settings-tools.js',
+			array( 'jquery', 'nxtcc-settings' ),
+			$tools_js_ver,
+			true
+		);
+
+		if ( class_exists( 'NXTCC_Data_Cleanup' ) ) {
+			wp_localize_script(
+				'nxtcc-settings-tools',
+				'NXTCC_CLEANUP_TOOLS',
+				NXTCC_Data_Cleanup::script_data()
+			);
+		}
+
+		wp_enqueue_script(
+			'nxtcc-team-access',
+			NXTCC_PLUGIN_URL . 'admin/assets/js/team-access.js',
+			array( 'jquery', 'nxtcc-settings' ),
+			$team_access_js_ver,
+			true
 		);
 	}
 );
@@ -442,18 +557,23 @@ add_action(
 			return;
 		}
 
+		$history_css_path = NXTCC_PLUGIN_DIR . 'admin/assets/css/history.css';
+		$history_js_path  = NXTCC_PLUGIN_DIR . 'admin/assets/js/history.js';
+		$history_css_ver  = file_exists( $history_css_path ) ? (string) filemtime( $history_css_path ) : NXTCC_VERSION;
+		$history_js_ver   = file_exists( $history_js_path ) ? (string) filemtime( $history_js_path ) : NXTCC_VERSION;
+
 		wp_enqueue_style(
 			'nxtcc-history-css',
 			NXTCC_PLUGIN_URL . 'admin/assets/css/history.css',
 			array(),
-			NXTCC_VERSION
+			$history_css_ver
 		);
 
 		wp_enqueue_script(
 			'nxtcc-history-js',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/history.js',
 			array( 'jquery' ),
-			NXTCC_VERSION,
+			$history_js_ver,
 			true
 		);
 
@@ -663,7 +783,7 @@ add_action(
 			'grace_enabled'     => ! empty( $raw_policy['grace_enabled'] ) ? 1 : 0,
 			'grace_days'        => isset( $raw_policy['grace_days'] ) ? max( 1, min( 90, (int) $raw_policy['grace_days'] ) ) : 7,
 			'redirect_wp_login' => ! empty( $raw_policy['redirect_wp_login'] ) ? 1 : 0,
-			'widget_branding'   => ! empty( $raw_policy['widget_branding'] ) ? 1 : 0,
+			'widget_branding'   => isset( $raw_policy['widget_branding'] ) ? ( ! empty( $raw_policy['widget_branding'] ) ? 1 : 0 ) : 1,
 			'allowed_countries' => array_values(
 				array_unique(
 					array_map(

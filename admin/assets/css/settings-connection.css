@@ -1,0 +1,283 @@
+.nxtcc-settings-connection {
+	display: grid;
+	gap: 12px;
+}
+
+.nxtcc-settings-section {
+	background: var(--nxtcc-card);
+	border: 1px solid var(--nxtcc-border);
+	border-radius: var(--nxtcc-radius);
+	box-shadow: var(--nxtcc-shadow-soft);
+	padding: 12px;
+}
+
+.nxtcc-settings-section-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 12px;
+}
+
+.nxtcc-settings-section-description {
+	margin: 6px 0 0;
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--nxtcc-muted);
+	max-width: 720px;
+}
+
+.nxtcc-settings-card-form {
+	margin: 0;
+}
+
+.nxtcc-settings-grid,
+.nxtcc-settings-diagnostics-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
+.nxtcc-settings-diagnostics-grid {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.nxtcc-settings-field {
+	min-width: 0;
+}
+
+.nxtcc-settings-field-span-2 {
+	grid-column: 1 / -1;
+}
+
+.nxtcc-settings-field label {
+	display: block;
+	margin: 0 0 6px;
+	font-size: 12px;
+	line-height: 1.35;
+	font-weight: 600;
+	color: var(--nxtcc-text);
+}
+
+.nxtcc-settings-field input[type="text"],
+.nxtcc-settings-field input[type="password"],
+.nxtcc-settings-field input[type="tel"] {
+	width: 100%;
+	min-height: 34px;
+	padding: 6px 10px;
+	border: 1px solid var(--nxtcc-border);
+	border-radius: 7px;
+	background: #fff;
+	color: var(--nxtcc-text);
+	font-size: 12px;
+	line-height: 1.3;
+	box-sizing: border-box;
+	box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.02);
+}
+
+.nxtcc-settings-field input[type="text"]:focus,
+.nxtcc-settings-field input[type="password"]:focus,
+.nxtcc-settings-field input[type="tel"]:focus {
+	outline: none;
+	border-color: var(--nxtcc-accent);
+	box-shadow: 0 0 0 3px var(--nxtcc-focus);
+}
+
+.nxtcc-settings-readonly-field[readonly] {
+	background: #f9fafb;
+	color: #66707a;
+}
+
+.nxtcc-settings-inline-control {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.nxtcc-settings-inline-control input[type="text"],
+.nxtcc-settings-inline-control input[type="password"] {
+	flex: 1 1 280px;
+	min-width: 0;
+}
+
+.nxtcc-settings-checkbox-field {
+	padding-top: 4px;
+}
+
+.nxtcc-settings-checkbox-label {
+	display: inline-flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.4;
+	font-weight: 600;
+	color: var(--nxtcc-text);
+}
+
+.nxtcc-settings-checkbox-label input[type="checkbox"] {
+	margin-top: 2px;
+}
+
+.nxtcc-settings-field-note {
+	margin: 6px 0 0;
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--nxtcc-muted);
+}
+
+.nxtcc-settings-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: 12px;
+}
+
+.nxtcc-settings-connection .nxtcc-button {
+	border: 1px solid var(--nxtcc-accent);
+	background: var(--nxtcc-accent);
+	color: #fff;
+	padding: 6px 11px;
+	border-radius: 8px;
+	font-size: 12px;
+	line-height: 1.2;
+	font-weight: 600;
+	cursor: pointer;
+	text-decoration: none;
+	white-space: nowrap;
+	transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.08s ease;
+}
+
+.nxtcc-settings-connection .nxtcc-button:hover {
+	background: var(--nxtcc-accent-dark);
+	border-color: var(--nxtcc-accent-dark);
+	box-shadow: 0 6px 16px rgba(11, 106, 98, 0.2);
+}
+
+.nxtcc-settings-connection .nxtcc-button:active {
+	transform: translateY(1px);
+}
+
+.nxtcc-settings-connection .nxtcc-button:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px var(--nxtcc-focus);
+}
+
+.nxtcc-settings-connection .nxtcc-button[disabled],
+.nxtcc-settings-connection .nxtcc-button.is-disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+	box-shadow: none;
+}
+
+.nxtcc-settings-connection .nxtcc-button-light {
+	background: #fff;
+	color: var(--nxtcc-text);
+	border-color: var(--nxtcc-border);
+}
+
+.nxtcc-settings-connection .nxtcc-button-light:hover {
+	background: #f2f7f6;
+	border-color: #cad6d4;
+	color: var(--nxtcc-text);
+	box-shadow: 0 4px 12px rgba(3, 28, 39, 0.1);
+}
+
+.nxtcc-settings-section-compact .nxtcc-settings-actions {
+	justify-content: flex-start;
+}
+
+.nxtcc-connection-results {
+	min-height: 0;
+}
+
+.nxtcc-connection-results-panel {
+	border: 1px solid var(--nxtcc-border);
+	border-radius: var(--nxtcc-radius);
+	background: var(--nxtcc-card);
+	overflow: hidden;
+}
+
+.nxtcc-connection-results-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.nxtcc-connection-results-table th,
+.nxtcc-connection-results-table td {
+	padding: 9px 10px;
+	border-bottom: 1px solid var(--nxtcc-border-soft);
+	text-align: left;
+	font-size: 12px;
+	vertical-align: top;
+	color: var(--nxtcc-text);
+}
+
+.nxtcc-connection-results-table th {
+	background: #f0f6f5;
+	font-weight: 600;
+}
+
+.nxtcc-connection-results-table tr:last-child td {
+	border-bottom: 0;
+}
+
+.nxtcc-settings-status-pill {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3px 9px;
+	border-radius: 999px;
+	font-size: 11px;
+	line-height: 1.2;
+	font-weight: 700;
+	background: #eef2f3;
+	color: #3f4b53;
+	border: 1px solid #e2e8eb;
+}
+
+.nxtcc-settings-status-pill.is-success {
+	background: #ecf8f0;
+	color: #0f6b3f;
+	border-color: #bfe8cf;
+}
+
+.nxtcc-settings-status-pill.is-fail {
+	background: #fff2f2;
+	color: #8a2424;
+	border-color: #f5c2c7;
+}
+
+.nxtcc-connection-results-message {
+	margin: 0;
+	padding: 10px 12px;
+	border: 1px solid #f5c2c7;
+	border-radius: 8px;
+	background: #fff2f2;
+	color: #8a2424;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+@media (max-width: 960px) {
+	.nxtcc-settings-diagnostics-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 782px) {
+	.nxtcc-settings-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.nxtcc-settings-field-span-2 {
+		grid-column: auto;
+	}
+
+	.nxtcc-settings-section {
+		padding: 10px;
+	}
+}

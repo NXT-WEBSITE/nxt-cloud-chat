@@ -155,23 +155,47 @@
 /* Error style used by JS notify() on help lines */
 .nxtcc-error{color:#b91c1c !important}
 
-/* Save button - WhatsApp green */
+/* Action buttons */
+.nxtcc-auth-wrap #nxtcc-generate-default.button.button-primary,
 .nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary{
 	background:#075E54;
 	border-color:#075E54;
 	color:#fff;
 	box-shadow:none;
 }
+.nxtcc-auth-wrap #nxtcc-generate-default.button.button-primary:hover,
+.nxtcc-auth-wrap #nxtcc-generate-default.button.button-primary:focus,
 .nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary:hover,
 .nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary:focus{
 	background:#064e46;
 	border-color:#064e46;
 	color:#fff;
 }
+.nxtcc-auth-wrap #nxtcc-generate-default.button.button-primary:active,
 .nxtcc-auth-wrap #nxtcc-auth-save.button.button-primary:active{
 	background:#05443d;
 	border-color:#05443d;
 	color:#fff;
+}
+
+.nxtcc-auth-wrap #nxtcc-sync-verified.button{
+	background:#fff;
+	border-color:#075E54;
+	color:#075E54;
+	box-shadow:none;
+}
+
+.nxtcc-auth-wrap #nxtcc-sync-verified.button:hover,
+.nxtcc-auth-wrap #nxtcc-sync-verified.button:focus{
+	background:#eef7f5;
+	border-color:#064e46;
+	color:#064e46;
+}
+
+.nxtcc-auth-wrap #nxtcc-sync-verified.button:active{
+	background:#dff0ed;
+	border-color:#05443d;
+	color:#05443d;
 }
 
 /* PRO badge */

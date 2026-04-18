@@ -31,7 +31,7 @@ if ( ! function_exists( 'nxtcc_chat_ajax_require_caps' ) ) {
 	 * @return void
 	 */
 	function nxtcc_chat_ajax_require_caps(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_access_chat' ) ) ) {
 			wp_die(
 				esc_html__( 'Forbidden', 'nxt-cloud-chat' ),
 				'',

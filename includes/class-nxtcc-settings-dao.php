@@ -12,9 +12,8 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Data access with caching for nxtcc_user_settings.
  *
- * Treats user_mailid as the unique tenant key:
- * - One logical row per user.
- * - Edits always update the latest row for that user instead of inserting.
+ * Stores the site's current tenant connection row and exposes helper queries
+ * that can later support multi-tenant SaaS overlays.
  */
 final class NXTCC_Settings_DAO {
 
@@ -136,6 +135,27 @@ final class NXTCC_Settings_DAO {
 	}
 
 	/**
+	 * Cache key for latest settings row across the site.
+	 *
+	 * @return string
+	 */
+	private static function ck_latest_any(): string {
+		return 'latest_any';
+	}
+
+	/**
+	 * Cache key for exact tenant tuple lookups.
+	 *
+	 * @param string $user_mailid User email.
+	 * @param string $baid        Business account ID.
+	 * @param string $pnid        Phone number ID.
+	 * @return string
+	 */
+	private static function ck_by_tenant( string $user_mailid, string $baid, string $pnid ): string {
+		return 'tenant:' . md5( $user_mailid . '|' . $baid . '|' . $pnid );
+	}
+
+	/**
 	 * Get latest settings row for a user (cached).
 	 *
 	 * @param string $user_mailid User email.
@@ -149,6 +169,50 @@ final class NXTCC_Settings_DAO {
 
 		// TTL is a literal 300+ inside the wrapper to satisfy VIP sniffs.
 		return NXTCC_DB_AdminSettings::get_row_prepared_query( $query, array( $user_mailid ), $ck );
+	}
+
+	/**
+	 * Get the newest settings row for the site, regardless of owner email.
+	 *
+	 * @return object|null
+	 */
+	public static function get_latest_any() {
+		$table = self::quote_table_name( self::$table );
+		$query = "SELECT * FROM {$table} ORDER BY id DESC LIMIT 1";
+
+		$cached = wp_cache_get( self::ck_latest_any(), NXTCC_DB_AdminSettings::CACHE_GROUP );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
+		$row = $GLOBALS['wpdb']->get_row( $query );
+		wp_cache_set( self::ck_latest_any(), $row, NXTCC_DB_AdminSettings::CACHE_GROUP, 300 );
+
+		return $row;
+	}
+
+	/**
+	 * Get one exact tenant row by tuple.
+	 *
+	 * @param string $user_mailid User email.
+	 * @param string $baid        Business account ID.
+	 * @param string $pnid        Phone number ID.
+	 * @return object|null
+	 */
+	public static function get_row_for_tenant( string $user_mailid, string $baid, string $pnid ) {
+		$user_mailid = sanitize_email( $user_mailid );
+		$baid        = sanitize_text_field( $baid );
+		$pnid        = sanitize_text_field( $pnid );
+
+		if ( '' === $user_mailid || '' === $baid || '' === $pnid ) {
+			return null;
+		}
+
+		$ck    = self::ck_by_tenant( $user_mailid, $baid, $pnid );
+		$table = self::quote_table_name( self::$table );
+		$query = "SELECT * FROM {$table} WHERE user_mailid = %s AND business_account_id = %s AND phone_number_id = %s ORDER BY id DESC LIMIT 1";
+
+		return NXTCC_DB_AdminSettings::get_row_prepared_query( $query, array( $user_mailid, $baid, $pnid ), $ck );
 	}
 
 	/**
@@ -166,6 +230,7 @@ final class NXTCC_Settings_DAO {
 		}
 
 		$now_utc  = current_time( 'mysql', 1 );
+		$actor_id = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::current_user_id() : (int) get_current_user_id();
 		$existing = self::get_latest_for_user( $user_mailid );
 
 		$data = array(
@@ -176,6 +241,10 @@ final class NXTCC_Settings_DAO {
 			'meta_webhook_subscribed'        => 1,
 			'updated_at'                     => $now_utc,
 		);
+
+		if ( $actor_id > 0 ) {
+			$data['updated_by'] = $actor_id;
+		}
 
 		$ok = false;
 
@@ -189,11 +258,15 @@ final class NXTCC_Settings_DAO {
 			) );
 		} else {
 			$data['created_at'] = $now_utc;
-			$ok                 = ( false !== NXTCC_DB_AdminSettings::insert( self::$table, $data ) );
+			if ( $actor_id > 0 ) {
+				$data['created_by'] = $actor_id;
+			}
+			$ok = ( false !== NXTCC_DB_AdminSettings::insert( self::$table, $data ) );
 		}
 
 		if ( $ok ) {
 			NXTCC_DB_AdminSettings::cache_delete( self::ck_latest_by_user( $user_mailid ) );
+			NXTCC_DB_AdminSettings::cache_delete( self::ck_latest_any() );
 		}
 
 		return (bool) $ok;
@@ -213,10 +286,14 @@ final class NXTCC_Settings_DAO {
 		}
 
 		$now_utc  = current_time( 'mysql', 1 );
+		$actor_id = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::current_user_id() : (int) get_current_user_id();
 		$existing = self::get_latest_for_user( $user_mailid );
 
 		$data['updated_at'] = $now_utc;
-		$ok                 = false;
+		if ( $actor_id > 0 ) {
+			$data['updated_by'] = $actor_id;
+		}
+		$ok = false;
 
 		if ( $existing && ! empty( $existing->id ) ) {
 			$ok = ( false !== NXTCC_DB_AdminSettings::update(
@@ -228,11 +305,25 @@ final class NXTCC_Settings_DAO {
 			) );
 		} else {
 			$data['created_at'] = $now_utc;
-			$ok                 = ( false !== NXTCC_DB_AdminSettings::insert( self::$table, $data ) );
+			if ( $actor_id > 0 ) {
+				$data['created_by'] = $actor_id;
+			}
+			$ok = ( false !== NXTCC_DB_AdminSettings::insert( self::$table, $data ) );
 		}
 
 		if ( $ok ) {
 			NXTCC_DB_AdminSettings::cache_delete( self::ck_latest_by_user( $user_mailid ) );
+			NXTCC_DB_AdminSettings::cache_delete( self::ck_latest_any() );
+
+			if ( ! empty( $data['business_account_id'] ) && ! empty( $data['phone_number_id'] ) ) {
+				NXTCC_DB_AdminSettings::cache_delete(
+					self::ck_by_tenant(
+						$user_mailid,
+						(string) $data['business_account_id'],
+						(string) $data['phone_number_id']
+					)
+				);
+			}
 		}
 
 		return (bool) $ok;

@@ -103,30 +103,6 @@ jQuery( function ( $ ) {
 		ref.insertAdjacentElement( 'afterend', node );
 	}
 
-	/**
-	 * Prepend a Node to an element without using insertBefore()/prepend() with HTML.
-	 *
-	 * @param {Element} parent Parent element.
-	 * @param {Element} node Node to prepend.
-	 * @return {void}
-	 */
-	function safePrependElement( parent, node ) {
-		if ( ! parent || ! node ) {
-			return;
-		}
-
-		if ( ! ( parent instanceof Element ) || ! ( node instanceof Element ) ) {
-			return;
-		}
-
-		if ( parent.firstElementChild ) {
-			parent.firstElementChild.insertAdjacentElement( 'beforebegin', node );
-			return;
-		}
-
-		safeAppend( parent, node );
-	}
-
 	// IMPORTANT: hasConnection is stored in R.state in your runtime.
 	const $widget    = R.$widget;
 	const ajaxurl    = R.ajaxurl;
@@ -143,9 +119,6 @@ jQuery( function ( $ ) {
 		R.utils && R.utils.enableMultiSelectToggle
 			? R.utils.enableMultiSelectToggle
 			: function () {};
-
-	// eslint-disable-next-line no-console..
-	console.debug( '[NXTCC][DEBUG] contacts-actions init' );
 
 	// -----------------------------
 	// Helpers.
@@ -203,12 +176,12 @@ jQuery( function ( $ ) {
 				return;
 			}
 
-			const isLinkedVerified =
-				Number( c.is_verified ) === 1 &&
-				c.wp_uid !== null &&
-				typeof c.wp_uid !== 'undefined';
+			const isLockedVerified =
+				R.table &&
+				'function' === typeof R.table.hasProtectedVerifiedGroup &&
+				R.table.hasProtectedVerifiedGroup( c );
 
-			( isLinkedVerified ? protectedIds : deletableIds ).push( String( c.id ) );
+			( isLockedVerified ? protectedIds : deletableIds ).push( String( c.id ) );
 		} );
 
 		return { deletableIds: deletableIds, protectedIds: protectedIds };
@@ -284,9 +257,6 @@ jQuery( function ( $ ) {
 			currentFilterPayload()
 		);
 
-		// eslint-disable-next-line no-console..
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_list payload', payload );
-
 		return $.post( ajaxurl, payload );
 	}
 
@@ -296,9 +266,6 @@ jQuery( function ( $ ) {
 			security: nonce,
 			instance_id: instanceId,
 		};
-
-		// eslint-disable-next-line no-console..
-		console.debug( '[NXTCC][AJAX] nxtcc_groups_list payload', payload );
 
 		return $.post( ajaxurl, payload );
 	}
@@ -310,9 +277,6 @@ jQuery( function ( $ ) {
 			instance_id: instanceId,
 		};
 
-		// eslint-disable-next-line no-console..
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_country_codes payload', payload );
-
 		return $.post( ajaxurl, payload );
 	}
 
@@ -322,9 +286,6 @@ jQuery( function ( $ ) {
 			nonce: nonce,
 			instance_id: instanceId,
 		};
-
-		// eslint-disable-next-line no-console..
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_creators payload', payload );
 
 		return $.post( ajaxurl, payload );
 	}
@@ -396,8 +357,6 @@ jQuery( function ( $ ) {
 	}
 
 	function updateCreatedByFilter() {
-		const currentUserEmail = R.currentUserEmail || null;
-
 		let creators = [];
 
 		if ( S.creatorsServer && S.creatorsServer.length ) {
@@ -405,15 +364,30 @@ jQuery( function ( $ ) {
 		} else {
 			const tmp = {};
 			( S.allContacts || [] ).forEach( function ( c ) {
-				const v = c && c.created_by ? String( c.created_by ) : '';
-				if ( v ) {
-					tmp[ v ] = true;
+				const value =
+					c && c.created_by_key
+						? String( c.created_by_key )
+						: c && c.created_by_email
+							? String( c.created_by_email )
+							: '';
+				const label =
+					c && c.created_by_label
+						? String( c.created_by_label )
+						: c && c.created_by
+							? String( c.created_by )
+							: value;
+
+				if ( value ) {
+					tmp[ value ] = label || value;
 				}
 			} );
-			creators = Object.keys( tmp );
+			creators = Object.keys( tmp ).map( function ( value ) {
+				return {
+					value: value,
+					label: tmp[ value ] || value,
+				};
+			} );
 		}
-
-		const options = currentUserEmail ? [ currentUserEmail ] : creators;
 
 		const selectEl = $( '#nxtcc-filter-created-by' ).get( 0 );
 		if ( ! selectEl ) {
@@ -423,12 +397,32 @@ jQuery( function ( $ ) {
 		safeEmpty( selectEl );
 		safeAppend( selectEl, el( 'option', { value: '' }, 'All Creators' ) );
 
-		options.forEach( function ( v ) {
-			const sv = String( v );
-			safeAppend( selectEl, el( 'option', { value: sv }, sv ) );
+		creators.forEach( function ( creator ) {
+			let value = '';
+			let label = '';
+
+			if ( creator && 'object' === typeof creator ) {
+				value = creator.value ? String( creator.value ) : '';
+				label = creator.label ? String( creator.label ) : value;
+			} else {
+				value = String( creator || '' );
+				label = value;
+			}
+
+			if ( ! value ) {
+				return;
+			}
+
+			safeAppend( selectEl, el( 'option', { value: value }, label || value ) );
 		} );
 
-		const optionStrings = options.map( String );
+		const optionStrings = creators.map( function ( creator ) {
+			if ( creator && 'object' === typeof creator ) {
+				return String( creator.value || '' );
+			}
+
+			return String( creator || '' );
+		} );
 
 		if ( filterCreatedBy && optionStrings.indexOf( String( filterCreatedBy ) ) === -1 ) {
 			filterCreatedBy = '';
@@ -553,7 +547,33 @@ jQuery( function ( $ ) {
 			cc.is_verified   = Number( cc.is_verified || 0 );
 			cc.is_subscribed = Number( cc.is_subscribed || 0 );
 
-			cc.created_by = cc.created_by || cc.user_mailid || cc.user_email || '';
+			cc.created_by_label =
+				cc.created_by_label ||
+				cc.created_by_login ||
+				cc.created_by_display ||
+				cc.created_by ||
+				cc.user_email ||
+				'';
+			cc.created_by_key =
+				cc.created_by_key ||
+				cc.created_by_login ||
+				cc.created_by_email ||
+				cc.user_email ||
+				'';
+			cc.created_by = cc.created_by_label;
+			cc.updated_by_label =
+				cc.updated_by_label ||
+				cc.updated_by_login ||
+				cc.updated_by_display ||
+				cc.updated_by ||
+				cc.updated_by_email ||
+				'';
+			cc.updated_by_key =
+				cc.updated_by_key ||
+				cc.updated_by_login ||
+				cc.updated_by_email ||
+				'';
+			cc.updated_by = cc.updated_by_label;
 
 			cc.custom_fields = normalizeCustomFields( cc.custom_fields );
 			cc.groups        = normalizeGroups( cc, groupMap );
@@ -567,6 +587,7 @@ jQuery( function ( $ ) {
 			normalized: normalized,
 			hasMore: computedHasMore,
 			groupNames: groupNames,
+			total: total,
 		};
 	}
 
@@ -582,11 +603,12 @@ jQuery( function ( $ ) {
 		safeEmpty( tbodyEl );
 
 		const tr = el( 'tr' );
-		const td = el( 'td', { colspan: '99' } );
+		const td = el( 'td', {
+			class: 'nxtcc-contacts-state-cell',
+			colspan: '99',
+		} );
 
-		td.style.textAlign = 'center';
-		td.style.color     = '#999';
-		td.textContent     = String( message || '' );
+		td.textContent = String( message || '' );
 
 		safeAppend( tr, td );
 		safeAppend( tbodyEl, tr );
@@ -598,15 +620,16 @@ jQuery( function ( $ ) {
 
 		return apiListContacts( page )
 			.done( function ( resp ) {
-				// eslint-disable-next-line no-console..
-				console.debug( '[NXTCC][AJAX] nxtcc_contacts_list resp', resp );
-
 				if ( ! resp || ! resp.success ) {
 					if ( 1 === page ) {
 						renderEmptyRow( 'No contacts found.' );
 
 						if ( R.actions && 'function' === typeof R.actions.updateBulkToolbar ) {
 							R.actions.updateBulkToolbar();
+						}
+
+						if ( R.table && 'function' === typeof R.table.updateSummary ) {
+							R.table.updateSummary( [] );
 						}
 					}
 
@@ -620,6 +643,9 @@ jQuery( function ( $ ) {
 				const normalized      = parsed.normalized;
 				const computedHasMore = parsed.hasMore;
 				const groupNames      = parsed.groupNames;
+				const total           = Number( parsed.total || 0 );
+
+				S.filteredTotal = total;
 
 				if ( ! Array.isArray( normalized ) || ! normalized.length ) {
 					if ( 1 === page ) {
@@ -627,6 +653,10 @@ jQuery( function ( $ ) {
 
 						if ( R.actions && 'function' === typeof R.actions.updateBulkToolbar ) {
 							R.actions.updateBulkToolbar();
+						}
+
+						if ( R.table && 'function' === typeof R.table.updateSummary ) {
+							R.table.updateSummary( [] );
 						}
 					}
 
@@ -666,21 +696,40 @@ jQuery( function ( $ ) {
 				hasMore     = computedHasMore;
 
 				if ( resp.data && Array.isArray( resp.data.creators ) ) {
-					S.creatorsServer = resp.data.creators.map( String ).filter( Boolean );
+					S.creatorsServer = resp.data.creators
+						.map( function ( creator ) {
+							if ( creator && 'object' === typeof creator ) {
+								return {
+									value: creator.value ? String( creator.value ) : '',
+									label: creator.label ? String( creator.label ) : String( creator.value || '' ),
+								};
+							}
+
+							const value = String( creator || '' );
+
+							return value
+								? {
+									value: value,
+									label: value,
+								}
+								: null;
+						} )
+						.filter( Boolean );
 					updateCreatedByFilter();
 				}
 
 				updateLoadMoreUI();
 			} )
 			.fail( function () {
-				// eslint-disable-next-line no-console..
-				console.debug( '[NXTCC][AJAX] nxtcc_contacts_list network error', { page: page } );
-
 				if ( 1 === page ) {
 					renderEmptyRow( 'Network error. Please retry.' );
 
 					if ( R.actions && 'function' === typeof R.actions.updateBulkToolbar ) {
 						R.actions.updateBulkToolbar();
+					}
+
+					if ( R.table && 'function' === typeof R.table.updateSummary ) {
+						R.table.updateSummary( [] );
 					}
 				}
 			} )
@@ -697,7 +746,11 @@ jQuery( function ( $ ) {
 			currentPage   = 1;
 			hasMore       = false;
 			S.allContacts = [];
-			renderEmptyRow( 'Loading contacts…' );
+
+			if ( R.table && 'function' === typeof R.table.updateSummary ) {
+				R.table.updateSummary( [] );
+			}
+			renderEmptyRow( 'Loading contacts...' );
 		}
 
 		return fetchContactsPage( currentPage );
@@ -711,9 +764,6 @@ jQuery( function ( $ ) {
 	function fetchGroups() {
 		return apiGroupsList()
 			.done( function ( resp ) {
-				// eslint-disable-next-line no-console..
-				console.debug( '[NXTCC][AJAX] nxtcc_groups_list resp', resp );
-
 				if ( resp && resp.success && resp.data && Array.isArray( resp.data.groups ) ) {
 					S.allGroups = resp.data.groups.map( function ( g ) {
 						return {
@@ -740,7 +790,15 @@ jQuery( function ( $ ) {
 						safeEmpty( gselEl );
 
 						S.allGroups.forEach( function ( g ) {
-							safeAppend( gselEl, el( 'option', { value: String( g.id ) }, toStr( g.group_name ) ) );
+							const label = toStr( g.group_name ) + ( g.is_verified ? ' (Protected)' : '' );
+							const opt   = el( 'option', { value: String( g.id ) }, label );
+
+							if ( g.is_verified ) {
+								opt.disabled = true;
+								opt.title    = 'Verified groups are protected and cannot be selected as import defaults';
+							}
+
+							safeAppend( gselEl, opt );
 						} );
 
 						enableMultiSelectToggle( $( gselEl ) );
@@ -758,9 +816,6 @@ jQuery( function ( $ ) {
 	function fetchCountryCodes() {
 		return apiCountryCodes()
 			.done( function ( resp ) {
-				// eslint-disable-next-line no-console..
-				console.debug( '[NXTCC][AJAX] nxtcc_contacts_country_codes resp', resp );
-
 				let list = [];
 
 				if ( resp && resp.data && Array.isArray( resp.data.codes ) ) {
@@ -789,11 +844,26 @@ jQuery( function ( $ ) {
 	function fetchCreators() {
 		return apiCreators()
 			.done( function ( resp ) {
-				// eslint-disable-next-line no-console..
-				console.debug( '[NXTCC][AJAX] nxtcc_contacts_creators resp', resp );
-
 				if ( resp && resp.success && resp.data && Array.isArray( resp.data.creators ) ) {
-					S.creatorsServer = resp.data.creators.map( String ).filter( Boolean );
+					S.creatorsServer = resp.data.creators
+						.map( function ( creator ) {
+							if ( creator && 'object' === typeof creator ) {
+								return {
+									value: creator.value ? String( creator.value ) : '',
+									label: creator.label ? String( creator.label ) : String( creator.value || '' ),
+								};
+							}
+
+							const value = String( creator || '' );
+
+							return value
+								? {
+									value: value,
+									label: value,
+								}
+								: null;
+						} )
+						.filter( Boolean );
 					updateCreatedByFilter();
 				}
 			} )
@@ -802,9 +872,6 @@ jQuery( function ( $ ) {
 				console.warn( '[NXTCC] fetchCreators failed.' );
 			} );
 	}
-
-	// eslint-disable-next-line no-console..
-	console.debug( '[NXTCC][DEBUG] initial load: contacts, groups, country codes, creators.' );
 
 	if ( ! S.hasConnection ) {
 		// eslint-disable-next-line no-console.
@@ -883,9 +950,7 @@ jQuery( function ( $ ) {
 		const protectedIds = split.protectedIds;
 
 		if ( ! deletableIds.length ) {
-			alert(
-				'Selected contacts include only verified contacts linked to WP users — they cannot be deleted.'
-			);
+			alert( 'Selected contacts include only verified-group contacts. They cannot be deleted.' );
 			return;
 		}
 
@@ -900,16 +965,17 @@ jQuery( function ( $ ) {
 			ids: deletableIds,
 		};
 
-		// eslint-disable-next-line no-console.
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_bulk_delete payload', payload );
-
 		$.post( ajaxurl, payload, function ( resp ) {
-			// eslint-disable-next-line no-console.
-			console.debug( '[NXTCC][AJAX] nxtcc_contacts_bulk_delete resp', resp );
-
 			if ( resp && resp.success ) {
-				if ( protectedIds.length ) {
-					alert( protectedIds.length + ' verified contact(s) were skipped (cannot delete).' );
+				const skippedCount =
+					resp &&
+					resp.data &&
+					Array.isArray( resp.data.skipped_locked )
+						? resp.data.skipped_locked.length
+						: protectedIds.length;
+
+				if ( skippedCount ) {
+					alert( skippedCount + ' verified-group contact(s) were skipped.' );
 				}
 
 				loadAll( true );
@@ -950,8 +1016,8 @@ jQuery( function ( $ ) {
 
 		( S.allGroups || [] ).forEach( function ( group ) {
 			const isV   = ! ! group.is_verified;
-			const label = toStr( group.group_name ) + ( isV ? ' (Locked)' : '' );
-			const title = isV ? 'Verified groups cannot be bulk-assigned' : '';
+			const label = toStr( group.group_name ) + ( isV ? ' (Protected)' : '' );
+			const title = isV ? 'Verified groups stay assigned automatically and cannot be bulk-assigned' : '';
 
 			const opt = el( 'option', { value: String( group.id ) }, label );
 
@@ -996,13 +1062,7 @@ jQuery( function ( $ ) {
 			group_ids: groupIds,
 		};
 
-		// eslint-disable-next-line no-console.
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_bulk_update_groups payload', payload );
-
 		$.post( ajaxurl, payload, function ( resp ) {
-			// eslint-disable-next-line no-console.
-			console.debug( '[NXTCC][AJAX] nxtcc_contacts_bulk_update_groups resp', resp );
-
 			if ( resp && resp.success ) {
 				$( '#nxtcc-bulk-group-modal' ).fadeOut( 120 );
 				loadAll( true );
@@ -1067,13 +1127,7 @@ jQuery( function ( $ ) {
 			is_subscribed: subscribed,
 		};
 
-		// eslint-disable-next-line no-console.
-		console.debug( '[NXTCC][AJAX] nxtcc_contacts_bulk_update_subscription payload', payload );
-
 		$.post( ajaxurl, payload, function ( resp ) {
-			// eslint-disable-next-line no-console.
-			console.debug( '[NXTCC][AJAX] nxtcc_contacts_bulk_update_subscription resp', resp );
-
 			if ( resp && resp.success ) {
 				$( '#nxtcc-bulk-subscription-modal' ).fadeOut( 120 );
 				loadAll( true );
@@ -1090,6 +1144,3 @@ jQuery( function ( $ ) {
 		} );
 	} );
 } );
-
-
-

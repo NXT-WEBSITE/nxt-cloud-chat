@@ -79,7 +79,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 		$nxtcc_tables = array(
 
 			/* ---------------------------- Contacts ---------------------------- */
-			"CREATE TABLE IF NOT EXISTS {$nxtcc_prefix}nxtcc_contacts (
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_contacts (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   user_mailid VARCHAR(255) NOT NULL,
   wp_uid BIGINT(20) UNSIGNED NULL,
@@ -94,12 +94,16 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   unsubscribed_reason VARCHAR(255) NULL,
   group_ids TEXT NULL,
   custom_fields LONGTEXT NULL,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_user_contact (user_mailid(191), business_account_id(191), phone_number_id(191), country_code, phone_number),
   KEY idx_user_mailid (user_mailid(191)),
   KEY idx_wp_uid (wp_uid),
+  KEY idx_contacts_created_by (created_by),
+  KEY idx_contacts_updated_by (updated_by),
   KEY idx_contacts_created_at (created_at),
   KEY idx_contacts_name (name(191)),
   KEY idx_contacts_multi_tenant (user_mailid(191), business_account_id(191), phone_number_id(191)),
@@ -114,17 +118,22 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 			/*
 			 * Groups are tenant-scoped (user_mailid + business_account_id + phone_number_id).
 			 */
-			"CREATE TABLE IF NOT EXISTS {$nxtcc_prefix}nxtcc_groups (
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_groups (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   user_mailid VARCHAR(255) NOT NULL,
   business_account_id VARCHAR(255) NOT NULL,
   phone_number_id VARCHAR(255) NOT NULL,
   group_name VARCHAR(255) NOT NULL,
   is_verified TINYINT(1) NOT NULL DEFAULT 0,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_user_groupname (user_mailid(191), business_account_id(191), phone_number_id(191), group_name(191)),
   KEY idx_user_mailid (user_mailid(191)),
+  KEY idx_groups_created_by (created_by),
+  KEY idx_groups_updated_by (updated_by),
   KEY idx_groups_is_verified (is_verified),
   KEY idx_groups_multi_tenant (user_mailid(191), business_account_id(191), phone_number_id(191))
 ) {$nxtcc_charset_collate};",
@@ -136,7 +145,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 			/*
 			 * Group-contact mapping is also tenant-scoped to prevent cross-tenant joins.
 			 */
-			"CREATE TABLE IF NOT EXISTS {$nxtcc_prefix}nxtcc_group_contact_map (
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_group_contact_map (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   user_mailid VARCHAR(255) NOT NULL,
   business_account_id VARCHAR(255) NOT NULL,
@@ -152,7 +161,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 ) {$nxtcc_charset_collate};",
 
 			/* -------------------------- Message history ----------------------- */
-			"CREATE TABLE IF NOT EXISTS {$nxtcc_prefix}nxtcc_message_history (
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_message_history (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   queue_id BIGINT(20) UNSIGNED NULL,
   user_mailid VARCHAR(255) NOT NULL,
@@ -169,6 +178,9 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   status VARCHAR(50) NULL,
   status_timestamps LONGTEXT NULL,
   last_error TEXT NULL,
+  origin_type VARCHAR(30) NULL,
+  origin_user_id BIGINT(20) UNSIGNED NULL,
+  origin_ref VARCHAR(191) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   sent_at DATETIME NULL,
   delivered_at DATETIME NULL,
@@ -188,6 +200,9 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   KEY idx_queue_id (queue_id),
   KEY idx_user_mailid (user_mailid(191)),
   KEY idx_status (status),
+  KEY idx_origin_type (origin_type),
+  KEY idx_origin_user_id (origin_user_id),
+  KEY idx_origin_ref (origin_ref),
   KEY idx_created_at (created_at),
   KEY idx_multi_tenant (user_mailid(191), business_account_id(191), phone_number_id(191)),
   KEY idx_deleted_at (deleted_at),
@@ -200,7 +215,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 ) {$nxtcc_charset_collate};",
 
 			/* -------------------------- User settings ------------------------- */
-			"CREATE TABLE IF NOT EXISTS {$nxtcc_prefix}nxtcc_user_settings (
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_user_settings (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   user_mailid VARCHAR(255) NOT NULL,
   app_id VARCHAR(64) NOT NULL,
@@ -217,11 +232,15 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   token_expires_at DATETIME NULL,
   crypto_algo VARCHAR(16) NOT NULL DEFAULT 'secretbox',
   kdf VARCHAR(16) NOT NULL DEFAULT 'hkdf256',
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_app_id (app_id),
   KEY idx_user_mailid (user_mailid(191)),
+  KEY idx_settings_created_by (created_by),
+  KEY idx_settings_updated_by (updated_by),
   KEY idx_phone_number_id (phone_number_id(191)),
   KEY idx_business_account_id (business_account_id(191)),
   KEY idx_created_at (created_at),
@@ -229,8 +248,30 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   UNIQUE KEY uq_settings_tenant (user_mailid(191), business_account_id(191), phone_number_id(191))
 ) {$nxtcc_charset_collate};",
 
+			/* ------------------------ Tenant user access ---------------------- */
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_tenant_user_access (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  wp_user_id BIGINT(20) UNSIGNED NOT NULL,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  role_key VARCHAR(50) NOT NULL DEFAULT 'custom',
+  capabilities_json LONGTEXT NULL,
+  is_owner TINYINT(1) NOT NULL DEFAULT 0,
+  granted_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_tenant_user (wp_user_id, user_mailid(191), business_account_id(191), phone_number_id(191)),
+  KEY idx_access_wp_user (wp_user_id),
+  KEY idx_access_owner (is_owner),
+  KEY idx_access_updated_by (updated_by),
+  KEY idx_access_tenant (user_mailid(191), business_account_id(191), phone_number_id(191))
+) {$nxtcc_charset_collate};",
+
 			/* ---------------------- Schema migrations log --------------------- */
-			"CREATE TABLE IF NOT EXISTS {$nxtcc_prefix}nxtcc_schema_migrations (
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_schema_migrations (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   version VARCHAR(50) NOT NULL,
   applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -240,7 +281,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 ) {$nxtcc_charset_collate};",
 
 			/* ----------------------------- Auth OTP --------------------------- */
-			"CREATE TABLE IF NOT EXISTS {$nxtcc_prefix}nxtcc_auth_otp (
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_auth_otp (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   session_id VARCHAR(64) NOT NULL,
   phone_e164 VARCHAR(30) NOT NULL,
@@ -261,7 +302,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 ) {$nxtcc_charset_collate};",
 
 			/* -------------------------- Auth Bindings ------------------------- */
-			"CREATE TABLE IF NOT EXISTS {$nxtcc_prefix}nxtcc_auth_bindings (
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_auth_bindings (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   user_id BIGINT(20) UNSIGNED NOT NULL,
   phone_e164 VARCHAR(30) NOT NULL,
@@ -278,5 +319,34 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 		foreach ( $nxtcc_tables as $nxtcc_sql ) {
 			nxtcc_run_dbdelta_sql( $nxtcc_sql );
 		}
+
+		if ( function_exists( 'nxtcc_schema_signature' ) ) {
+			update_option( 'nxtcc_schema_signature', nxtcc_schema_signature(), false );
+		}
+	}
+}
+
+if ( ! function_exists( 'nxtcc_schema_signature' ) ) {
+	/**
+	 * Build a lightweight schema signature for upgrade checks.
+	 *
+	 * @return string
+	 */
+	function nxtcc_schema_signature(): string {
+		$hash = hash_file( 'sha256', __FILE__ );
+
+		return is_string( $hash ) ? $hash : '';
+	}
+}
+
+if ( ! function_exists( 'nxtcc_schema_needs_install' ) ) {
+	/**
+	 * Determine whether the Free schema needs to be installed or refreshed.
+	 *
+	 * @return bool
+	 */
+	function nxtcc_schema_needs_install(): bool {
+		$stored_signature = get_option( 'nxtcc_schema_signature', '' );
+		return ! is_string( $stored_signature ) || nxtcc_schema_signature() !== $stored_signature;
 	}
 }

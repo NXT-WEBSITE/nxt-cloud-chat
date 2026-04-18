@@ -42,9 +42,11 @@ jQuery( function ( $ ) {
 		{ key: 'country_code', label: 'Country Code', visible: true, sortable: false },
 		{ key: 'phone_number', label: 'Phone Number', visible: true, sortable: false },
 		{ key: 'groups', label: 'Groups', visible: true, sortable: false },
-		{ key: 'subscribed', label: 'Subscribed', visible: true, sortable: false },
+		{ key: 'subscribed', label: 'Subscription', visible: true, sortable: false },
 		{ key: 'created_at', label: 'Created At', visible: true, sortable: false },
-		{ key: 'created_by', label: 'Created By', visible: true, sortable: false },
+		{ key: 'updated_at', label: 'Updated At', visible: false, sortable: false },
+		{ key: 'created_by', label: 'Created By', visible: false, sortable: false },
+		{ key: 'updated_by', label: 'Updated By', visible: false, sortable: false },
 		{ key: 'actions', label: 'Actions', visible: true, sortable: false },
 	];
 
@@ -374,13 +376,18 @@ jQuery( function ( $ ) {
 			{ key: 'name', label: 'Name', visible: true, sortable: false },
 			{ key: 'country_code', label: 'Country Code', visible: true, sortable: false },
 			{ key: 'phone_number', label: 'Phone Number', visible: true, sortable: false },
+			{ key: 'groups', label: 'Groups', visible: true, sortable: false },
+			{ key: 'subscribed', label: 'Subscription', visible: true, sortable: false },
+		];
+
+		const audit = [
+			{ key: 'created_at', label: 'Created At', visible: true, sortable: false },
+			{ key: 'updated_at', label: 'Updated At', visible: false, sortable: false },
+			{ key: 'created_by', label: 'Created By', visible: false, sortable: false },
+			{ key: 'updated_by', label: 'Updated By', visible: false, sortable: false },
 		];
 
 		const after = [
-			{ key: 'groups', label: 'Groups', visible: true, sortable: false },
-			{ key: 'subscribed', label: 'Subscribed', visible: true, sortable: false },
-			{ key: 'created_at', label: 'Created At', visible: true, sortable: false },
-			{ key: 'created_by', label: 'Created By', visible: true, sortable: false },
 			{ key: 'actions', label: 'Actions', visible: true, sortable: false },
 		];
 
@@ -397,13 +404,13 @@ jQuery( function ( $ ) {
 			return {
 				key: 'custom__' + label,
 				label,
-				visible: true,
+				visible: false,
 				type: sample && sample.type ? sample.type : 'text',
 				options: sample && sample.options ? sample.options : [],
 			};
 		} );
 
-		let merged = [ ...before, ...customCols, ...after ];
+		let merged = [ ...before, ...customCols, ...audit, ...after ];
 		merged     = applySavedPrefsTo( merged );
 
 		columns   = merged;
@@ -425,6 +432,74 @@ jQuery( function ( $ ) {
 	function getGroupName( id ) {
 		const found = ( S.allGroups || [] ).find( ( g ) => String( g.id ) === String( id ) );
 		return found ? found.group_name : String( id );
+	}
+
+	/**
+	 * Get the verified group IDs currently available in the tenant.
+	 *
+	 * @return {Set<string>} Verified group ids.
+	 */
+	function getVerifiedGroupIds() {
+		return new Set(
+			( S.allGroups || [] )
+				.filter( ( group ) => Number( group.is_verified ) === 1 )
+				.map( ( group ) => String( group.id ) )
+		);
+	}
+
+	/**
+	 * Check whether a contact belongs to any protected verified group.
+	 *
+	 * @param {Object} row Contact row.
+	 * @return {boolean} True when the contact belongs to a verified group.
+	 */
+	function hasProtectedVerifiedGroup( row ) {
+		const verifiedGroupIds = getVerifiedGroupIds();
+
+		return Array.isArray( row.groups ) && row.groups.some( ( gid ) => verifiedGroupIds.has( String( gid ) ) );
+	}
+
+	/**
+	 * Update top-of-screen summary cards.
+	 *
+	 * @param {Array} contacts Loaded contacts list.
+	 * @return {void}
+	 */
+	function updateSummary( contacts ) {
+		const items           = Array.isArray( contacts ) ? contacts : [];
+		const filteredTotalEl = document.getElementById( 'nxtcc-contacts-summary-total' );
+		const loadedEl        = document.getElementById( 'nxtcc-contacts-summary-loaded' );
+		const subscribedEl    = document.getElementById( 'nxtcc-contacts-summary-subscribed' );
+		const verifiedEl      = document.getElementById( 'nxtcc-contacts-summary-verified' );
+
+		let subscribedCount = 0;
+		let verifiedCount   = 0;
+
+		items.forEach( ( row ) => {
+			if ( Number( row.is_subscribed ) === 1 ) {
+				subscribedCount += 1;
+			}
+
+			if ( hasProtectedVerifiedGroup( row ) ) {
+				verifiedCount += 1;
+			}
+		} );
+
+		if ( filteredTotalEl ) {
+			filteredTotalEl.textContent = String( Number( S.filteredTotal || 0 ) );
+		}
+
+		if ( loadedEl ) {
+			loadedEl.textContent = String( items.length );
+		}
+
+		if ( subscribedEl ) {
+			subscribedEl.textContent = String( subscribedCount );
+		}
+
+		if ( verifiedEl ) {
+			verifiedEl.textContent = String( verifiedCount );
+		}
 	}
 
 	/**
@@ -482,23 +557,22 @@ jQuery( function ( $ ) {
 	/**
 	 * Build the groups chips node for a row.
 	 *
-	 * @param {Object} row Contact row.
-	 * @param {string|null} verifiedGroupId Verified group ID (string), if any.
-	 * @param {boolean} isLinkedVerified Whether contact is verified + linked to WP user.
+	 * @param {Object}      row              Contact row.
+	 * @param {Set<string>} verifiedGroupIds Verified group ids.
 	 * @return {HTMLElement} Chips wrapper.
 	 */
-	function buildGroupsChips( row, verifiedGroupId, isLinkedVerified ) {
-		const wrap = el( 'div' );
+	function buildGroupsChips( row, verifiedGroupIds ) {
+		const wrap = el( 'div', { className: 'nxtcc-contact-group-chips' } );
 
 		( row.groups || [] ).forEach( ( gid ) => {
 			const name           = getGroupName( gid );
-			const isThisVerified = ! ! verifiedGroupId && String( gid ) === verifiedGroupId;
+			const isThisVerified = verifiedGroupIds.has( String( gid ) );
 
 			const chip = el( 'span', { text: name } );
 
-			if ( isThisVerified && isLinkedVerified ) {
+			if ( isThisVerified ) {
 				chip.className = 'nxtcc-chip nxtcc-chip-verified';
-				chip.setAttribute( 'title', name + ' (Locked)' );
+				chip.setAttribute( 'title', name + ' (Protected verified group)' );
 				chip.appendChild( document.createTextNode( ' 🔒' ) );
 			} else {
 				chip.className = 'nxtcc-chip';
@@ -528,27 +602,25 @@ jQuery( function ( $ ) {
 
 		if ( ! contacts || ! contacts.length ) {
 			const tr = el( 'tr' );
-			const td = el( 'td', { text: 'No contacts found.' } );
+			const td = el( 'td', {
+				className: 'nxtcc-contacts-state-cell',
+				text: 'No contacts found.',
+			} );
 
 			td.setAttribute( 'colspan', '99' );
-			td.style.textAlign = 'center';
-			td.style.color     = '#999';
 
 			tr.appendChild( td );
 			tbody.appendChild( tr );
 
+			updateSummary( [] );
 			afterRenderTable();
 			return;
 		}
 
-		const verifiedGroupMeta = ( S.allGroups || [] ).find( ( g ) => Number( g.is_verified ) === 1 );
-		const verifiedGroupId   = verifiedGroupMeta ? String( verifiedGroupMeta.id ) : null;
+		const verifiedGroupIds = getVerifiedGroupIds();
 
 		contacts.forEach( ( row ) => {
-			const isLinkedVerified =
-				Number( row.is_verified ) === 1 &&
-				row.wp_uid !== null &&
-				row.wp_uid !== undefined;
+			const hasLockedVerifiedGroup = hasProtectedVerifiedGroup( row );
 
 			const tr = el( 'tr' );
 
@@ -571,7 +643,7 @@ jQuery( function ( $ ) {
 
 				if ( col.key === 'groups' ) {
 					const td = el( 'td' );
-					td.appendChild( buildGroupsChips( row, verifiedGroupId, isLinkedVerified ) );
+					td.appendChild( buildGroupsChips( row, verifiedGroupIds ) );
 					tr.appendChild( td );
 					return;
 				}
@@ -598,6 +670,15 @@ jQuery( function ( $ ) {
 					return;
 				}
 
+				if ( col.key === 'updated_at' ) {
+					const localStr = formatCreatedAtUTCToSiteAMPM( row.updated_at );
+					const td       = el( 'td', { text: localStr || '' } );
+
+					td.setAttribute( 'title', 'Stored in UTC; shown in site time' );
+					tr.appendChild( td );
+					return;
+				}
+
 				if ( col.key.startsWith( 'custom__' ) ) {
 					const label = col.label;
 					let value   = '';
@@ -613,11 +694,31 @@ jQuery( function ( $ ) {
 
 				if ( col.key === 'created_by' ) {
 					const v =
-						row.created_by !== undefined &&
-						row.created_by !== null &&
-						String( row.created_by ).trim() !== ''
+						row.created_by_label !== undefined &&
+						row.created_by_label !== null &&
+						String( row.created_by_label ).trim() !== ''
+							? row.created_by_label
+							: row.created_by !== undefined &&
+								row.created_by !== null &&
+								String( row.created_by ).trim() !== ''
 							? row.created_by
-							: ( row.user_mailid || '' );
+							: '';
+
+					tr.appendChild( el( 'td', { text: v } ) );
+					return;
+				}
+
+				if ( col.key === 'updated_by' ) {
+					const v =
+						row.updated_by_label !== undefined &&
+						row.updated_by_label !== null &&
+						String( row.updated_by_label ).trim() !== ''
+							? row.updated_by_label
+							: row.updated_by !== undefined &&
+								row.updated_by !== null &&
+								String( row.updated_by ).trim() !== ''
+									? row.updated_by
+									: '';
 
 					tr.appendChild( el( 'td', { text: v } ) );
 					return;
@@ -626,6 +727,7 @@ jQuery( function ( $ ) {
 				if ( col.key === 'actions' ) {
 					const td     = el( 'td' );
 					td.className = 'actions-col';
+					const wrap   = el( 'div', { className: 'nxtcc-contact-row-actions' } );
 
 					const edit     = el( 'button', { type: 'button', text: 'Edit' } );
 					edit.className = 'nxtcc-btn-sm nxtcc-btn-green nxtcc-edit-contact';
@@ -635,14 +737,19 @@ jQuery( function ( $ ) {
 					del.className = 'nxtcc-btn-sm nxtcc-btn-outline nxtcc-delete-contact';
 					del.setAttribute( 'data-id', String( row.id ) );
 
-					if ( isLinkedVerified ) {
+					if ( hasLockedVerifiedGroup ) {
 						del.disabled = true;
-						del.setAttribute( 'title', 'Verified contact linked to WP user — cannot delete' );
+						del.title    = 'Contacts assigned to verified groups cannot be deleted';
+						del.setAttribute( 'title', 'Contacts assigned to verified groups cannot be deleted' );
 					}
 
-					td.appendChild( edit );
-					td.appendChild( document.createTextNode( ' ' ) );
-					td.appendChild( del );
+					if ( hasLockedVerifiedGroup ) {
+						del.title = 'Contacts assigned to verified groups cannot be deleted';
+					}
+
+					wrap.appendChild( edit );
+					wrap.appendChild( del );
+					td.appendChild( wrap );
 
 					tr.appendChild( td );
 					return;
@@ -658,6 +765,7 @@ jQuery( function ( $ ) {
 			tbody.appendChild( tr );
 		} );
 
+		updateSummary( contacts );
 		afterRenderTable();
 	}
 
@@ -695,7 +803,6 @@ jQuery( function ( $ ) {
 	R.table.renderColumnsPopover           = renderColumnsPopover;
 	R.table.renderTableHeader              = renderTableHeader;
 	R.table.renderTable                    = renderTable;
+	R.table.hasProtectedVerifiedGroup      = hasProtectedVerifiedGroup;
+	R.table.updateSummary                  = updateSummary;
 } );
-
-
-

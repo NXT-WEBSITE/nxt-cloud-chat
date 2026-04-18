@@ -273,12 +273,20 @@ jQuery( function ( $ ) {
 		// Small public API used by other modules.
 		ctx.api.actions.updateScrollButton = updateScrollButton;
 		ctx.api.actions.setComposerEnabled = setComposerEnabled;
-		ctx.api.actions.exitSelection      = exitSelection;
 
 		function loadChatThread() {
 			if ( ctx.api.thread && ctx.api.thread.loadChatThread ) {
 				ctx.api.thread.loadChatThread();
 			}
+		}
+
+		function reloadChatThread() {
+			if ( ctx.api.thread && ctx.api.thread.reloadChatThread ) {
+				ctx.api.thread.reloadChatThread();
+				return;
+			}
+
+			loadChatThread();
 		}
 
 		function stopChatPolling() {
@@ -319,7 +327,7 @@ jQuery( function ( $ ) {
 							replyTo = null;
 							$replyStrip.hide();
 						}
-						loadChatThread();
+						reloadChatThread();
 						return;
 					}
 
@@ -375,7 +383,7 @@ jQuery( function ( $ ) {
 							replyTo = null;
 							$replyStrip.hide();
 						}
-						loadChatThread();
+						reloadChatThread();
 						return;
 					}
 
@@ -444,7 +452,7 @@ jQuery( function ( $ ) {
 							replyTo = null;
 							$replyStrip.hide();
 						}
-						loadChatThread();
+						reloadChatThread();
 						return;
 					}
 
@@ -787,7 +795,7 @@ jQuery( function ( $ ) {
 						closeForwardModal();
 						exitSelection();
 						if ( ctx.state.chatContactId ) {
-							loadChatThread();
+							reloadChatThread();
 						}
 						uiAlert( 'Forwarded.' );
 						return;

@@ -629,7 +629,7 @@ jQuery( function ( $ ) {
 			parts.push( 'Created By: ' + f.createdBy );
 		}
 		if ( f.createdFrom || f.createdTo ) {
-			parts.push( 'Created: ' + ( f.createdFrom || '…' ) + ' → ' + ( f.createdTo || '…' ) );
+			parts.push( 'Created: ' + ( f.createdFrom || '...' ) + ' to ' + ( f.createdTo || '...' ) );
 		}
 		if ( f.groupId ) {
 			parts.push( 'Group: ' + getGroupName( f.groupId ) );
@@ -752,7 +752,7 @@ jQuery( function ( $ ) {
 		$( '#nxtcc-import-mapping-grid' ).empty();
 		$( '#nxtcc-import-validation-cards' ).empty();
 		$( '#nxtcc-import-progress-bar' ).css( 'width', '0%' );
-		$( '#nxtcc-import-progress-text' ).text( 'Waiting…' );
+		$( '#nxtcc-import-progress-text' ).text( 'Waiting...' );
 		$( '#nxtcc-import-log' ).empty();
 		$( '#nxtcc-import-download-errors' ).hide().attr( 'href', '#' );
 		$( '#nxtcc-import-done' ).hide();
@@ -774,7 +774,13 @@ jQuery( function ( $ ) {
 			( S.allGroups || [] ).forEach( function ( g ) {
 				const opt       = document.createElement( 'option' );
 				opt.value       = String( g.id );
-				opt.textContent = String( g.group_name );
+				opt.textContent = String( g.group_name ) + ( g.is_verified ? ' (Protected)' : '' );
+
+				if ( g.is_verified ) {
+					opt.disabled = true;
+					opt.title    = 'Verified groups are protected and cannot be selected as import defaults';
+				}
+
 				gsel.appendChild( opt );
 			} );
 
@@ -896,7 +902,7 @@ jQuery( function ( $ ) {
 			.concat(
 				existingCustomLabels.map( ( lbl ) => ( { val: 'custom:' + lbl, text: 'Custom: ' + lbl } ) )
 			)
-			.concat( [ { val: 'custom__new', text: '➕ Add New field' } ] );
+			.concat( [ { val: 'custom__new', text: 'Add New field' } ] );
 
 		const frag = document.createDocumentFragment();
 

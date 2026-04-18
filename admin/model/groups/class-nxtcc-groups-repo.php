@@ -119,10 +119,11 @@ final class NXTCC_Groups_Repo {
 	 * @param string $baid        Business account ID.
 	 * @param string $pnid        Phone number ID.
 	 * @param int    $is_verified Verified flag.
+	 * @param int    $actor_id    Acting WordPress user ID.
 	 * @return int
 	 */
-	public function insert_group( string $name, string $owner, string $baid, string $pnid, int $is_verified ): int {
-		return NXTCC_Groups_DB::i()->insert_group( $name, $owner, $baid, $pnid, $is_verified );
+	public function insert_group( string $name, string $owner, string $baid, string $pnid, int $is_verified, int $actor_id = 0 ): int {
+		return NXTCC_Groups_DB::i()->insert_group( $name, $owner, $baid, $pnid, $is_verified, $actor_id );
 	}
 
 	/**
@@ -133,10 +134,11 @@ final class NXTCC_Groups_Repo {
 	 * @param string $owner Owner identifier (user_mailid).
 	 * @param string $baid  Business account ID.
 	 * @param string $pnid  Phone number ID.
+	 * @param int    $actor_id Acting WordPress user ID.
 	 * @return bool
 	 */
-	public function update_group_name( int $id, string $name, string $owner, string $baid, string $pnid ): bool {
-		return NXTCC_Groups_DB::i()->update_group_name( $id, $name, $owner, $baid, $pnid );
+	public function update_group_name( int $id, string $name, string $owner, string $baid, string $pnid, int $actor_id = 0 ): bool {
+		return NXTCC_Groups_DB::i()->update_group_name( $id, $name, $owner, $baid, $pnid, $actor_id );
 	}
 
 	/**
