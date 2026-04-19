@@ -44,6 +44,106 @@ final class NXTCC_Access_Control {
 	private const TEAM_ROLE = 'nxtcc_team';
 
 	/**
+	 * Return one catalog label, translating only after init.
+	 *
+	 * Returning the source string before init avoids triggering JIT translation
+	 * notices during very early capability checks while keeping PHPCS happy with
+	 * literal translation strings.
+	 *
+	 * @param string $key Catalog text key.
+	 * @return string
+	 */
+	private static function text( string $key ): string {
+		static $fallback = array(
+			'dashboard'                 => 'Dashboard',
+			'dashboard_desc'            => 'View tenant dashboard and connection overview.',
+			'chat_window'               => 'Chat Window',
+			'chat_window_desc'          => 'Access the tenant chat inbox and send replies.',
+			'view_contacts'             => 'View Contacts',
+			'view_contacts_desc'        => 'Open the contacts screen and view tenant contacts.',
+			'manage_contacts'           => 'Manage Contacts',
+			'manage_contacts_desc'      => 'Create, edit, import, export, and delete tenant contacts.',
+			'view_groups'               => 'View Groups',
+			'view_groups_desc'          => 'Open the groups screen and view tenant groups.',
+			'manage_groups'             => 'Manage Groups',
+			'manage_groups_desc'        => 'Create, edit, and delete tenant groups.',
+			'view_history'              => 'View History',
+			'view_history_desc'         => 'View tenant message history.',
+			'authentication'            => 'Authentication',
+			'authentication_desc'       => 'Manage OTP/login settings for the tenant.',
+			'connection_settings'       => 'Connection Settings',
+			'connection_settings_desc'  => 'Manage tenant connection credentials and diagnostics.',
+			'team_access'               => 'Team Access',
+			'team_access_desc'          => 'Manage tenant staff access and capabilities.',
+			'viewer'                    => 'Viewer',
+			'viewer_desc'               => 'Can review tenant activity, contacts, groups, and history without editing records.',
+			'support_agent'             => 'Support Agent',
+			'support_agent_desc'        => 'Can work in the inbox and keep contact records up to date while handling tenant conversations.',
+			'operator'                  => 'Operator',
+			'operator_desc'             => 'Can manage day-to-day tenant operations across contacts, groups, inbox activity, and authentication.',
+			'section_core'              => 'Core',
+			'section_messaging'         => 'Messaging',
+			'section_contacts'          => 'Contacts',
+			'section_groups'            => 'Groups',
+			'section_authentication'    => 'Authentication',
+			'section_marketing'         => 'Pro Marketing',
+			'section_automation'        => 'Pro Automation',
+			'section_owner'             => 'Owner Only',
+			'section_general'           => 'General',
+			'team_role'                 => 'NXT Cloud Chat Team',
+		);
+
+		if ( ! did_action( 'init' ) ) {
+			return isset( $fallback[ $key ] ) ? $fallback[ $key ] : $key;
+		}
+
+		static $translated = null;
+
+		if ( null === $translated ) {
+			$translated = array(
+				'dashboard'                 => __( 'Dashboard', 'nxt-cloud-chat' ),
+				'dashboard_desc'            => __( 'View tenant dashboard and connection overview.', 'nxt-cloud-chat' ),
+				'chat_window'               => __( 'Chat Window', 'nxt-cloud-chat' ),
+				'chat_window_desc'          => __( 'Access the tenant chat inbox and send replies.', 'nxt-cloud-chat' ),
+				'view_contacts'             => __( 'View Contacts', 'nxt-cloud-chat' ),
+				'view_contacts_desc'        => __( 'Open the contacts screen and view tenant contacts.', 'nxt-cloud-chat' ),
+				'manage_contacts'           => __( 'Manage Contacts', 'nxt-cloud-chat' ),
+				'manage_contacts_desc'      => __( 'Create, edit, import, export, and delete tenant contacts.', 'nxt-cloud-chat' ),
+				'view_groups'               => __( 'View Groups', 'nxt-cloud-chat' ),
+				'view_groups_desc'          => __( 'Open the groups screen and view tenant groups.', 'nxt-cloud-chat' ),
+				'manage_groups'             => __( 'Manage Groups', 'nxt-cloud-chat' ),
+				'manage_groups_desc'        => __( 'Create, edit, and delete tenant groups.', 'nxt-cloud-chat' ),
+				'view_history'              => __( 'View History', 'nxt-cloud-chat' ),
+				'view_history_desc'         => __( 'View tenant message history.', 'nxt-cloud-chat' ),
+				'authentication'            => __( 'Authentication', 'nxt-cloud-chat' ),
+				'authentication_desc'       => __( 'Manage OTP/login settings for the tenant.', 'nxt-cloud-chat' ),
+				'connection_settings'       => __( 'Connection Settings', 'nxt-cloud-chat' ),
+				'connection_settings_desc'  => __( 'Manage tenant connection credentials and diagnostics.', 'nxt-cloud-chat' ),
+				'team_access'               => __( 'Team Access', 'nxt-cloud-chat' ),
+				'team_access_desc'          => __( 'Manage tenant staff access and capabilities.', 'nxt-cloud-chat' ),
+				'viewer'                    => __( 'Viewer', 'nxt-cloud-chat' ),
+				'viewer_desc'               => __( 'Can review tenant activity, contacts, groups, and history without editing records.', 'nxt-cloud-chat' ),
+				'support_agent'             => __( 'Support Agent', 'nxt-cloud-chat' ),
+				'support_agent_desc'        => __( 'Can work in the inbox and keep contact records up to date while handling tenant conversations.', 'nxt-cloud-chat' ),
+				'operator'                  => __( 'Operator', 'nxt-cloud-chat' ),
+				'operator_desc'             => __( 'Can manage day-to-day tenant operations across contacts, groups, inbox activity, and authentication.', 'nxt-cloud-chat' ),
+				'section_core'              => __( 'Core', 'nxt-cloud-chat' ),
+				'section_messaging'         => __( 'Messaging', 'nxt-cloud-chat' ),
+				'section_contacts'          => __( 'Contacts', 'nxt-cloud-chat' ),
+				'section_groups'            => __( 'Groups', 'nxt-cloud-chat' ),
+				'section_authentication'    => __( 'Authentication', 'nxt-cloud-chat' ),
+				'section_marketing'         => __( 'Pro Marketing', 'nxt-cloud-chat' ),
+				'section_automation'        => __( 'Pro Automation', 'nxt-cloud-chat' ),
+				'section_owner'             => __( 'Owner Only', 'nxt-cloud-chat' ),
+				'section_general'           => __( 'General', 'nxt-cloud-chat' ),
+				'team_role'                 => __( 'NXT Cloud Chat Team', 'nxt-cloud-chat' ),
+			);
+		}
+
+		return isset( $translated[ $key ] ) ? $translated[ $key ] : ( isset( $fallback[ $key ] ) ? $fallback[ $key ] : $key );
+	}
+
+	/**
 	 * Default capability catalog.
 	 *
 	 * @return array<string,array<string,mixed>>
@@ -51,63 +151,63 @@ final class NXTCC_Access_Control {
 	private static function default_capabilities(): array {
 		return array(
 			'nxtcc_access_dashboard'      => array(
-				'label'       => __( 'Dashboard', 'nxt-cloud-chat' ),
-				'description' => __( 'View tenant dashboard and connection overview.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'dashboard' ),
+				'description' => self::text( 'dashboard_desc' ),
 				'group'       => 'free',
 				'section'     => 'core',
 			),
 			'nxtcc_access_chat'           => array(
-				'label'       => __( 'Chat Window', 'nxt-cloud-chat' ),
-				'description' => __( 'Access the tenant chat inbox and send replies.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'chat_window' ),
+				'description' => self::text( 'chat_window_desc' ),
 				'group'       => 'free',
 				'section'     => 'messaging',
 			),
 			'nxtcc_view_contacts'         => array(
-				'label'       => __( 'View Contacts', 'nxt-cloud-chat' ),
-				'description' => __( 'Open the contacts screen and view tenant contacts.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'view_contacts' ),
+				'description' => self::text( 'view_contacts_desc' ),
 				'group'       => 'free',
 				'section'     => 'contacts',
 			),
 			'nxtcc_manage_contacts'       => array(
-				'label'       => __( 'Manage Contacts', 'nxt-cloud-chat' ),
-				'description' => __( 'Create, edit, import, export, and delete tenant contacts.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'manage_contacts' ),
+				'description' => self::text( 'manage_contacts_desc' ),
 				'group'       => 'free',
 				'section'     => 'contacts',
 			),
 			'nxtcc_view_groups'           => array(
-				'label'       => __( 'View Groups', 'nxt-cloud-chat' ),
-				'description' => __( 'Open the groups screen and view tenant groups.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'view_groups' ),
+				'description' => self::text( 'view_groups_desc' ),
 				'group'       => 'free',
 				'section'     => 'groups',
 			),
 			'nxtcc_manage_groups'         => array(
-				'label'       => __( 'Manage Groups', 'nxt-cloud-chat' ),
-				'description' => __( 'Create, edit, and delete tenant groups.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'manage_groups' ),
+				'description' => self::text( 'manage_groups_desc' ),
 				'group'       => 'free',
 				'section'     => 'groups',
 			),
 			'nxtcc_view_history'          => array(
-				'label'       => __( 'View History', 'nxt-cloud-chat' ),
-				'description' => __( 'View tenant message history.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'view_history' ),
+				'description' => self::text( 'view_history_desc' ),
 				'group'       => 'free',
 				'section'     => 'messaging',
 			),
 			'nxtcc_manage_authentication' => array(
-				'label'       => __( 'Authentication', 'nxt-cloud-chat' ),
-				'description' => __( 'Manage OTP/login settings for the tenant.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'authentication' ),
+				'description' => self::text( 'authentication_desc' ),
 				'group'       => 'free',
 				'section'     => 'authentication',
 			),
 			'nxtcc_manage_settings'       => array(
-				'label'       => __( 'Connection Settings', 'nxt-cloud-chat' ),
-				'description' => __( 'Manage tenant connection credentials and diagnostics.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'connection_settings' ),
+				'description' => self::text( 'connection_settings_desc' ),
 				'group'       => 'free',
 				'section'     => 'owner',
 				'owner_only'  => true,
 			),
 			'nxtcc_manage_team_access'    => array(
-				'label'       => __( 'Team Access', 'nxt-cloud-chat' ),
-				'description' => __( 'Manage tenant staff access and capabilities.', 'nxt-cloud-chat' ),
+				'label'       => self::text( 'team_access' ),
+				'description' => self::text( 'team_access_desc' ),
 				'group'       => 'free',
 				'section'     => 'owner',
 				'owner_only'  => true,
@@ -123,8 +223,8 @@ final class NXTCC_Access_Control {
 	private static function default_role_presets(): array {
 		return array(
 			'viewer'        => array(
-				'label'        => __( 'Viewer', 'nxt-cloud-chat' ),
-				'description'  => __( 'Can review tenant activity, contacts, groups, and history without editing records.', 'nxt-cloud-chat' ),
+				'label'        => self::text( 'viewer' ),
+				'description'  => self::text( 'viewer_desc' ),
 				'capabilities' => array(
 					'nxtcc_access_dashboard',
 					'nxtcc_view_contacts',
@@ -133,8 +233,8 @@ final class NXTCC_Access_Control {
 				),
 			),
 			'support_agent' => array(
-				'label'        => __( 'Support Agent', 'nxt-cloud-chat' ),
-				'description'  => __( 'Can work in the inbox and keep contact records up to date while handling tenant conversations.', 'nxt-cloud-chat' ),
+				'label'        => self::text( 'support_agent' ),
+				'description'  => self::text( 'support_agent_desc' ),
 				'capabilities' => array(
 					'nxtcc_access_dashboard',
 					'nxtcc_access_chat',
@@ -145,8 +245,8 @@ final class NXTCC_Access_Control {
 				),
 			),
 			'operator'      => array(
-				'label'        => __( 'Operator', 'nxt-cloud-chat' ),
-				'description'  => __( 'Can manage day-to-day tenant operations across contacts, groups, inbox activity, and authentication.', 'nxt-cloud-chat' ),
+				'label'        => self::text( 'operator' ),
+				'description'  => self::text( 'operator_desc' ),
 				'capabilities' => array(
 					'nxtcc_access_dashboard',
 					'nxtcc_access_chat',
@@ -169,17 +269,17 @@ final class NXTCC_Access_Control {
 	 */
 	private static function capability_section_label( string $section ): string {
 		$labels = array(
-			'core'           => __( 'Core', 'nxt-cloud-chat' ),
-			'messaging'      => __( 'Messaging', 'nxt-cloud-chat' ),
-			'contacts'       => __( 'Contacts', 'nxt-cloud-chat' ),
-			'groups'         => __( 'Groups', 'nxt-cloud-chat' ),
-			'authentication' => __( 'Authentication', 'nxt-cloud-chat' ),
-			'marketing'      => __( 'Pro Marketing', 'nxt-cloud-chat' ),
-			'automation'     => __( 'Pro Automation', 'nxt-cloud-chat' ),
-			'owner'          => __( 'Owner Only', 'nxt-cloud-chat' ),
+			'core'           => self::text( 'section_core' ),
+			'messaging'      => self::text( 'section_messaging' ),
+			'contacts'       => self::text( 'section_contacts' ),
+			'groups'         => self::text( 'section_groups' ),
+			'authentication' => self::text( 'section_authentication' ),
+			'marketing'      => self::text( 'section_marketing' ),
+			'automation'     => self::text( 'section_automation' ),
+			'owner'          => self::text( 'section_owner' ),
 		);
 
-		return isset( $labels[ $section ] ) ? $labels[ $section ] : __( 'General', 'nxt-cloud-chat' );
+		return isset( $labels[ $section ] ) ? $labels[ $section ] : self::text( 'section_general' );
 	}
 
 	/**
@@ -245,7 +345,7 @@ final class NXTCC_Access_Control {
 	 */
 	public static function register_team_role(): void {
 		$role_key   = self::TEAM_ROLE;
-		$role_label = __( 'NXT Cloud Chat Team', 'nxt-cloud-chat' );
+		$role_label = self::text( 'team_role' );
 		$role_caps  = array(
 			'read' => true,
 		);

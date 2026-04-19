@@ -137,8 +137,8 @@ final class NXTCC_Data_Cleanup {
 	 */
 	public static function register_core_targets( array $targets ): array {
 		$targets['message_activity'] = array(
-			'label'            => __( 'Message activity', 'nxt-cloud-chat' ),
-			'description'      => __( 'Sent, received, delivered, read, and failed message records.', 'nxt-cloud-chat' ),
+			'label'            => did_action( 'init' ) ? __( 'Message activity', 'nxt-cloud-chat' ) : 'Message activity',
+			'description'      => did_action( 'init' ) ? __( 'Sent, received, delivered, read, and failed message records.', 'nxt-cloud-chat' ) : 'Sent, received, delivered, read, and failed message records.',
 			'default_enabled'  => 0,
 			'default_days'     => 180,
 			'min_days'         => 1,

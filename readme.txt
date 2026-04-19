@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp cloud api, whatsapp business, whatsapp login, woocommer
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.3
+Stable tag: 1.0.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -271,6 +271,11 @@ Use this with care in production environments.
 11. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
 
 == Changelog ==
+
+= 1.0.4 =
+* Improved WordPress 6.7+ compatibility by refining translation-loading timing and cleanup catalog text handling.
+* Cleaned up i18n and PCP-related warnings in the Free plugin codebase for a more release-ready build.
+* Updated the dashboard upgrade call-to-action to point directly to the NXT Cloud Chat product page.
 
 = 1.0.3 =
 * Added Team Access management for tenant-owner controlled staff permissions inside the plugin.

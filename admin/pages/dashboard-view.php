@@ -28,11 +28,11 @@ $nxtcc_nonce = wp_create_nonce( 'nxtcc_dashboard' );
 $nxtcc_ajaxurl = admin_url( 'admin-ajax.php' );
 
 /**
- * Default upgrade URL used when the plugin header does not provide Author URI.
+ * Preferred product page for dashboard upgrade CTA.
  *
  * @var string
  */
-$nxtcc_default_author = 'https://nxtwebsite.com';
+$nxtcc_product_url = 'https://nxtwebsite.com/wordpress/nxt-cloud-chat/';
 
 /**
  * Absolute path to the main plugin file. Used to read header metadata.
@@ -42,18 +42,18 @@ $nxtcc_default_author = 'https://nxtwebsite.com';
 $nxtcc_plugin_file = trailingslashit( NXTCC_PLUGIN_DIR ) . 'nxt-cloud-chat.php';
 
 /**
- * Resolve the upgrade URL from plugin header data (Author URI).
- * Falls back to the default author URL if metadata is not available.
+ * Resolve the upgrade URL for the dashboard CTA.
+ * Falls back to the plugin Author URI only if the preferred URL is unavailable.
  *
  * @var string
  */
-$nxtcc_upgrade_url = $nxtcc_default_author;
+$nxtcc_upgrade_url = $nxtcc_product_url;
 $nxtcc_data        = array();
 
 if ( function_exists( 'get_plugin_data' ) && file_exists( $nxtcc_plugin_file ) ) {
 	$nxtcc_data = get_plugin_data( $nxtcc_plugin_file, false, false );
 
-	if ( ! empty( $nxtcc_data['AuthorURI'] ) ) {
+	if ( '' === esc_url_raw( $nxtcc_upgrade_url ) && ! empty( $nxtcc_data['AuthorURI'] ) ) {
 		$nxtcc_upgrade_url = esc_url_raw( $nxtcc_data['AuthorURI'] );
 	}
 }
