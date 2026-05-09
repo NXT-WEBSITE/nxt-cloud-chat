@@ -1,10 +1,10 @@
-﻿=== NXT Cloud Chat ===
+=== NXT Cloud Chat ===
 Contributors: nxtwebsite
 Tags: whatsapp, whatsapp cloud api, whatsapp business, whatsapp login, woocommerce
 Requires at least: 6.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 1.0.4
+Stable tag: 1.0.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,8 @@ If you need a WordPress WhatsApp plugin that combines WhatsApp Cloud API messagi
 NXT Cloud Chat also includes team access controls so a tenant owner can assign user roles and permissions for selected WordPress users who need access to WhatsApp chat, contacts, groups, history, settings, or authentication features.
 
 For stores and growing businesses, the optional Pro add-on extends NXT Cloud Chat with WooCommerce automations, workflow-based messaging, bulk WhatsApp campaigns, advanced template messaging, CTA buttons, and customer engagement flows.
+
+Free customer support is available for both Free plugin users and Pro users who need help with WhatsApp API setup, plugin configuration, troubleshooting, and general technical support for NXT Cloud Chat.
 
 Key goals:
 
@@ -121,6 +123,13 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 * Cleanup tools to control data-retention periods and safely remove old WhatsApp operational data when needed.
 * Team Access controls to let the tenant owner manage staff access by role and module permissions.
 
+= Customer Support & Setup Help =
+
+* Free customer support for both NXT Cloud Chat free plugin users and NXT Cloud Chat Pro users.
+* WhatsApp API setup support for connecting the plugin with the WhatsApp Cloud API and Meta app credentials.
+* Technical support for authentication setup, webhook configuration, templates, chat operations, and troubleshooting.
+* Direct access to setup guides, support resources, and support portal links from inside the plugin admin.
+
 = Available with the Optional Pro Add-on =
 
 * WooCommerce WhatsApp notifications for order created, order paid, and order status changes.
@@ -195,11 +204,11 @@ This works alongside the standard WordPress login screen and can also be used on
 
 == Support & Documentation ==
 
-For setup guides, usage instructions, and troubleshooting help, see:
+NXT Cloud Chat includes free customer support for both free plugin users and Pro users. If you need help with WhatsApp API setup, Meta app configuration, webhook verification, authentication setup, or general plugin troubleshooting, start with the official documentation below.
 
 User Guide & Documentation: https://nxtcloudchat.com/user-guide
 
-For support queries or feature requests, you can also use the plugin support section on WordPress.org.
+For support queries, technical help, or feature requests, you can also use the plugin support section on WordPress.org.
 
 == Frequently Asked Questions ==
 
@@ -258,9 +267,9 @@ Use this with care in production environments.
 
 == Screenshots ==
 
-1. Settings screen for WhatsApp Cloud API credentials and diagnostics.
-2. Dashboard interface.
-3. Chat Window management interface.
+1. Chat Window management interface.
+2. Settings screen for WhatsApp Cloud API credentials and diagnostics.
+3. Dashboard interface.
 4. Contacts management interface.
 5. Groups management interface.
 6. Login authentication management interface.
@@ -271,6 +280,10 @@ Use this with care in production environments.
 11. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
 
 == Changelog ==
+
+= 1.0.5 =
+* Added a floating Support Portal badge across eligible NXT Cloud Chat admin pages in Free and Pro contexts.
+* Improved the support badge UX with expandable and icon-only collapsed states.
 
 = 1.0.4 =
 * Improved WordPress 6.7+ compatibility by refining translation-loading timing and cleanup catalog text handling.

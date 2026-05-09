@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       Integrates WhatsApp Cloud API with WordPress to enable real-time messaging, automated notifications, customer communication, contact management, and secure WhatsApp-based user authentication and login.
- * Version:           1.0.4
+ * Version:           1.0.5
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.0.4' );
+	define( 'NXTCC_VERSION', '1.0.5' );
 }
 
 /**
@@ -311,8 +311,161 @@ function nxtcc_admin_global_assets( string $hook ): void {
 			true
 		);
 	}
+
+	$nxtcc_support_context = nxtcc_support_badge_context( $hook );
+	if ( null !== $nxtcc_support_context ) {
+		wp_enqueue_style( 'dashicons' );
+		wp_enqueue_style(
+			'nxtcc-support-badge',
+			NXTCC_PLUGIN_URL . 'admin/assets/css/support-badge.css',
+			array(),
+			NXTCC_VERSION
+		);
+		wp_enqueue_script(
+			'nxtcc-support-badge',
+			NXTCC_PLUGIN_URL . 'admin/assets/js/support-badge.js',
+			array( 'jquery' ),
+			NXTCC_VERSION,
+			true
+		);
+	}
 }
 add_action( 'admin_enqueue_scripts', 'nxtcc_admin_global_assets' );
+
+/**
+ * Normalize the current site domain for support portal referral tracking.
+ *
+ * @return string
+ */
+function nxtcc_support_badge_source_domain(): string {
+	$host = wp_parse_url( home_url(), PHP_URL_HOST );
+	if ( ! is_string( $host ) || '' === trim( $host ) ) {
+		return '';
+	}
+
+	return strtolower( trim( $host ) );
+}
+
+/**
+ * Determine support badge context for the current admin page.
+ *
+ * @param string $hook Current admin page hook suffix.
+ * @return array<string,string>|null
+ */
+function nxtcc_support_badge_context( string $hook = '' ): ?array {
+	if ( ! is_admin() ) {
+		return null;
+	}
+
+	$page_raw = filter_input( INPUT_GET, 'page', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	$page     = is_string( $page_raw ) ? sanitize_key( $page_raw ) : '';
+
+	$allowed_pages = array(
+		'nxt-cloud-chat',
+		'nxtcc-chat-window',
+		'nxtcc-contacts',
+		'nxtcc-groups',
+		'nxtcc-history',
+		'nxtcc-authentication',
+		'nxtcc-settings',
+		'nxtcc-upgrade',
+		'nxtcc-templates',
+		'nxtcc-broadcast',
+		'nxtcc-workflows',
+		'nxtcc-workflow-runs',
+		'nxtcc-license',
+	);
+
+	$allowed_pages = apply_filters( 'nxtcc_support_badge_allowed_pages', $allowed_pages );
+	if ( ! is_array( $allowed_pages ) ) {
+		$allowed_pages = array();
+	}
+
+	if ( '' === $page || ! in_array( $page, $allowed_pages, true ) ) {
+		return null;
+	}
+
+	$product_slug = 'nxt-cloud-chat';
+	$version      = defined( 'NXTCC_VERSION' ) ? (string) NXTCC_VERSION : '';
+	$pro_pages    = array(
+		'nxtcc-templates',
+		'nxtcc-broadcast',
+		'nxtcc-workflows',
+		'nxtcc-workflow-runs',
+		'nxtcc-license',
+	);
+
+	if ( in_array( $page, $pro_pages, true ) && defined( 'NXTCC_PRO_VERSION' ) ) {
+		$product_slug = 'nxt-cloud-chat-pro';
+		$version      = (string) NXTCC_PRO_VERSION;
+	}
+
+	$context = array(
+		'hook'         => $hook,
+		'page_slug'    => $page,
+		'product_slug' => $product_slug,
+		'version'      => $version,
+		'domain'       => nxtcc_support_badge_source_domain(),
+	);
+
+	$context = apply_filters( 'nxtcc_support_badge_context', $context, $hook, $page );
+	if ( ! is_array( $context ) ) {
+		return null;
+	}
+
+	$enabled = apply_filters( 'nxtcc_support_badge_enabled', true, $context, $hook, $page );
+
+	return $enabled ? $context : null;
+}
+
+/**
+ * Build the dynamic support portal URL.
+ *
+ * @param array<string,string> $context Badge context.
+ * @return string
+ */
+function nxtcc_support_badge_url( array $context ): string {
+	$base_url = apply_filters( 'nxtcc_support_badge_portal_url', 'https://nxtwebsite.com/support-portal/', $context );
+	$base_url = is_string( $base_url ) ? trim( $base_url ) : '';
+	if ( '' === $base_url ) {
+		return '';
+	}
+
+	$url = add_query_arg(
+		array(
+			'sd' => $context['domain'] ?? '',
+			'ps' => $context['product_slug'] ?? '',
+			'sp' => $context['page_slug'] ?? '',
+			'pv' => $context['version'] ?? '',
+		),
+		$base_url
+	);
+
+	return (string) apply_filters( 'nxtcc_support_badge_url', $url, $context );
+}
+
+/**
+ * Render the floating support badge on eligible NXT Cloud Chat admin pages.
+ *
+ * @return void
+ */
+function nxtcc_render_support_badge(): void {
+	$context = nxtcc_support_badge_context();
+	if ( null === $context ) {
+		return;
+	}
+
+	$support_url = nxtcc_support_badge_url( $context );
+	if ( '' === $support_url ) {
+		return;
+	}
+
+	$badge_view = NXTCC_PLUGIN_DIR . 'admin/pages/support-badge.php';
+	if ( file_exists( $badge_view ) ) {
+		require $badge_view;
+	}
+}
+add_action( 'admin_footer', 'nxtcc_render_support_badge' );
 
 /**
  * Contacts screen assets.
