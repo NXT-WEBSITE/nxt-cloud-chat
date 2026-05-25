@@ -2,9 +2,9 @@
 Contributors: nxtwebsite
 Tags: whatsapp, whatsapp cloud api, whatsapp business, whatsapp login, woocommerce
 Requires at least: 6.0
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.5
+Stable tag: 1.0.6
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -280,6 +280,9 @@ Use this with care in production environments.
 11. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
 
 == Changelog ==
+
+= 1.0.6 =
+* Officially tested and validated compatibility with WordPress 7.0.
 
 = 1.0.5 =
 * Added a floating Support Portal badge across eligible NXT Cloud Chat admin pages in Free and Pro contexts.
