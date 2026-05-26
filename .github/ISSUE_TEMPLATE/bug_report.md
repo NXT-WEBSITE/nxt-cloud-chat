@@ -1,7 +1,7 @@
 ---
 name: Bug report
 about: Report reproducible bugs and technical issues
-title: "[BUG]"
+title: "[BUG] Short description"
 labels: bug
 assignees: parashuramuc
 type: Bug
