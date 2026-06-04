@@ -36,5 +36,29 @@
 	color: #2bb24c !important;
 }
 
+#adminmenu .nxtcc-menu-pro-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 22px;
+	height: 14px;
+	margin-left: 5px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: #2bb24c;
+	color: #ffffff;
+	font-size: 9px;
+	font-weight: 700;
+	line-height: 14px;
+	text-transform: uppercase;
+	vertical-align: middle;
+	box-sizing: border-box;
+}
 
+#adminmenu a:hover .nxtcc-menu-pro-badge,
+#adminmenu a:focus .nxtcc-menu-pro-badge,
+#adminmenu .current .nxtcc-menu-pro-badge {
+	background: #ffffff;
+	color: #2bb24c;
+}
 

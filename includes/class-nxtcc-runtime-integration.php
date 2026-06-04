@@ -442,6 +442,223 @@ final class NXTCC_Runtime_Integration {
 	}
 
 	/**
+	 * Create or update a contact for an external integration.
+	 *
+	 * This wrapper is intentionally generic so add-ons and future platform
+	 * integrations can write contacts through one Free-owned runtime surface.
+	 *
+	 * @param array<string, mixed> $args Contact payload.
+	 * @return array<string, mixed>
+	 */
+	public static function upsert_contact_for_integration( array $args ): array {
+		$user_mailid         = isset( $args['user_mailid'] ) ? sanitize_email( (string) $args['user_mailid'] ) : '';
+		$business_account_id = isset( $args['business_account_id'] ) ? sanitize_text_field( (string) $args['business_account_id'] ) : '';
+		$phone_number_id     = isset( $args['phone_number_id'] ) ? sanitize_text_field( (string) $args['phone_number_id'] ) : '';
+		$raw_phone           = isset( $args['phone_number'] ) ? (string) $args['phone_number'] : ( isset( $args['phone'] ) ? (string) $args['phone'] : '' );
+		$phone_number        = self::normalize_phone( $raw_phone );
+		$country_code        = isset( $args['country_code'] ) ? self::normalize_phone( (string) $args['country_code'] ) : '';
+		$wp_user_id          = isset( $args['wp_user_id'] ) ? absint( $args['wp_user_id'] ) : ( isset( $args['wp_uid'] ) ? absint( $args['wp_uid'] ) : 0 );
+		$name                = isset( $args['name'] ) ? sanitize_text_field( (string) $args['name'] ) : '';
+		$email               = isset( $args['email'] ) ? sanitize_email( (string) $args['email'] ) : '';
+		$source              = isset( $args['source'] ) ? sanitize_key( (string) $args['source'] ) : 'integration';
+		$external_id         = isset( $args['external_id'] ) ? sanitize_text_field( (string) $args['external_id'] ) : '';
+		$metadata            = isset( $args['metadata'] ) && is_array( $args['metadata'] ) ? self::sanitize_metadata_value( $args['metadata'] ) : array();
+		$allow_resubscribe   = ! empty( $args['allow_resubscribe'] );
+		$now                 = current_time( 'mysql', true );
+
+		if ( '' === $source ) {
+			$source = 'integration';
+		}
+
+		if ( '' === $user_mailid || '' === $business_account_id || '' === $phone_number_id ) {
+			return array(
+				'success' => false,
+				'error'   => 'missing_tenant',
+			);
+		}
+
+		list( $country_code, $local_phone ) = self::split_contact_phone( $phone_number, $country_code );
+		if ( '' === $local_phone ) {
+			return array(
+				'success' => false,
+				'error'   => 'invalid_phone_number',
+			);
+		}
+
+		$db           = NXTCC_DB::i();
+		$contacts_sql = self::quote_table( $db->t_contacts() );
+		$phone_e164   = self::normalize_phone( $country_code . $local_phone );
+		$existing     = self::get_contact_by_phone( $phone_e164, $user_mailid, $business_account_id, $phone_number_id );
+
+		if ( ! is_array( $existing ) && $wp_user_id > 0 ) {
+			$existing = self::get_contact_by_wp_user( $wp_user_id, $user_mailid, $business_account_id, $phone_number_id );
+		}
+
+		$integration_fields = self::build_integration_custom_fields(
+			$source,
+			$external_id,
+			$email,
+			$metadata,
+			$now
+		);
+
+		if ( is_array( $existing ) ) {
+			$contact_id    = isset( $existing['id'] ) ? absint( $existing['id'] ) : 0;
+			$custom_fields = self::merge_contact_custom_fields(
+				isset( $existing['custom_fields'] ) ? $existing['custom_fields'] : '',
+				$integration_fields
+			);
+			$update        = array(
+				'custom_fields' => $custom_fields,
+				'updated_at'    => $now,
+			);
+
+			if ( '' !== $name && ( empty( $existing['name'] ) || $name !== (string) $existing['name'] ) ) {
+				$update['name'] = $name;
+			}
+
+			$existing_wp_uid = isset( $existing['wp_uid'] ) ? absint( $existing['wp_uid'] ) : 0;
+			if ( $wp_user_id > 0 && ( 0 === $existing_wp_uid || $wp_user_id === $existing_wp_uid ) ) {
+				$update['wp_uid'] = $wp_user_id;
+			}
+
+			if ( array_key_exists( 'is_subscribed', $args ) ) {
+				$requested_subscribed = ! empty( $args['is_subscribed'] ) ? 1 : 0;
+				$current_subscribed   = ! empty( $existing['is_subscribed'] ) ? 1 : 0;
+
+				if ( 0 === $requested_subscribed ) {
+					$update['is_subscribed']       = 0;
+					$update['unsubscribed_at']     = ! empty( $existing['unsubscribed_at'] ) ? $existing['unsubscribed_at'] : $now;
+					$update['unsubscribed_reason'] = 'integration';
+				} elseif ( $allow_resubscribe || 1 === $current_subscribed ) {
+					$update['is_subscribed']       = 1;
+					$update['unsubscribed_at']     = null;
+					$update['unsubscribed_reason'] = null;
+				}
+			}
+
+			$updated = $db->update(
+				$db->t_contacts(),
+				$update,
+				array(
+					'id'                  => $contact_id,
+					'user_mailid'         => $user_mailid,
+					'business_account_id' => $business_account_id,
+					'phone_number_id'     => $phone_number_id,
+				)
+			);
+
+			if ( ! $updated ) {
+				$contact = self::read_contact_by_id( $contact_id, $user_mailid, $business_account_id, $phone_number_id );
+				if ( ! is_array( $contact ) ) {
+					return array(
+						'success' => false,
+						'error'   => 'contact_update_failed',
+					);
+				}
+
+				$result = array(
+					'success'       => true,
+					'contact_id'    => $contact_id,
+					'created'       => false,
+					'updated'       => false,
+					'is_subscribed' => ! empty( $contact['is_subscribed'] ) ? 1 : 0,
+					'contact'       => $contact,
+				);
+
+				do_action( 'nxtcc_contact_upserted_for_integration', $result, $args );
+
+				return $result;
+			}
+
+			self::flush_contact_runtime_cache( $existing );
+			$contact = self::read_contact_by_id( $contact_id, $user_mailid, $business_account_id, $phone_number_id );
+
+			$result = array(
+				'success'       => true,
+				'contact_id'    => $contact_id,
+				'created'       => false,
+				'updated'       => true,
+				'is_subscribed' => is_array( $contact ) && ! empty( $contact['is_subscribed'] ) ? 1 : 0,
+				'contact'       => is_array( $contact ) ? $contact : array(),
+			);
+
+			do_action( 'nxtcc_contact_upserted_for_integration', $result, $args );
+
+			return $result;
+		}
+
+		$is_subscribed = array_key_exists( 'is_subscribed', $args ) ? ( ! empty( $args['is_subscribed'] ) ? 1 : 0 ) : 1;
+		$custom_json   = wp_json_encode( $integration_fields );
+		$row           = array(
+			'user_mailid'         => $user_mailid,
+			'wp_uid'              => $wp_user_id > 0 ? $wp_user_id : null,
+			'business_account_id' => $business_account_id,
+			'phone_number_id'     => $phone_number_id,
+			'country_code'        => $country_code,
+			'phone_number'        => $local_phone,
+			'name'                => '' !== $name ? $name : null,
+			'is_verified'         => 0,
+			'is_subscribed'       => $is_subscribed,
+			'unsubscribed_at'     => 1 === $is_subscribed ? null : $now,
+			'unsubscribed_reason' => 1 === $is_subscribed ? null : 'integration',
+			'custom_fields'       => is_string( $custom_json ) ? $custom_json : '{}',
+			'created_by'          => get_current_user_id() > 0 ? get_current_user_id() : null,
+			'updated_by'          => get_current_user_id() > 0 ? get_current_user_id() : null,
+			'created_at'          => $now,
+			'updated_at'          => $now,
+		);
+		$inserted      = $db->insert( $db->t_contacts(), $row );
+		$contact_id    = $inserted ? $db->insert_id() : 0;
+
+		if ( $contact_id <= 0 ) {
+			$duplicate = self::read_contact_by_exact_phone(
+				$user_mailid,
+				$business_account_id,
+				$phone_number_id,
+				$country_code,
+				$local_phone
+			);
+
+			if ( is_array( $duplicate ) && ! empty( $duplicate['id'] ) ) {
+				self::flush_contact_runtime_cache( $duplicate );
+
+				return self::upsert_contact_for_integration(
+					array_merge(
+						$args,
+						array(
+							'allow_resubscribe' => false,
+						)
+					)
+				);
+			}
+
+			return array(
+				'success' => false,
+				'error'   => 'contact_insert_failed',
+			);
+		}
+
+		$contact = self::read_contact_by_id( $contact_id, $user_mailid, $business_account_id, $phone_number_id );
+		if ( is_array( $contact ) ) {
+			self::flush_contact_runtime_cache( $contact );
+		}
+
+		$result = array(
+			'success'       => true,
+			'contact_id'    => $contact_id,
+			'created'       => true,
+			'updated'       => false,
+			'is_subscribed' => $is_subscribed,
+			'contact'       => is_array( $contact ) ? $contact : array(),
+		);
+
+		do_action( 'nxtcc_contact_upserted_for_integration', $result, $args );
+
+		return $result;
+	}
+
+	/**
 	 * Flush known runtime contact cache keys after a contact write.
 	 *
 	 * @param array<string, mixed> $row Contact row.
@@ -472,6 +689,188 @@ final class NXTCC_Runtime_Integration {
 			wp_cache_delete( self::cache_key( 'contact_wp_user', array( $wp_uid, '', '', '' ) ), self::CACHE_GROUP );
 			wp_cache_delete( self::cache_key( 'contact_wp_user', array( $wp_uid, $user_mailid, $business_account_id, $phone_number_id ) ), self::CACHE_GROUP );
 		}
+	}
+
+	/**
+	 * Split a phone number into stored country/local columns.
+	 *
+	 * @param string $phone_number Normalized full phone digits.
+	 * @param string $country_code Optional normalized country code.
+	 * @return array{0:string,1:string}
+	 */
+	private static function split_contact_phone( string $phone_number, string $country_code ): array {
+		if ( '' === $phone_number ) {
+			return array( '', '' );
+		}
+
+		if ( '' === $country_code ) {
+			return array( '', substr( $phone_number, 0, 30 ) );
+		}
+
+		$local_phone = $phone_number;
+		if ( 0 === strpos( $phone_number, $country_code ) ) {
+			$local_phone = substr( $phone_number, strlen( $country_code ) );
+		}
+
+		return array(
+			substr( $country_code, 0, 10 ),
+			substr( self::normalize_phone( $local_phone ), 0, 30 ),
+		);
+	}
+
+	/**
+	 * Read one contact by id using tenant guards.
+	 *
+	 * @param int    $contact_id          Contact id.
+	 * @param string $user_mailid         Tenant owner email.
+	 * @param string $business_account_id Business account id.
+	 * @param string $phone_number_id     Phone number id.
+	 * @return array<string, mixed>|null
+	 */
+	private static function read_contact_by_id( int $contact_id, string $user_mailid, string $business_account_id, string $phone_number_id ): ?array {
+		$contact_id = absint( $contact_id );
+		if ( $contact_id <= 0 ) {
+			return null;
+		}
+
+		$db           = NXTCC_DB::i();
+		$contacts_sql = self::quote_table( $db->t_contacts() );
+		$row          = $db->get_row(
+			'SELECT *
+			 FROM ' . $contacts_sql . '
+			 WHERE id = %d
+			   AND user_mailid = %s
+			   AND business_account_id = %s
+			   AND phone_number_id = %s
+			 LIMIT 1',
+			array( $contact_id, $user_mailid, $business_account_id, $phone_number_id ),
+			ARRAY_A
+		);
+
+		return is_array( $row ) ? $row : null;
+	}
+
+	/**
+	 * Read one contact by the table's unique phone tuple.
+	 *
+	 * @param string $user_mailid         Tenant owner email.
+	 * @param string $business_account_id Business account id.
+	 * @param string $phone_number_id     Phone number id.
+	 * @param string $country_code        Stored country code.
+	 * @param string $phone_number        Stored phone number.
+	 * @return array<string, mixed>|null
+	 */
+	private static function read_contact_by_exact_phone(
+		string $user_mailid,
+		string $business_account_id,
+		string $phone_number_id,
+		string $country_code,
+		string $phone_number
+	): ?array {
+		$db           = NXTCC_DB::i();
+		$contacts_sql = self::quote_table( $db->t_contacts() );
+		$row          = $db->get_row(
+			'SELECT *
+			 FROM ' . $contacts_sql . '
+			 WHERE user_mailid = %s
+			   AND business_account_id = %s
+			   AND phone_number_id = %s
+			   AND country_code = %s
+			   AND phone_number = %s
+			 LIMIT 1',
+			array( $user_mailid, $business_account_id, $phone_number_id, $country_code, $phone_number ),
+			ARRAY_A
+		);
+
+		return is_array( $row ) ? $row : null;
+	}
+
+	/**
+	 * Build custom field payload for integration writes.
+	 *
+	 * @param string               $source      Integration source.
+	 * @param string               $external_id External source id.
+	 * @param string               $email       Contact email.
+	 * @param array<string, mixed> $metadata    Sanitized metadata.
+	 * @param string               $now         Current UTC time.
+	 * @return array<string, mixed>
+	 */
+	private static function build_integration_custom_fields( string $source, string $external_id, string $email, array $metadata, string $now ): array {
+		$payload = array(
+			'integration_source'  => $source,
+			'integration_seen_at' => $now,
+		);
+
+		if ( '' !== $external_id ) {
+			$payload['integration_external_id'] = substr( $external_id, 0, 191 );
+		}
+
+		if ( '' !== $email ) {
+			$payload['email'] = $email;
+		}
+
+		if ( ! empty( $metadata ) ) {
+			$payload['integration_metadata'] = $metadata;
+		}
+
+		return $payload;
+	}
+
+	/**
+	 * Merge integration custom fields into an existing JSON payload.
+	 *
+	 * @param mixed                $stored      Stored custom fields.
+	 * @param array<string, mixed> $integration Integration fields.
+	 * @return string
+	 */
+	private static function merge_contact_custom_fields( $stored, array $integration ): string {
+		$current = array();
+		if ( is_string( $stored ) && '' !== trim( $stored ) ) {
+			$decoded = json_decode( $stored, true );
+			if ( is_array( $decoded ) ) {
+				$current = self::sanitize_metadata_value( $decoded );
+			}
+		} elseif ( is_array( $stored ) ) {
+			$current = self::sanitize_metadata_value( $stored );
+		}
+
+		$merged = array_merge( $current, $integration );
+		$json   = wp_json_encode( $merged );
+
+		return is_string( $json ) ? $json : '{}';
+	}
+
+	/**
+	 * Sanitize scalar or nested metadata values for JSON storage.
+	 *
+	 * @param mixed $value Raw metadata value.
+	 * @param int   $depth Nesting depth.
+	 * @return mixed
+	 */
+	private static function sanitize_metadata_value( $value, int $depth = 0 ) {
+		if ( $depth > 4 ) {
+			return null;
+		}
+
+		if ( is_array( $value ) ) {
+			$clean = array();
+			foreach ( $value as $key => $child ) {
+				$clean_key = is_string( $key ) ? sanitize_key( $key ) : (string) absint( $key );
+				if ( '' === $clean_key ) {
+					continue;
+				}
+
+				$clean[ $clean_key ] = self::sanitize_metadata_value( $child, $depth + 1 );
+			}
+
+			return $clean;
+		}
+
+		if ( is_bool( $value ) || is_int( $value ) || is_float( $value ) || null === $value ) {
+			return $value;
+		}
+
+		return sanitize_text_field( (string) $value );
 	}
 
 	/**

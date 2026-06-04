@@ -369,6 +369,8 @@ if ( ! function_exists( 'nxtcc__wipe_site_data' ) ) {
 			$site_prefix . 'nxtcc_workflow_events',
 			$site_prefix . 'nxtcc_workflow_runs',
 			$site_prefix . 'nxtcc_workflow_run_steps',
+			$site_prefix . 'nxtcc_abandoned_cart_events',
+			$site_prefix . 'nxtcc_abandoned_carts',
 		);
 
 		$tables_free = array(

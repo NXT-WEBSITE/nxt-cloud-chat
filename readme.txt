@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp cloud api, whatsapp business, whatsapp login, woocommer
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.7
+Stable tag: 1.0.8
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,7 +20,7 @@ If you need a WordPress WhatsApp plugin that combines WhatsApp Cloud API messagi
 
 NXT Cloud Chat also includes team access controls so a tenant owner can assign user roles and permissions for selected WordPress users who need access to WhatsApp chat, contacts, groups, history, settings, or authentication features.
 
-For stores and growing businesses, the optional Pro add-on extends NXT Cloud Chat with WooCommerce automations, workflow-based messaging, bulk WhatsApp campaigns, advanced template messaging, CTA buttons, and customer engagement flows.
+For stores and growing businesses, the optional Pro add-on extends NXT Cloud Chat with WooCommerce automations, abandoned cart recovery, workflow-based messaging, bulk WhatsApp campaigns, advanced template messaging, CTA buttons, and customer engagement flows.
 
 Free customer support is available for both Free plugin users and Pro users who need help with WhatsApp API setup, plugin configuration, troubleshooting, and general technical support for NXT Cloud Chat.
 
@@ -84,6 +84,7 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 * Store WhatsApp contacts with phone, country, name, and custom fields.
 * Track subscription status and unsubscribe reasons.
 * Keep subscription status changes tenant-scoped through the shared contact runtime used by compatible add-ons.
+* Provide a shared contact upsert wrapper for compatible integrations that need to create or update tenant contacts safely.
 * Organize contacts into groups for easier targeting, such as leads, members, or customers.
 * Use group-based organization to support better WhatsApp messaging workflows inside WordPress.
 * Assign team access inside the plugin so selected WordPress users can work with WhatsApp data based on the permissions granted by the tenant owner.
@@ -115,6 +116,11 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
   * Chat Window
   * Contacts
   * Groups
+  * Templates (Pro)
+  * Send Broadcasts (Pro)
+  * Abandoned Carts (Pro)
+  * Workflows (Pro)
+  * Workflow Runs (Pro)
   * History
   * Authentication (WhatsApp login settings)
   * Settings (Cloud API credentials and diagnostics)
@@ -134,7 +140,10 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 = Available with the Optional Pro Add-on =
 
 * WooCommerce WhatsApp notifications for order created, order paid, and order status changes.
+* WooCommerce abandoned cart recovery with cart tracking, stale-cart analytics, cart table, retention settings, and cleanup controls.
 * Workflow automation builder for incoming messages, user login events, and WooCommerce triggers.
+* Workflow abandoned-cart trigger with cart context for recovery flows.
+* Workflow condition for checking contact subscription status before sending selected messages.
 * Workflow actions for updating contact subscription status.
 * Bulk WhatsApp messaging and broadcast campaigns for promotions, updates, and follow-ups.
 * Advanced template messaging with image headers, CTA buttons, coupon codes, and dynamic placeholders.
@@ -242,9 +251,9 @@ Yes. The recommended method is to create a page and place the `[nxtcc_login_what
 
 Yes. You can enable a WhatsApp login button on the WooCommerce My Account login form, and you can also enable the same style of button on the default WordPress login page.
 
-=== Are WooCommerce automations, workflows, template CTA buttons, and bulk messaging available? ===
+=== Are WooCommerce automations, abandoned cart recovery, workflows, template CTA buttons, and bulk messaging available? ===
 
-Yes. Those advanced capabilities are available through the optional `NXT Cloud Chat Pro` add-on. Pro is designed for stores and businesses that need WooCommerce notifications, WhatsApp workflows, advanced template campaigns, and bulk broadcast messaging from WordPress.
+Yes. Those advanced capabilities are available through the optional `NXT Cloud Chat Pro` add-on. Pro is designed for stores and businesses that need WooCommerce notifications, abandoned cart recovery, WhatsApp workflows, advanced template campaigns, and bulk broadcast messaging from WordPress.
 
 === Can I assign different user roles and permissions for staff users? ===
 
@@ -279,9 +288,16 @@ Use this with care in production environments.
 8. WhatsApp login buttons for the default WordPress login page and WooCommerce My Account login page.
 9. Template management interface for creating and managing WhatsApp message templates (Pro).
 10. Bulk WhatsApp messaging and campaign screen for sending messages to multiple contacts (Pro).
-11. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
+11. Abandoned cart recovery table and analytics screen for WooCommerce carts (Pro).
+12. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
 
 == Changelog ==
+
+= 1.0.8 =
+* Added a shared contact upsert runtime wrapper for compatible integrations and add-ons.
+* Added the contact integration writer capability to the Free runtime contract.
+* Added Pro feature menu entries with compact Pro badges that open the existing upgrade page when Pro is not installed or the Pro license is inactive.
+* Updated Free plugin documentation for Pro abandoned cart recovery, workflow subscription-status checks, and Pro upgrade entry points.
 
 = 1.0.7 =
 * Added a shared runtime wrapper so compatible add-ons can update contact subscription status safely.

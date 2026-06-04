@@ -106,6 +106,7 @@ if ( function_exists( 'get_plugin_data' ) && file_exists( $nxtcc_plugin_file ) )
 					<li><?php esc_html_e( 'Bulk WhatsApp messaging', 'nxt-cloud-chat' ); ?></li>
 					<li><?php esc_html_e( 'Templates management', 'nxt-cloud-chat' ); ?></li>
 					<li><?php esc_html_e( 'WooCommerce integration & Workflows', 'nxt-cloud-chat' ); ?></li>
+					<li><?php esc_html_e( 'WooCommerce Abandoned cart recovery', 'nxt-cloud-chat' ); ?></li>
 					<li><?php esc_html_e( 'Advanced dashboard & reports', 'nxt-cloud-chat' ); ?></li>
 				</ul>
 

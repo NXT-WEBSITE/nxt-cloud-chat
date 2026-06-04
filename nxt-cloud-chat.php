@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat - Business Inbox, Login & Contact Management
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       Integrates WhatsApp Cloud API with WordPress to enable real-time messaging, automated notifications, customer communication, contact management, and secure WhatsApp-based user authentication and login.
- * Version:           1.0.7
+ * Version:           1.0.8
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.0.7' );
+	define( 'NXTCC_VERSION', '1.0.8' );
 }
 
 /**
@@ -282,6 +282,49 @@ function nxtcc_enqueue_fontawesome(): void {
 }
 
 /**
+ * Admin page slugs that can render the upgrade app view.
+ *
+ * @return string[]
+ */
+function nxtcc_admin_upgrade_app_page_slugs(): array {
+	return array(
+		'nxtcc-upgrade',
+		'nxtcc-templates',
+		'nxtcc-broadcast',
+		'nxtcc-abandoned-carts',
+		'nxtcc-workflows',
+		'nxtcc-workflow-runs',
+	);
+}
+
+/**
+ * Decide whether the app upgrade assets should load for the current page.
+ *
+ * @param string $page Current admin page slug.
+ * @param string $hook Current admin page hook suffix.
+ * @return bool
+ */
+function nxtcc_admin_should_enqueue_upgrade_app_assets( string $page, string $hook ): bool {
+	if ( false !== strpos( $hook, 'nxtcc-upgrade' ) || 'nxtcc-upgrade' === $page ) {
+		return true;
+	}
+
+	if ( ! in_array( $page, nxtcc_admin_upgrade_app_page_slugs(), true ) ) {
+		return false;
+	}
+
+	if ( function_exists( 'nxtcc_pro_dashboard_is_licensed' ) ) {
+		return ! nxtcc_pro_dashboard_is_licensed();
+	}
+
+	if ( function_exists( 'nxtcc_pro_runtime_is_licensed' ) ) {
+		return ! nxtcc_pro_runtime_is_licensed();
+	}
+
+	return true;
+}
+
+/**
  * Enqueue admin-wide assets used by the plugin menu and specific pages.
  *
  * @param string $hook Current admin page hook suffix.
@@ -295,7 +338,10 @@ function nxtcc_admin_global_assets( string $hook ): void {
 		NXTCC_VERSION
 	);
 
-	if ( false !== strpos( $hook, 'nxtcc-upgrade' ) ) {
+	$page_raw = filter_input( INPUT_GET, 'page', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	$page     = is_string( $page_raw ) ? sanitize_key( $page_raw ) : '';
+
+	if ( nxtcc_admin_should_enqueue_upgrade_app_assets( $page, $hook ) ) {
 		wp_enqueue_style(
 			'nxtcc-apps',
 			NXTCC_PLUGIN_URL . 'admin/assets/css/apps.css',
@@ -371,6 +417,7 @@ function nxtcc_support_badge_context( string $hook = '' ): ?array {
 		'nxtcc-upgrade',
 		'nxtcc-templates',
 		'nxtcc-broadcast',
+		'nxtcc-abandoned-carts',
 		'nxtcc-workflows',
 		'nxtcc-workflow-runs',
 		'nxtcc-license',
@@ -390,6 +437,7 @@ function nxtcc_support_badge_context( string $hook = '' ): ?array {
 	$pro_pages    = array(
 		'nxtcc-templates',
 		'nxtcc-broadcast',
+		'nxtcc-abandoned-carts',
 		'nxtcc-workflows',
 		'nxtcc-workflow-runs',
 		'nxtcc-license',

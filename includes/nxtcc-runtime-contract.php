@@ -78,6 +78,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'contact_wp_user_reader'              => function_exists( 'nxtcc_get_contact_by_wp_user' ),
 				'contact_group_reader'                => function_exists( 'nxtcc_get_contact_groups_by_id' ),
 				'contact_subscription_writer'         => function_exists( 'nxtcc_update_contact_subscription_status' ),
+				'contact_integration_writer'          => function_exists( 'nxtcc_upsert_contact_for_integration' ),
 				'latest_inbound_reader'               => function_exists( 'nxtcc_get_latest_inbound_at' ),
 				'verified_phone_reader'               => function_exists( 'nxtcc_get_latest_verified_phone_for_user' ),
 			),
@@ -103,6 +104,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'nxtcc_get_contact_by_wp_user',
 				'nxtcc_get_contact_groups_by_id',
 				'nxtcc_update_contact_subscription_status',
+				'nxtcc_upsert_contact_for_integration',
 				'nxtcc_get_latest_inbound_at',
 				'nxtcc_get_latest_verified_phone_for_user',
 			),
@@ -504,6 +506,33 @@ if ( ! function_exists( 'nxtcc_update_contact_subscription_status' ) ) {
 	 */
 	function nxtcc_update_contact_subscription_status( array $args ): array {
 		return NXTCC_Runtime_Integration::update_contact_subscription_status( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_upsert_contact_for_integration' ) ) {
+	/**
+	 * Create or update a contact through the stable runtime integration wrapper.
+	 *
+	 * Supported args:
+	 * - user_mailid
+	 * - business_account_id
+	 * - phone_number_id
+	 * - phone_number
+	 * - country_code
+	 * - wp_user_id
+	 * - name
+	 * - email
+	 * - source
+	 * - external_id
+	 * - metadata
+	 * - is_subscribed
+	 * - allow_resubscribe
+	 *
+	 * @param array $args Contact payload.
+	 * @return array<string, mixed>
+	 */
+	function nxtcc_upsert_contact_for_integration( array $args ): array {
+		return NXTCC_Runtime_Integration::upsert_contact_for_integration( $args );
 	}
 }
 

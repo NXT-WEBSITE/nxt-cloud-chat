@@ -84,6 +84,52 @@ function nxtcc_register_admin_menu(): void {
 		'nxtcc_render_groups_page'
 	);
 
+	// Pro feature placeholders. The Pro add-on replaces these when licensed.
+	add_submenu_page(
+		$parent_slug,
+		__( 'Templates', 'nxt-cloud-chat' ),
+		nxtcc_menu_pro_badge_label( __( 'Templates', 'nxt-cloud-chat' ) ),
+		$capability,
+		'nxtcc-templates',
+		'nxtcc_render_upgrade_page'
+	);
+
+	add_submenu_page(
+		$parent_slug,
+		__( 'Send Broadcasts', 'nxt-cloud-chat' ),
+		nxtcc_menu_pro_badge_label( __( 'Send Broadcasts', 'nxt-cloud-chat' ) ),
+		$capability,
+		'nxtcc-broadcast',
+		'nxtcc_render_upgrade_page'
+	);
+
+	add_submenu_page(
+		$parent_slug,
+		__( 'Abandoned Carts', 'nxt-cloud-chat' ),
+		nxtcc_menu_pro_badge_label( __( 'Abandoned Cart', 'nxt-cloud-chat' ) ),
+		$capability,
+		'nxtcc-abandoned-carts',
+		'nxtcc_render_upgrade_page'
+	);
+
+	add_submenu_page(
+		$parent_slug,
+		__( 'Workflows', 'nxt-cloud-chat' ),
+		nxtcc_menu_pro_badge_label( __( 'Workflows', 'nxt-cloud-chat' ) ),
+		$capability,
+		'nxtcc-workflows',
+		'nxtcc_render_upgrade_page'
+	);
+
+	add_submenu_page(
+		$parent_slug,
+		__( 'Workflow Runs', 'nxt-cloud-chat' ),
+		nxtcc_menu_pro_badge_label( __( 'Workflow Runs', 'nxt-cloud-chat' ) ),
+		$capability,
+		'nxtcc-workflow-runs',
+		'nxtcc_render_upgrade_page'
+	);
+
 	// Message history screen.
 	add_submenu_page(
 		$parent_slug,
@@ -125,6 +171,20 @@ function nxtcc_register_admin_menu(): void {
 	);
 }
 add_action( 'admin_menu', 'nxtcc_register_admin_menu' );
+
+/**
+ * Append a compact Pro badge to Free placeholder menu labels.
+ *
+ * @param string $label Menu label.
+ * @return string
+ */
+function nxtcc_menu_pro_badge_label( string $label ): string {
+	return sprintf(
+		'%1$s <span class="nxtcc-menu-pro-badge">%2$s</span>',
+		esc_html( $label ),
+		esc_html_x( 'Pro', 'admin menu badge', 'nxt-cloud-chat' )
+	);
+}
 
 /**
  * Render the Dashboard admin page.
