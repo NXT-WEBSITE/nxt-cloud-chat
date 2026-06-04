@@ -77,6 +77,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'contact_phone_reader'                => function_exists( 'nxtcc_get_contact_by_phone' ),
 				'contact_wp_user_reader'              => function_exists( 'nxtcc_get_contact_by_wp_user' ),
 				'contact_group_reader'                => function_exists( 'nxtcc_get_contact_groups_by_id' ),
+				'contact_subscription_writer'         => function_exists( 'nxtcc_update_contact_subscription_status' ),
 				'latest_inbound_reader'               => function_exists( 'nxtcc_get_latest_inbound_at' ),
 				'verified_phone_reader'               => function_exists( 'nxtcc_get_latest_verified_phone_for_user' ),
 			),
@@ -101,6 +102,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'nxtcc_get_contact_by_phone',
 				'nxtcc_get_contact_by_wp_user',
 				'nxtcc_get_contact_groups_by_id',
+				'nxtcc_update_contact_subscription_status',
 				'nxtcc_get_latest_inbound_at',
 				'nxtcc_get_latest_verified_phone_for_user',
 			),
@@ -482,6 +484,26 @@ if ( ! function_exists( 'nxtcc_get_message_history_id_by_wamid' ) ) {
 	 */
 	function nxtcc_get_message_history_id_by_wamid( string $wamid ): int {
 		return NXTCC_Runtime_Integration::get_message_history_id_by_wamid( $wamid );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_update_contact_subscription_status' ) ) {
+	/**
+	 * Update a contact's subscription status through the stable runtime wrapper.
+	 *
+	 * Supported args:
+	 * - contact_id
+	 * - status: subscribed|unsubscribed
+	 * - user_mailid
+	 * - business_account_id
+	 * - phone_number_id
+	 * - reason
+	 *
+	 * @param array $args Update arguments.
+	 * @return array<string, mixed>
+	 */
+	function nxtcc_update_contact_subscription_status( array $args ): array {
+		return NXTCC_Runtime_Integration::update_contact_subscription_status( $args );
 	}
 }
 

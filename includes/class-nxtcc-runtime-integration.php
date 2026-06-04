@@ -270,6 +270,211 @@ final class NXTCC_Runtime_Integration {
 	}
 
 	/**
+	 * Update a contact subscription status through the runtime contract.
+	 *
+	 * @param array<string, mixed> $args Update arguments.
+	 * @return array<string, mixed>
+	 */
+	public static function update_contact_subscription_status( array $args ): array {
+		$contact_id = isset( $args['contact_id'] ) ? absint( $args['contact_id'] ) : 0;
+		$status     = isset( $args['status'] ) ? sanitize_key( (string) $args['status'] ) : '';
+
+		if ( '' === $status && isset( $args['subscription_status'] ) ) {
+			$status = sanitize_key( (string) $args['subscription_status'] );
+		}
+
+		if ( '' === $status && array_key_exists( 'is_subscribed', $args ) ) {
+			$status = ! empty( $args['is_subscribed'] ) ? 'subscribed' : 'unsubscribed';
+		}
+
+		if ( $contact_id <= 0 ) {
+			return array(
+				'success' => false,
+				'error'   => 'invalid_contact_id',
+			);
+		}
+
+		if ( ! in_array( $status, array( 'subscribed', 'unsubscribed' ), true ) ) {
+			return array(
+				'success' => false,
+				'error'   => 'invalid_subscription_status',
+			);
+		}
+
+		$user_mailid         = isset( $args['user_mailid'] ) ? sanitize_email( (string) $args['user_mailid'] ) : '';
+		$business_account_id = isset( $args['business_account_id'] ) ? sanitize_text_field( (string) $args['business_account_id'] ) : '';
+		$phone_number_id     = isset( $args['phone_number_id'] ) ? sanitize_text_field( (string) $args['phone_number_id'] ) : '';
+		$reason              = isset( $args['reason'] ) ? sanitize_text_field( (string) $args['reason'] ) : '';
+		$reason              = substr( $reason, 0, 255 );
+
+		$db           = NXTCC_DB::i();
+		$contacts_sql = self::quote_table( $db->t_contacts() );
+		$sql          = 'SELECT id, user_mailid, business_account_id, phone_number_id, country_code, phone_number, wp_uid, is_subscribed, unsubscribed_at, unsubscribed_reason
+			FROM ' . $contacts_sql . '
+			WHERE id = %d';
+		$query_args   = array( $contact_id );
+
+		if ( '' !== $user_mailid ) {
+			$sql         .= ' AND user_mailid = %s';
+			$query_args[] = $user_mailid;
+		}
+
+		if ( '' !== $business_account_id ) {
+			$sql         .= ' AND business_account_id = %s';
+			$query_args[] = $business_account_id;
+		}
+
+		if ( '' !== $phone_number_id ) {
+			$sql         .= ' AND phone_number_id = %s';
+			$query_args[] = $phone_number_id;
+		}
+
+		$sql .= ' LIMIT 1';
+
+		$row = $db->get_row( $sql, $query_args, ARRAY_A );
+		if ( ! is_array( $row ) ) {
+			return array(
+				'success' => false,
+				'error'   => 'contact_not_found',
+			);
+		}
+
+		$current_flag     = ! empty( $row['is_subscribed'] ) ? 1 : 0;
+		$next_flag        = 'subscribed' === $status ? 1 : 0;
+		$row_user_mailid  = isset( $row['user_mailid'] ) ? sanitize_email( (string) $row['user_mailid'] ) : '';
+		$row_business_id  = isset( $row['business_account_id'] ) ? sanitize_text_field( (string) $row['business_account_id'] ) : '';
+		$row_phone_id     = isset( $row['phone_number_id'] ) ? sanitize_text_field( (string) $row['phone_number_id'] ) : '';
+		$now              = current_time( 'mysql', true );
+		$current_unsub_at = isset( $row['unsubscribed_at'] ) ? trim( (string) $row['unsubscribed_at'] ) : '';
+		$current_reason   = isset( $row['unsubscribed_reason'] ) ? trim( (string) $row['unsubscribed_reason'] ) : '';
+		$changed          = false;
+		$affected         = 0;
+
+		if ( 1 === $next_flag ) {
+			$changed = 1 !== $current_flag || '' !== $current_unsub_at || '' !== $current_reason;
+
+			if ( $changed ) {
+				$affected = $db->query(
+					'UPDATE ' . $contacts_sql . '
+					 SET is_subscribed = %d,
+						 unsubscribed_at = NULL,
+						 unsubscribed_reason = NULL,
+						 updated_at = %s
+					 WHERE id = %d
+					   AND user_mailid = %s
+					   AND business_account_id = %s
+					   AND phone_number_id = %s
+					 LIMIT 1',
+					array(
+						1,
+						$now,
+						$contact_id,
+						$row_user_mailid,
+						$row_business_id,
+						$row_phone_id,
+					)
+				);
+			}
+		} else {
+			$next_reason       = '' !== $reason ? $reason : ( '' !== $current_reason ? $current_reason : 'workflow' );
+			$next_unsubscribed = '' !== $current_unsub_at ? $current_unsub_at : $now;
+			$changed           = 0 !== $current_flag || '' === $current_unsub_at || $next_reason !== $current_reason;
+
+			if ( $changed ) {
+				$affected = $db->query(
+					'UPDATE ' . $contacts_sql . '
+					 SET is_subscribed = %d,
+						 unsubscribed_at = %s,
+						 unsubscribed_reason = %s,
+						 updated_at = %s
+					 WHERE id = %d
+					   AND user_mailid = %s
+					   AND business_account_id = %s
+					   AND phone_number_id = %s
+					 LIMIT 1',
+					array(
+						0,
+						$next_unsubscribed,
+						$next_reason,
+						$now,
+						$contact_id,
+						$row_user_mailid,
+						$row_business_id,
+						$row_phone_id,
+					)
+				);
+			}
+		}
+
+		if ( $changed && $affected <= 0 ) {
+			return array(
+				'success' => false,
+				'error'   => 'subscription_update_failed',
+			);
+		}
+
+		self::flush_contact_runtime_cache( $row );
+
+		if ( function_exists( 'nxtcc_invalidate_tenant_caches' ) ) {
+			nxtcc_invalidate_tenant_caches( $row_business_id, $row_phone_id );
+		}
+
+		$result = array(
+			'success'             => true,
+			'contact_id'          => $contact_id,
+			'status'              => $status,
+			'is_subscribed'       => $next_flag,
+			'previous_status'     => 1 === $current_flag ? 'subscribed' : 'unsubscribed',
+			'previous_subscribed' => $current_flag,
+			'changed'             => $changed,
+		);
+
+		/**
+		 * Fires after the runtime contract updates a contact subscription status.
+		 *
+		 * @param array<string, mixed> $result Update result payload.
+		 * @param array<string, mixed> $row    Original contact row.
+		 * @param array<string, mixed> $args   Original update arguments.
+		 */
+		do_action( 'nxtcc_contact_subscription_status_updated', $result, $row, $args );
+
+		return $result;
+	}
+
+	/**
+	 * Flush known runtime contact cache keys after a contact write.
+	 *
+	 * @param array<string, mixed> $row Contact row.
+	 * @return void
+	 */
+	private static function flush_contact_runtime_cache( array $row ): void {
+		$contact_id          = isset( $row['id'] ) ? absint( $row['id'] ) : 0;
+		$user_mailid         = isset( $row['user_mailid'] ) ? sanitize_email( (string) $row['user_mailid'] ) : '';
+		$business_account_id = isset( $row['business_account_id'] ) ? sanitize_text_field( (string) $row['business_account_id'] ) : '';
+		$phone_number_id     = isset( $row['phone_number_id'] ) ? sanitize_text_field( (string) $row['phone_number_id'] ) : '';
+
+		if ( $contact_id <= 0 ) {
+			return;
+		}
+
+		wp_cache_delete( self::cache_key( 'contact', array( $contact_id, '', '', '' ) ), self::CACHE_GROUP );
+		wp_cache_delete( self::cache_key( 'contact', array( $contact_id, $user_mailid, $business_account_id, $phone_number_id ) ), self::CACHE_GROUP );
+
+		$phone_e164 = ( isset( $row['country_code'] ) ? (string) $row['country_code'] : '' ) . ( isset( $row['phone_number'] ) ? (string) $row['phone_number'] : '' );
+		$phone_e164 = self::normalize_phone( $phone_e164 );
+		if ( '' !== $phone_e164 ) {
+			wp_cache_delete( self::cache_key( 'contact_phone', array( $phone_e164, '', '', '' ) ), self::CACHE_GROUP );
+			wp_cache_delete( self::cache_key( 'contact_phone', array( $phone_e164, $user_mailid, $business_account_id, $phone_number_id ) ), self::CACHE_GROUP );
+		}
+
+		$wp_uid = isset( $row['wp_uid'] ) ? absint( $row['wp_uid'] ) : 0;
+		if ( $wp_uid > 0 ) {
+			wp_cache_delete( self::cache_key( 'contact_wp_user', array( $wp_uid, '', '', '' ) ), self::CACHE_GROUP );
+			wp_cache_delete( self::cache_key( 'contact_wp_user', array( $wp_uid, $user_mailid, $business_account_id, $phone_number_id ) ), self::CACHE_GROUP );
+		}
+	}
+
+	/**
 	 * Send a background-safe session reply through the shared text-send helper.
 	 *
 	 * @param array<string, mixed> $args Send arguments.

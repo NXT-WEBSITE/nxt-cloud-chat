@@ -1,10 +1,10 @@
-=== NXT Cloud Chat ===
+=== NXT Cloud Chat - Business Inbox, Login & Contact Management ===
 Contributors: nxtwebsite
 Tags: whatsapp, whatsapp cloud api, whatsapp business, whatsapp login, woocommerce
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.6
+Stable tag: 1.0.7
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,7 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 
 * Store WhatsApp contacts with phone, country, name, and custom fields.
 * Track subscription status and unsubscribe reasons.
+* Keep subscription status changes tenant-scoped through the shared contact runtime used by compatible add-ons.
 * Organize contacts into groups for easier targeting, such as leads, members, or customers.
 * Use group-based organization to support better WhatsApp messaging workflows inside WordPress.
 * Assign team access inside the plugin so selected WordPress users can work with WhatsApp data based on the permissions granted by the tenant owner.
@@ -134,6 +135,7 @@ You are responsible for ensuring that your own use of this plugin and the WhatsA
 
 * WooCommerce WhatsApp notifications for order created, order paid, and order status changes.
 * Workflow automation builder for incoming messages, user login events, and WooCommerce triggers.
+* Workflow actions for updating contact subscription status.
 * Bulk WhatsApp messaging and broadcast campaigns for promotions, updates, and follow-ups.
 * Advanced template messaging with image headers, CTA buttons, coupon codes, and dynamic placeholders.
 * WhatsApp marketing and utility templates for customer engagement, reminders, and sales flows.
@@ -280,6 +282,10 @@ Use this with care in production environments.
 11. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
 
 == Changelog ==
+
+= 1.0.7 =
+* Added a shared runtime wrapper so compatible add-ons can update contact subscription status safely.
+* Routed contact bulk subscribe and unsubscribe actions through the shared tenant-scoped subscription runtime.
 
 = 1.0.6 =
 * Officially tested and validated compatibility with WordPress 7.0.

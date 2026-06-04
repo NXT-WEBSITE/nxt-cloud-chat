@@ -903,14 +903,44 @@ function nxtcc_ajax_contacts_bulk_update_subscription(): void {
 		wp_send_json_error( array( 'message' => 'No valid contacts selected.' ) );
 	}
 
+	$updated = array();
+	$failed  = array();
+	$status  = $flag ? 'subscribed' : 'unsubscribed';
+
 	foreach ( $allowed as $cid ) {
+		if ( function_exists( 'nxtcc_update_contact_subscription_status' ) ) {
+			$result = nxtcc_update_contact_subscription_status(
+				array(
+					'contact_id'          => (int) $cid,
+					'status'              => $status,
+					'business_account_id' => $baid,
+					'phone_number_id'     => $pnid,
+					'reason'              => 'manual',
+				)
+			);
+
+			if ( ! empty( $result['success'] ) ) {
+				$updated[] = (int) $cid;
+				continue;
+			}
+
+			$failed[] = (int) $cid;
+			continue;
+		}
+
 		$repo->update_subscription( (int) $cid, $flag, $baid, $pnid );
+		$updated[] = (int) $cid;
+	}
+
+	if ( empty( $updated ) ) {
+		wp_send_json_error( array( 'message' => 'Subscription update failed.' ) );
 	}
 
 	wp_send_json_success(
 		array(
 			'message' => 'Subscription updated.',
-			'updated' => $allowed,
+			'updated' => $updated,
+			'failed'  => $failed,
 			'flag'    => $flag,
 		)
 	);
