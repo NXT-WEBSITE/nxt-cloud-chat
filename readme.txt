@@ -1,10 +1,10 @@
 === NXT Cloud Chat - Business Inbox, Login & Contact Management ===
 Contributors: nxtwebsite
 Tags: whatsapp, whatsapp cloud api, whatsapp business, whatsapp login, woocommerce
-Requires at least: 6.0
+Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.0.8
+Stable tag: 1.0.9
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -292,6 +292,12 @@ Use this with care in production environments.
 12. Advanced workflow automation screen for WooCommerce and event-based WhatsApp messaging (Pro).
 
 == Changelog ==
+
+= 1.0.9 =
+* Redesigned the Free dashboard with compact Pro-style cards for Connection, Messaging and Calling Health Status, and setup help links.
+* Added dashboard setup-help links from the existing support badge helper.
+* Improved the Messaging and Calling Health Status UI by hiding internal Meta node IDs while preserving the backend health payload.
+* Cleaned unused dashboard response fields and UI code after the dashboard redesign.
 
 = 1.0.8 =
 * Added a shared contact upsert runtime wrapper for compatible integrations and add-ons.

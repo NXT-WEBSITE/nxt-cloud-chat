@@ -3,8 +3,8 @@
  * Plugin Name:       NXT Cloud Chat - Business Inbox, Login & Contact Management
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       Integrates WhatsApp Cloud API with WordPress to enable real-time messaging, automated notifications, customer communication, contact management, and secure WhatsApp-based user authentication and login.
- * Version:           1.0.8
- * Requires at least: 6.0
+ * Version:           1.0.9
+ * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
  * Author URI:        https://nxtwebsite.com
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.0.8' );
+	define( 'NXTCC_VERSION', '1.0.9' );
 }
 
 /**
@@ -217,6 +217,7 @@ require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-auth-handler.php';
 
 require_once NXTCC_PLUGIN_DIR . 'includes/routes.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-send-message.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-meta-health-status.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-runtime-contract.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-message-history-repo.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-unread.php';
@@ -229,7 +230,6 @@ require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-groups-handler.php';
 require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-chat-handler.php';
 require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-history-handler.php';
 
-require_once NXTCC_PLUGIN_DIR . 'admin/model/class-nxtcc-dashboard-repo.php';
 require_once NXTCC_PLUGIN_DIR . 'admin/model/class-nxtcc-dashboard-handler.php';
 
 require_once NXTCC_PLUGIN_DIR . 'includes/queue-runner.php';

@@ -79,6 +79,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'contact_group_reader'                => function_exists( 'nxtcc_get_contact_groups_by_id' ),
 				'contact_subscription_writer'         => function_exists( 'nxtcc_update_contact_subscription_status' ),
 				'contact_integration_writer'          => function_exists( 'nxtcc_upsert_contact_for_integration' ),
+				'meta_health_status_reader'           => function_exists( 'nxtcc_get_meta_health_status' ),
 				'latest_inbound_reader'               => function_exists( 'nxtcc_get_latest_inbound_at' ),
 				'verified_phone_reader'               => function_exists( 'nxtcc_get_latest_verified_phone_for_user' ),
 			),
@@ -105,6 +106,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'nxtcc_get_contact_groups_by_id',
 				'nxtcc_update_contact_subscription_status',
 				'nxtcc_upsert_contact_for_integration',
+				'nxtcc_get_meta_health_status',
 				'nxtcc_get_latest_inbound_at',
 				'nxtcc_get_latest_verified_phone_for_user',
 			),
@@ -533,6 +535,35 @@ if ( ! function_exists( 'nxtcc_upsert_contact_for_integration' ) ) {
 	 */
 	function nxtcc_upsert_contact_for_integration( array $args ): array {
 		return NXTCC_Runtime_Integration::upsert_contact_for_integration( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_meta_health_status' ) ) {
+	/**
+	 * Fetch Meta Messaging and Calling Health Status through the Free runtime.
+	 *
+	 * Supported args:
+	 * - node_id: Optional Meta node id. Defaults to the tenant phone_number_id.
+	 * - graph_version: Optional Graph API version.
+	 * - force_refresh: Bypass object cache when true.
+	 *
+	 * @param array $tenant Tenant context.
+	 * @param array $args   Optional request arguments.
+	 * @return array<string, mixed>
+	 */
+	function nxtcc_get_meta_health_status( array $tenant = array(), array $args = array() ): array {
+		if ( ! class_exists( 'NXTCC_Meta_Health_Status' ) ) {
+			return array(
+				'success' => false,
+				'status'  => 'unknown',
+				'error'   => array(
+					'code'    => 'meta_health_runtime_unavailable',
+					'message' => __( 'Meta health runtime is not available.', 'nxt-cloud-chat' ),
+				),
+			);
+		}
+
+		return NXTCC_Meta_Health_Status::get_status( $tenant, $args );
 	}
 }
 

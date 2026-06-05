@@ -89,56 +89,118 @@ final class NXTCC_Dashboard_Handler {
 	}
 
 	/**
+	 * Build one dashboard connection item.
+	 *
+	 * @param string $id      Item id.
+	 * @param string $label   Item label.
+	 * @param string $status  Item status.
+	 * @param string $message Item message.
+	 * @return array<string, string>
+	 */
+	private static function connection_item( string $id, string $label, string $status, string $message ): array {
+		return array(
+			'id'      => sanitize_key( $id ),
+			'label'   => $label,
+			'status'  => sanitize_key( $status ),
+			'message' => $message,
+		);
+	}
+
+	/**
 	 * Build connection checks for the dashboard "Connection" card.
 	 *
 	 * Output shape:
-	 * - ok: false when core checks fail, 'warn' when core checks pass but webhook is off,
+	 * - ok: false when required checks fail, 'warn' when limited/unknown,
 	 *       true when all checks pass.
-	 * - checks: detailed booleans for each check.
+	 * - basics: rows for the local connection basics UI.
+	 * - health: Meta health_status payload.
 	 *
+	 * @param bool $force_refresh Whether to bypass cached Meta health.
 	 * @return array<string, mixed>
 	 */
-	private static function build_connection_status(): array {
+	private static function build_connection_status( bool $force_refresh = false ): array {
 		$checks = array(
+			'tenant_context'       => false,
+			'app_id'               => false,
+			'access_token'         => false,
 			'waba_profile'         => false,
-			'templates_list'       => false,
 			'phone_number_profile' => false,
 			'webhook'              => false,
 		);
 
 		$tenant = NXTCC_Access_Control::get_current_tenant_context();
-		if ( empty( $tenant['user_mailid'] ) || empty( $tenant['business_account_id'] ) || empty( $tenant['phone_number_id'] ) ) {
+		$health = function_exists( 'nxtcc_get_meta_health_status' )
+			? nxtcc_get_meta_health_status( $tenant, array( 'force_refresh' => $force_refresh ) )
+			: array(
+				'success' => false,
+				'status'  => 'unknown',
+				'error'   => array(
+					'message' => __( 'Meta health runtime is not available.', 'nxt-cloud-chat' ),
+				),
+			);
+
+		$tenant_ok = ! empty( $tenant['user_mailid'] ) && ! empty( $tenant['business_account_id'] ) && ! empty( $tenant['phone_number_id'] );
+
+		if ( ! $tenant_ok ) {
 			return array(
 				'ok'     => false,
-				'checks' => $checks,
+				'basics' => array(
+					self::connection_item( 'tenant_context', __( 'Tenant Context', 'nxt-cloud-chat' ), 'fail', __( 'No active tenant connection is available for this user.', 'nxt-cloud-chat' ) ),
+				),
+				'health' => $health,
 			);
 		}
 
-		$settings = NXTCC_Access_Control::get_settings_row_for_tenant( $tenant );
-		if ( ! is_object( $settings ) ) {
-			return array(
-				'ok'     => false,
-				'checks' => $checks,
+		$checks['tenant_context'] = true;
+		$settings                 = NXTCC_Access_Control::get_settings_row_for_tenant( $tenant );
+		$creds                    = false;
+
+		if ( function_exists( 'nxtcc_get_tenant_api_credentials' ) ) {
+			$creds = nxtcc_get_tenant_api_credentials(
+				(string) $tenant['user_mailid'],
+				(string) $tenant['business_account_id'],
+				(string) $tenant['phone_number_id']
 			);
 		}
 
 		if (
-			! empty( $settings->app_id ) &&
-			! empty( $settings->business_account_id ) &&
-			! empty( $settings->phone_number_id )
+			is_object( $settings )
+			&& ! empty( $settings->app_id )
+			&& ! empty( $settings->business_account_id )
+			&& ! empty( $settings->phone_number_id )
 		) {
+			$checks['app_id']               = true;
 			$checks['waba_profile']         = true;
-			$checks['templates_list']       = true;
 			$checks['phone_number_profile'] = true;
 			$checks['webhook']              = ! empty( $settings->meta_webhook_subscribed );
 		}
 
-		$core_all_ok   = ( $checks['waba_profile'] && $checks['templates_list'] && $checks['phone_number_profile'] );
-		$connection_ok = $core_all_ok ? ( $checks['webhook'] ? true : 'warn' ) : false;
+		$checks['access_token'] = is_array( $creds ) && ! empty( $creds['access_token'] );
+		$core_all_ok            = ( $checks['tenant_context'] && $checks['app_id'] && $checks['access_token'] && $checks['waba_profile'] && $checks['phone_number_profile'] );
+		$health_status          = isset( $health['status'] ) ? sanitize_key( (string) $health['status'] ) : 'unknown';
+		$connection_ok          = false;
+
+		if ( $core_all_ok ) {
+			if ( 'fail' === $health_status ) {
+				$connection_ok = false;
+			} elseif ( ! $checks['webhook'] || in_array( $health_status, array( 'warn', 'unknown' ), true ) ) {
+				$connection_ok = 'warn';
+			} else {
+				$connection_ok = true;
+			}
+		}
 
 		return array(
 			'ok'     => $connection_ok,
-			'checks' => $checks,
+			'basics' => array(
+				self::connection_item( 'tenant_context', __( 'Tenant Context', 'nxt-cloud-chat' ), 'ok', __( 'Active tenant resolved.', 'nxt-cloud-chat' ) ),
+				self::connection_item( 'app_id', __( 'App ID', 'nxt-cloud-chat' ), $checks['app_id'] ? 'ok' : 'fail', $checks['app_id'] ? __( 'Saved.', 'nxt-cloud-chat' ) : __( 'Missing from connection settings.', 'nxt-cloud-chat' ) ),
+				self::connection_item( 'waba_profile', __( 'Business Account ID', 'nxt-cloud-chat' ), $checks['waba_profile'] ? 'ok' : 'fail', $checks['waba_profile'] ? __( 'Saved.', 'nxt-cloud-chat' ) : __( 'Missing from connection settings.', 'nxt-cloud-chat' ) ),
+				self::connection_item( 'phone_number_profile', __( 'Phone Number ID', 'nxt-cloud-chat' ), $checks['phone_number_profile'] ? 'ok' : 'fail', $checks['phone_number_profile'] ? __( 'Saved.', 'nxt-cloud-chat' ) : __( 'Missing from connection settings.', 'nxt-cloud-chat' ) ),
+				self::connection_item( 'access_token', __( 'Access Token', 'nxt-cloud-chat' ), $checks['access_token'] ? 'ok' : 'fail', $checks['access_token'] ? __( 'Saved and decryptable.', 'nxt-cloud-chat' ) : __( 'Missing or could not be decrypted.', 'nxt-cloud-chat' ) ),
+				self::connection_item( 'webhook', __( 'Webhook', 'nxt-cloud-chat' ), $checks['webhook'] ? 'ok' : 'warn', $checks['webhook'] ? __( 'Enabled.', 'nxt-cloud-chat' ) : __( 'Not enabled.', 'nxt-cloud-chat' ) ),
+			),
+			'health' => $health,
 		);
 	}
 
@@ -149,7 +211,7 @@ final class NXTCC_Dashboard_Handler {
 	 * {
 	 *   success: true,
 	 *   data: {
-	 *     connection: { ok, checks }
+	 *     connection: { ok, basics, health }
 	 *   }
 	 * }
 	 *
@@ -158,9 +220,12 @@ final class NXTCC_Dashboard_Handler {
 	public static function fetch_overview(): void {
 		self::enforce_access();
 
+		$force_refresh = filter_input( INPUT_POST, 'force_refresh', FILTER_VALIDATE_BOOLEAN );
+		$force_refresh = ( true === $force_refresh );
+
 		wp_send_json_success(
 			array(
-				'connection' => self::build_connection_status(),
+				'connection' => self::build_connection_status( $force_refresh ),
 			)
 		);
 	}

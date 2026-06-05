@@ -2,9 +2,7 @@
 /**
  * Admin dashboard view for NXT Cloud Chat.
  *
- * Renders the plugin's dashboard cards inside the WordPress admin area:
- * - Connection status card (details loaded via AJAX).
- * - Upgrade card with feature highlights and an external upgrade link.
+ * Renders the plugin's dashboard cards inside the WordPress admin area.
  *
  * This file is a view template and does not process requests directly.
  *
@@ -28,35 +26,43 @@ $nxtcc_nonce = wp_create_nonce( 'nxtcc_dashboard' );
 $nxtcc_ajaxurl = admin_url( 'admin-ajax.php' );
 
 /**
- * Preferred product page for dashboard upgrade CTA.
+ * UTM source for dashboard setup/help links.
  *
  * @var string
  */
-$nxtcc_product_url = 'https://nxtwebsite.com/wordpress/nxt-cloud-chat/';
+$nxtcc_setup_utm_source = function_exists( 'nxtcc_support_badge_source_domain' ) ? nxtcc_support_badge_source_domain() : '';
 
-/**
- * Absolute path to the main plugin file. Used to read header metadata.
- *
- * @var string
- */
-$nxtcc_plugin_file = trailingslashit( NXTCC_PLUGIN_DIR ) . 'nxt-cloud-chat.php';
-
-/**
- * Resolve the upgrade URL for the dashboard CTA.
- * Falls back to the plugin Author URI only if the preferred URL is unavailable.
- *
- * @var string
- */
-$nxtcc_upgrade_url = $nxtcc_product_url;
-$nxtcc_data        = array();
-
-if ( function_exists( 'get_plugin_data' ) && file_exists( $nxtcc_plugin_file ) ) {
-	$nxtcc_data = get_plugin_data( $nxtcc_plugin_file, false, false );
-
-	if ( '' === esc_url_raw( $nxtcc_upgrade_url ) && ! empty( $nxtcc_data['AuthorURI'] ) ) {
-		$nxtcc_upgrade_url = esc_url_raw( $nxtcc_data['AuthorURI'] );
-	}
+if ( '' === $nxtcc_setup_utm_source ) {
+	$nxtcc_setup_utm_source = 'wordpress_plugin';
 }
+
+/**
+ * Setup guide URL shown in the Need Help card.
+ *
+ * @var string
+ */
+$nxtcc_setup_guide_url = add_query_arg(
+	array(
+		'utm_source'   => $nxtcc_setup_utm_source,
+		'utm_medium'   => 'dashboard_help_card',
+		'utm_campaign' => 'nxt_cloud_chat_setup',
+	),
+	'https://nxtcloudchat.com/user-guide/'
+);
+
+/**
+ * Setup support URL shown in the Need Help card.
+ *
+ * @var string
+ */
+$nxtcc_setup_help_url = add_query_arg(
+	array(
+		'utm_source'   => $nxtcc_setup_utm_source,
+		'utm_medium'   => 'dashboard_help_card',
+		'utm_campaign' => 'nxt_cloud_chat_setup_help',
+	),
+	'https://nxtwebsite.com/support-portal/'
+);
 ?>
 <div
 	class="nxtcc-dashboard-widget"
@@ -70,7 +76,7 @@ if ( function_exists( 'get_plugin_data' ) && file_exists( $nxtcc_plugin_file ) )
 			<div class="nxtcc-card-head">
 				<h2><?php esc_html_e( 'Connection', 'nxt-cloud-chat' ); ?></h2>
 
-				<span class="nxtcc-badge nxtcc-badge-neutral" data-role="badge">—</span>
+				<span class="nxtcc-badge nxtcc-badge-neutral" data-role="connection-badge">-</span>
 
 				<div class="nxtcc-card-actions">
 					<button
@@ -88,38 +94,64 @@ if ( function_exists( 'get_plugin_data' ) && file_exists( $nxtcc_plugin_file ) )
 			</div>
 
 			<div class="nxtcc-card-body">
-				<ul class="nxtcc-list" data-role="connection-details"></ul>
+				<div class="nxtcc-status-list" data-role="connection-basics"></div>
 			</div>
 		</div>
 
-		<div class="nxtcc-card nxtcc-card-upgrade" id="nxtcc-card-upgrade">
+		<div class="nxtcc-card" id="nxtcc-card-health">
 			<div class="nxtcc-card-head">
-				<h2><?php esc_html_e( 'Upgrade to NXT Cloud Chat Pro', 'nxt-cloud-chat' ); ?></h2>
+				<h2><?php esc_html_e( 'Messaging and Calling Health Status', 'nxt-cloud-chat' ); ?></h2>
+
+				<span class="nxtcc-badge nxtcc-badge-neutral" data-role="health-badge">-</span>
+
+				<div class="nxtcc-card-actions">
+					<button
+						type="button"
+						id="nxtcc-health-refresh"
+						class="nxtcc-icon-btn"
+						title="<?php esc_attr_e( 'Refresh', 'nxt-cloud-chat' ); ?>"
+					>
+						<i class="fa fa-refresh" aria-hidden="true"></i>
+						<span class="screen-reader-text">
+							<?php esc_html_e( 'Refresh', 'nxt-cloud-chat' ); ?>
+						</span>
+					</button>
+				</div>
 			</div>
 
 			<div class="nxtcc-card-body">
-				<p class="nxtcc-upgrade-intro">
-					<?php esc_html_e( 'Unlock more powerful WhatsApp tools for your WordPress site:', 'nxt-cloud-chat' ); ?>
-				</p>
+				<div class="nxtcc-health-summary" data-role="health-summary"></div>
+				<div class="nxtcc-health-entities" data-role="health-entities"></div>
+				<div class="nxtcc-small" data-role="health-checked-at"></div>
+			</div>
+		</div>
 
-				<ul class="nxtcc-list nxtcc-upgrade-features">
-					<li><?php esc_html_e( 'Bulk WhatsApp messaging', 'nxt-cloud-chat' ); ?></li>
-					<li><?php esc_html_e( 'Templates management', 'nxt-cloud-chat' ); ?></li>
-					<li><?php esc_html_e( 'WooCommerce integration & Workflows', 'nxt-cloud-chat' ); ?></li>
-					<li><?php esc_html_e( 'WooCommerce Abandoned cart recovery', 'nxt-cloud-chat' ); ?></li>
-					<li><?php esc_html_e( 'Advanced dashboard & reports', 'nxt-cloud-chat' ); ?></li>
+		<div class="nxtcc-card" id="nxtcc-card-help">
+			<div class="nxtcc-card-head">
+				<h2><?php esc_html_e( 'Need Help?', 'nxt-cloud-chat' ); ?></h2>
+			</div>
+
+			<div class="nxtcc-card-body">
+				<ul class="nxtcc-list nxtcc-help-list">
+					<li>
+						<a
+							href="<?php echo esc_url( $nxtcc_setup_guide_url ); ?>"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							<?php echo esc_html__( 'Step-by-step setup guide', 'nxt-cloud-chat' ); ?>
+						</a>
+					</li>
+					<li>
+						<a
+							href="<?php echo esc_url( $nxtcc_setup_help_url ); ?>"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							<?php echo esc_html__( 'Get free setup assistance', 'nxt-cloud-chat' ); ?>
+						</a>
+					</li>
 				</ul>
-
-				<p class="nxtcc-upgrade-cta-wrap">
-					<a
-						class="button button-primary nxtcc-upgrade-btn"
-						href="<?php echo esc_url( $nxtcc_upgrade_url ); ?>"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						<?php esc_html_e( 'Upgrade', 'nxt-cloud-chat' ); ?>
-					</a>
-				</p>
 			</div>
 		</div>
 
