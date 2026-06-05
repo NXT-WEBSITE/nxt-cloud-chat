@@ -197,7 +197,7 @@ final class NXTCC_Dashboard_Handler {
 				self::connection_item( 'app_id', __( 'App ID', 'nxt-cloud-chat' ), $checks['app_id'] ? 'ok' : 'fail', $checks['app_id'] ? __( 'Saved.', 'nxt-cloud-chat' ) : __( 'Missing from connection settings.', 'nxt-cloud-chat' ) ),
 				self::connection_item( 'waba_profile', __( 'Business Account ID', 'nxt-cloud-chat' ), $checks['waba_profile'] ? 'ok' : 'fail', $checks['waba_profile'] ? __( 'Saved.', 'nxt-cloud-chat' ) : __( 'Missing from connection settings.', 'nxt-cloud-chat' ) ),
 				self::connection_item( 'phone_number_profile', __( 'Phone Number ID', 'nxt-cloud-chat' ), $checks['phone_number_profile'] ? 'ok' : 'fail', $checks['phone_number_profile'] ? __( 'Saved.', 'nxt-cloud-chat' ) : __( 'Missing from connection settings.', 'nxt-cloud-chat' ) ),
-				self::connection_item( 'access_token', __( 'Access Token', 'nxt-cloud-chat' ), $checks['access_token'] ? 'ok' : 'fail', $checks['access_token'] ? __( 'Saved and decryptable.', 'nxt-cloud-chat' ) : __( 'Missing or could not be decrypted.', 'nxt-cloud-chat' ) ),
+				self::connection_item( 'access_token', __( 'Access Token', 'nxt-cloud-chat' ), $checks['access_token'] ? 'ok' : 'fail', $checks['access_token'] ? __( 'Saved.', 'nxt-cloud-chat' ) : __( 'Missing or could not be decrypted.', 'nxt-cloud-chat' ) ),
 				self::connection_item( 'webhook', __( 'Webhook', 'nxt-cloud-chat' ), $checks['webhook'] ? 'ok' : 'warn', $checks['webhook'] ? __( 'Enabled.', 'nxt-cloud-chat' ) : __( 'Not enabled.', 'nxt-cloud-chat' ) ),
 			),
 			'health' => $health,

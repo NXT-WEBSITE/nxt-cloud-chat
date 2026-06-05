@@ -26,6 +26,13 @@ $nxtcc_nonce = wp_create_nonce( 'nxtcc_dashboard' );
 $nxtcc_ajaxurl = admin_url( 'admin-ajax.php' );
 
 /**
+ * Connection settings URL used by dashboard JavaScript.
+ *
+ * @var string
+ */
+$nxtcc_settings_url = admin_url( 'admin.php?page=nxtcc-settings' );
+
+/**
  * UTM source for dashboard setup/help links.
  *
  * @var string
@@ -68,6 +75,7 @@ $nxtcc_setup_help_url = add_query_arg(
 	class="nxtcc-dashboard-widget"
 	data-nonce="<?php echo esc_attr( $nxtcc_nonce ); ?>"
 	data-ajax="<?php echo esc_url( $nxtcc_ajaxurl ); ?>"
+	data-settings-url="<?php echo esc_url( $nxtcc_settings_url ); ?>"
 >
 
 	<div class="nxtcc-dashboard-cards">
@@ -95,6 +103,15 @@ $nxtcc_setup_help_url = add_query_arg(
 
 			<div class="nxtcc-card-body">
 				<div class="nxtcc-status-list" data-role="connection-basics"></div>
+			</div>
+
+			<div class="nxtcc-card-footer">
+				<a
+					href="<?php echo esc_url( $nxtcc_settings_url ); ?>"
+					class="nxtcc-card-footer-link"
+				>
+					<?php echo esc_html__( 'Open connection settings', 'nxt-cloud-chat' ); ?>
+				</a>
 			</div>
 		</div>
 

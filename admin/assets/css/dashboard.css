@@ -89,6 +89,28 @@
 	padding: 10px;
 }
 
+.nxtcc-card-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 8px 10px;
+	border-top: 1px solid var(--nxtcc-border-soft);
+}
+
+.nxtcc-card-footer-link {
+	color: var(--nxtcc-accent);
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.35;
+	text-decoration: none;
+}
+
+.nxtcc-card-footer-link:hover,
+.nxtcc-card-footer-link:focus {
+	color: var(--nxtcc-accent-dark);
+	text-decoration: underline;
+}
+
 #nxtcc-card-health .nxtcc-card-body {
 	height: 100%;
 	max-height: 100%;
@@ -299,6 +321,18 @@
 	min-width: 0;
 	color: var(--nxtcc-muted);
 	overflow-wrap: anywhere;
+}
+
+.nxtcc-health-kv-value a {
+	color: var(--nxtcc-accent);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.nxtcc-health-kv-value a:hover,
+.nxtcc-health-kv-value a:focus {
+	color: var(--nxtcc-accent-dark);
+	text-decoration: underline;
 }
 
 .nxtcc-health-entity {

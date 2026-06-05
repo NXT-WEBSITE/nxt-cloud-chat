@@ -20,6 +20,7 @@ jQuery(
 		const nonce   = $widget.data( 'nonce' ) || '';
 		const ajaxurl =
 			$widget.data( 'ajax' ) || ( 'string' === typeof window.ajaxurl ? window.ajaxurl : '' );
+		const settingsUrl = String( $widget.data( 'settings-url' ) || 'admin.php?page=nxtcc-settings' );
 
 		const canSendLabels = {
 			AVAILABLE: 'Available',
@@ -232,6 +233,38 @@ jQuery(
 			const row = el( 'div', 'nxtcc-health-kv' );
 			row.appendChild( el( 'span', 'nxtcc-health-kv-key', key ) );
 			row.appendChild( el( 'span', 'nxtcc-health-kv-value', value ) );
+			return row;
+		}
+
+		/**
+		 * Render the Meta health reason row with a link to connection settings when applicable.
+		 *
+		 * @param {string} value Reason message.
+		 * @return {HTMLElement} Row.
+		 */
+		function healthReasonRow( value ) {
+			const row       = el( 'div', 'nxtcc-health-kv' );
+			const valueNode = el( 'span', 'nxtcc-health-kv-value' );
+			const message   = String( value || '' );
+			const phrase    = 'connection settings';
+			const index     = message.toLowerCase().indexOf( phrase );
+
+			row.appendChild( el( 'span', 'nxtcc-health-kv-key', 'Reason' ) );
+
+			if ( index === -1 ) {
+				valueNode.textContent = message;
+				row.appendChild( valueNode );
+				return row;
+			}
+
+			valueNode.appendChild( document.createTextNode( message.slice( 0, index ) ) );
+
+			const link = el( 'a', '', message.slice( index, index + phrase.length ) );
+			link.href  = settingsUrl;
+			valueNode.appendChild( link );
+			valueNode.appendChild( document.createTextNode( message.slice( index + phrase.length ) ) );
+
+			row.appendChild( valueNode );
 			return row;
 		}
 
@@ -482,7 +515,7 @@ jQuery(
 			target.appendChild( statusRow( 'Overall', status, canSendLabel( canSend ) ) );
 
 			if ( health.error && health.error.message ) {
-				target.appendChild( keyValueRow( 'Reason', String( health.error.message ) ) );
+				target.appendChild( healthReasonRow( health.error.message ) );
 			}
 
 			if (
