@@ -259,7 +259,7 @@ jQuery( function ( $ ) {
 		if ( showPassword ) {
 			$redirect.prop( 'checked', false );
 			$help.text(
-				'Available only when "Use password instead" is disabled.'
+				'Available only when "Try another sign-in method" is disabled.'
 			);
 			return;
 		}

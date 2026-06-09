@@ -62,7 +62,7 @@ if ( '' === $nxtcc_privacy_url ) {
 /**
  * Read plugin policy/options (fallback-safe).
  *
- * - show_password: whether to show "Use password instead" link.
+ * - show_password: whether to show the alternative sign-in method link.
  * - widget_branding: whether branding is globally enabled.
  */
 $nxtcc_policy = function_exists( 'nxtcc_fm_get_options' ) ? (array) nxtcc_fm_get_options() : array();
@@ -98,12 +98,14 @@ $nxtcc_nonce        = wp_create_nonce( $nxtcc_nonce_action );
 $nxtcc_uid = wp_unique_id( 'nxtcc-' );
 
 /**
- * Branding content: read Plugin Name and Author URI from the main plugin file.
+ * Branding content: use the compact plugin name and read the Plugin URI from
+ * the main plugin file.
  *
- * This allows branding to stay consistent even if the plugin name changes.
+ * This keeps compact widget branding stable while the full plugin name remains
+ * descriptive on the Plugins screen.
  */
-$nxtcc_plugin_file = dirname( dirname( __DIR__ ) ) . '/nxt-cloud-chat.php';
-$nxtcc_brand_name  = 'NXTWEBSITE';
+$nxtcc_plugin_file = defined( 'NXTCC_PLUGIN_FILE' ) ? NXTCC_PLUGIN_FILE : dirname( dirname( __DIR__ ) ) . '/nxt-cloud-chat.php';
+$nxtcc_brand_name  = function_exists( 'nxtcc_get_short_plugin_name' ) ? nxtcc_get_short_plugin_name() : 'NXT Cloud Chat';
 $nxtcc_brand_url   = 'https://nxtwebsite.com';
 $nxtcc_plugin_data = array();
 
@@ -111,15 +113,10 @@ if ( function_exists( 'get_file_data' ) && file_exists( $nxtcc_plugin_file ) ) {
 	$nxtcc_plugin_data = get_file_data(
 		$nxtcc_plugin_file,
 		array(
-			'Name'      => 'Plugin Name',
 			'PluginURI' => 'Plugin URI',
 		),
 		'plugin'
 	);
-
-	if ( ! empty( $nxtcc_plugin_data['Name'] ) ) {
-		$nxtcc_brand_name = (string) $nxtcc_plugin_data['Name'];
-	}
 
 	if ( ! empty( $nxtcc_plugin_data['PluginURI'] ) ) {
 		$nxtcc_brand_url = (string) $nxtcc_plugin_data['PluginURI'];
@@ -178,7 +175,7 @@ if ( function_exists( 'get_file_data' ) && file_exists( $nxtcc_plugin_file ) ) {
 						</a>
 					<?php elseif ( $nxtcc_show_password ) : ?>
 						<a class="nxtcc-link-alt" href="<?php echo esc_url( wp_login_url() ); ?>">
-							<?php esc_html_e( 'Use password instead', 'nxt-cloud-chat' ); ?>
+							<?php esc_html_e( 'Try another sign-in method', 'nxt-cloud-chat' ); ?>
 						</a>
 					<?php endif; ?>
 				</div>

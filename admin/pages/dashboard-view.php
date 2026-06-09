@@ -110,7 +110,7 @@ $nxtcc_setup_help_url = add_query_arg(
 					href="<?php echo esc_url( $nxtcc_settings_url ); ?>"
 					class="nxtcc-card-footer-link"
 				>
-					<?php echo esc_html__( 'Open connection settings', 'nxt-cloud-chat' ); ?>
+					<?php echo esc_html__( 'WhatsApp Connection Settings', 'nxt-cloud-chat' ); ?>
 				</a>
 			</div>
 		</div>

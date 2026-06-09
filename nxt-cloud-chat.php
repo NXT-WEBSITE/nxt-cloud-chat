@@ -33,6 +33,50 @@ if ( ! defined( 'NXTCC_PLUGIN_FILE' ) ) {
 }
 
 /**
+ * Return the compact plugin brand name from the main plugin header.
+ *
+ * Descriptive text after a spaced hyphen, en dash, or em dash is excluded so
+ * compact interfaces can use the core product name while the Plugins screen
+ * continues to display the full plugin name.
+ *
+ * @return string
+ */
+function nxtcc_get_short_plugin_name(): string {
+	static $short_name = null;
+
+	if ( null !== $short_name ) {
+		return $short_name;
+	}
+
+	$short_name = 'NXT Cloud Chat';
+
+	if ( ! function_exists( 'get_file_data' ) || ! file_exists( NXTCC_PLUGIN_FILE ) ) {
+		return $short_name;
+	}
+
+	$plugin_data = get_file_data(
+		NXTCC_PLUGIN_FILE,
+		array(
+			'Name' => 'Plugin Name',
+		),
+		'plugin'
+	);
+	$plugin_name = isset( $plugin_data['Name'] ) ? sanitize_text_field( (string) $plugin_data['Name'] ) : '';
+
+	if ( '' === $plugin_name ) {
+		return $short_name;
+	}
+
+	$name_parts = preg_split( '/\s+(?:-|\x{2013}|\x{2014})\s+/u', $plugin_name, 2 );
+
+	if ( is_array( $name_parts ) && ! empty( $name_parts[0] ) ) {
+		$short_name = sanitize_text_field( (string) $name_parts[0] );
+	}
+
+	return $short_name;
+}
+
+/**
  * Distribution marker (free/pro awareness).
  */
 if ( ! defined( 'NXTCC_DISTRIBUTION' ) ) {

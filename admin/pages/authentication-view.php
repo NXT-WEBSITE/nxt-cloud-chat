@@ -303,7 +303,7 @@ $nxtcc_woo_active = class_exists( 'WooCommerce' );
 								<?php checked( $nxtcc_show_password, 1 ); ?>
 							/>
 							<span>
-								<?php esc_html_e( 'Show "Use password instead" link on the widget', 'nxt-cloud-chat' ); ?>
+								<?php esc_html_e( 'Show "Try another sign-in method" link on the widget', 'nxt-cloud-chat' ); ?>
 							</span>
 						</label>
 						<p class="nxtcc-help">
@@ -338,7 +338,7 @@ $nxtcc_woo_active = class_exists( 'WooCommerce' );
 							</span>
 						</label>
 						<p id="nxtcc-redirect-help" class="nxtcc-help">
-							<?php esc_html_e( 'Available only when "Use password instead" is disabled.', 'nxt-cloud-chat' ); ?>
+							<?php esc_html_e( 'Available only when "Try another sign-in method" is disabled.', 'nxt-cloud-chat' ); ?>
 						</p>
 
 						<div class="nxtcc-field" style="margin-top:.9rem;margin-bottom:0;">
