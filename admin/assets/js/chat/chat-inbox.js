@@ -35,6 +35,7 @@ jQuery( function ( $ ) {
 		// Shared state/API containers across chat modules.
 		ctx.state = ctx.state || {};
 		ctx.api   = ctx.api || {};
+		ctx.api.inbox = ctx.api.inbox || {};
 
 		const ns = '.nxtccInbox' + U.toStr( ctx.instanceId || '' );
 
@@ -82,6 +83,18 @@ jQuery( function ( $ ) {
 				'data-contact': contactId ? String( contactId ) : '0',
 				'data-phone': U.toStr( full ),
 			} );
+			const conversation = chat && chat.conversation && 'object' === typeof chat.conversation ? chat.conversation : null;
+			if ( conversation ) {
+				row.setAttribute( 'data-ticket-id', U.toStr( conversation.id || '' ) );
+			}
+			const assignment = chat && chat.assignment && 'object' === typeof chat.assignment ? chat.assignment : null;
+			let assignmentTarget = '';
+			if ( assignment && 'user' === U.toStr( assignment.target_type ) ) {
+				assignmentTarget = 'user:' + U.toStr( assignment.assigned_user_id );
+			} else if ( assignment && 'role' === U.toStr( assignment.target_type ) ) {
+				assignmentTarget = 'role:' + U.toStr( assignment.assigned_role );
+			}
+			row.setAttribute( 'data-assignment-target', assignmentTarget );
 
 			// Cache normalized text for fast client-side filtering (no repeated DOM reads).
 			row.setAttribute( 'data-name-lc', U.toStr( nameText ).toLowerCase() );
@@ -92,6 +105,13 @@ jQuery( function ( $ ) {
 			const main = U.el( 'div', { class: 'nxtcc-chat-head-main' } );
 			U.safeAppend( main, U.el( 'div', { class: 'nxtcc-chat-head-name' }, nameText ) );
 			U.safeAppend( main, U.el( 'div', { class: 'nxtcc-chat-head-preview' }, previewText ) );
+			U.safeAppend( main, U.el( 'div', { class: 'nxtcc-chat-head-assignment' }, assignment && assignment.label ? U.toStr( assignment.label ) : 'Unassigned' ) );
+			if ( conversation ) {
+				const ticketMeta = U.el( 'div', { class: 'nxtcc-chat-head-ticket-meta' } );
+				U.safeAppend( ticketMeta, U.el( 'span', { class: 'nxtcc-ticket-chip status-' + U.toStr( conversation.status || 'open' ) }, U.toStr( conversation.status || 'open' ) ) );
+				U.safeAppend( ticketMeta, U.el( 'span', { class: 'nxtcc-ticket-chip priority-' + U.toStr( conversation.priority || 'normal' ) }, U.toStr( conversation.priority || 'normal' ) ) );
+				U.safeAppend( main, ticketMeta );
+			}
 			U.safeAppend( row, main );
 
 			const meta = U.el( 'div', { class: 'nxtcc-chat-head-meta' } );
@@ -166,10 +186,15 @@ jQuery( function ( $ ) {
 				action: 'nxtcc_fetch_inbox_summary',
 				business_account_id: ctx.businessAccountId,
 				phone_number_id: ctx.phoneNumberId,
+				ticket_view: U.toStr( $widget.find( '.nxtcc-ticket-view' ).val() || 'all' ),
 				nonce: ctx.nonce,
 			} )
 				.done( function ( resp ) {
 					if ( resp && resp.success && resp.data && resp.data.contacts ) {
+						ctx.state.assignmentTargets = resp.data.assignment_targets || { users: [], roles: [], teams: [] };
+						ctx.state.accessPolicy = resp.data.access_policy || { can_manage: false };
+						$widget.toggleClass( 'is-view-only', ! ctx.state.accessPolicy.can_manage );
+						renderAssignmentSelect();
 						patchInbox( resp.data.contacts );
 
 						if ( ctx.api.thread && ctx.api.thread.syncSelectedContact ) {
@@ -194,6 +219,92 @@ jQuery( function ( $ ) {
 					pollInFlight = false;
 				} );
 		}
+
+		/**
+		 * Render the header assignment selector and preserve its value.
+		 *
+		 * @param {string} value Compact assignment target.
+		 * @return {void}
+		 */
+		function renderAssignmentSelect( value ) {
+			const select = $widget.find( '.nxtcc-chat-assignment' ).get( 0 );
+			if ( ! select ) {
+				return;
+			}
+
+			const selected = undefined === value ? String( select.value || '' ) : String( value || '' );
+			U.safeEmpty( select );
+			U.safeAppend( select, U.el( 'option', { value: '' }, 'Unassigned' ) );
+
+			const targets = ctx.state.assignmentTargets || { users: [], roles: [], teams: [] };
+			const users   = targets.users || [];
+			const teams   = targets.teams || targets.roles || [];
+
+			if ( users.length ) {
+				const usersGroup = U.el( 'optgroup', { label: 'Users' } );
+				users.forEach( function ( user ) {
+					U.safeAppend( usersGroup, U.el( 'option', { value: 'user:' + U.toStr( user.id ) }, U.toStr( user.label || user.email || user.id ) ) );
+				} );
+				U.safeAppend( select, usersGroup );
+			}
+
+			if ( teams.length ) {
+				const teamsGroup = U.el( 'optgroup', { label: 'Teams' } );
+				teams.forEach( function ( role ) {
+					U.safeAppend( teamsGroup, U.el( 'option', { value: 'role:' + U.toStr( role.key ) }, U.toStr( role.label || role.key ) ) );
+				} );
+				U.safeAppend( select, teamsGroup );
+			}
+
+			select.value    = selected;
+			select.disabled = ! ctx.state.chatContactId || ! ( ctx.state.accessPolicy && ctx.state.accessPolicy.can_manage && ctx.state.accessPolicy.can_reassign );
+		}
+
+		ctx.api.inbox.syncAssignment = renderAssignmentSelect;
+		ctx.api.inbox.refresh        = pollInbox;
+
+		$widget.find( '.nxtcc-chat-assignment' ).off( 'change' + ns ).on( 'change' + ns, function () {
+			if ( ! ctx.state.chatContactId || ! ( ctx.state.accessPolicy && ctx.state.accessPolicy.can_manage && ctx.state.accessPolicy.can_reassign ) ) {
+				return;
+			}
+
+			const select = this;
+			const previousTarget = ctx.state.conversation
+				? U.toStr( ctx.state.conversation.assignment_target || '' )
+				: U.toStr( $chatList.find( '.nxtcc-chat-head.active' ).attr( 'data-assignment-target' ) || '' );
+			let handoffNote = '';
+			if ( previousTarget && previousTarget !== U.toStr( select.value || '' ) ) {
+				handoffNote = window.prompt( 'Add an internal handoff note before changing the assignee:' ) || '';
+				if ( ! handoffNote.trim() ) {
+					select.value = previousTarget;
+					return;
+				}
+			}
+			select.disabled = true;
+			$.post( Chat.cfg.ajaxurl, {
+				action: 'nxtcc_chat_update_assignment',
+				contact_id: ctx.state.chatContactId,
+				assignment_target: String( select.value || '' ),
+				note: handoffNote,
+				nonce: ctx.nonce,
+			} ).done( function ( resp ) {
+				if ( ! resp || ! resp.success ) {
+					window.alert( resp && resp.data && resp.data.message ? String( resp.data.message ) : 'Failed to update assignment.' );
+				} else if ( resp.data && resp.data.conversation ) {
+					ctx.state.conversation = resp.data.conversation;
+					if ( ctx.api.tickets && ctx.api.tickets.renderConversation ) {
+						ctx.api.tickets.renderConversation( resp.data.conversation );
+					}
+				}
+				pollInbox();
+			} ).always( function () {
+				select.disabled = false;
+			} );
+		} );
+
+		$widget.find( '.nxtcc-ticket-view' ).off( 'change' + ns ).on( 'change' + ns, function () {
+			pollInbox();
+		} );
 
 		/**
 		 * Start inbox polling interval.

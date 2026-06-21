@@ -63,11 +63,49 @@ final class NXTCC_Helpers {
 	private const CKEY_TENANT = 'tenant_creds';
 
 	/**
+	 * Default Meta Graph API version.
+	 *
+	 * @var string
+	 */
+	private const META_GRAPH_VERSION = 'v25.0';
+
+	/**
 	 * Prefix for ciphertexts encrypted with the OpenSSL fallback.
 	 *
 	 * @var string
 	 */
 	private const CRYPTO_PREFIX_OPENSSL = 'v2:';
+
+	/**
+	 * Resolve the Meta Graph API version used by the plugin.
+	 *
+	 * @param string $version Optional requested version.
+	 * @return string Graph API version, for example v25.0.
+	 */
+	public static function meta_graph_version( string $version = '' ): string {
+		$default = defined( 'NXTCC_META_GRAPH_VERSION' ) ? (string) NXTCC_META_GRAPH_VERSION : self::META_GRAPH_VERSION;
+		$version = '' !== $version ? $version : (string) apply_filters( 'nxtcc_meta_graph_version', $default );
+		$version = sanitize_text_field( $version );
+
+		if ( ! preg_match( '/^v[0-9]+\.[0-9]+$/', $version ) ) {
+			return self::META_GRAPH_VERSION;
+		}
+
+		return $version;
+	}
+
+	/**
+	 * Build a Meta Graph API URL for a node/path.
+	 *
+	 * @param string $path    URL path after the version.
+	 * @param string $version Optional requested version.
+	 * @return string Meta Graph API URL.
+	 */
+	public static function meta_graph_url( string $path = '', string $version = '' ): string {
+		$path = ltrim( $path, '/' );
+
+		return 'https://graph.facebook.com/' . self::meta_graph_version( $version ) . ( '' !== $path ? '/' . $path : '' );
+	}
 
 	/**
 	 * Check if libsodium secretbox functions are available.
@@ -526,7 +564,7 @@ final class NXTCC_Helpers {
 	 * @return bool True on success.
 	 */
 	public static function sync_templates_from_meta( string $user_mailid, string $access_token, string $business_account_id, string $phone_number_id ): bool {
-		$url  = 'https://graph.facebook.com/v19.0/' . rawurlencode( $business_account_id ) . '/message_templates?limit=1000';
+		$url  = self::meta_graph_url( rawurlencode( $business_account_id ) . '/message_templates?limit=1000' );
 		$resp = nxtcc_safe_remote_get(
 			$url,
 			array(

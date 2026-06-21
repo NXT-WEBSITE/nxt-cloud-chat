@@ -54,6 +54,44 @@ if ( ! function_exists( 'nxtcc_chat_can_reply_24h' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nxtcc_chat_require_contact_access' ) ) {
+	/**
+	 * Require current CRM scope access to one chat conversation.
+	 *
+	 * @param int  $contact_id Contact ID.
+	 * @param bool $manage Whether mutation access is required.
+	 * @return void
+	 */
+	function nxtcc_chat_require_contact_access( int $contact_id, bool $manage = false ): void {
+		$tenant       = NXTCC_Access_Control::get_current_tenant_context();
+		$conversation = NXTCC_Conversations::instance()->get_or_create_for_contact( $contact_id, $tenant );
+		$allowed      = is_array( $conversation ) && ( $manage
+			? NXTCC_CRM_Access_Policy::user_can_manage_conversation( absint( $conversation['id'] ), $tenant )
+			: NXTCC_CRM_Access_Policy::user_can_view_conversation( absint( $conversation['id'] ), $tenant ) );
+
+		if ( ! $allowed ) {
+			wp_send_json_error( array( 'message' => __( 'This chat is outside your assigned record scope.', 'nxt-cloud-chat' ) ), 403 );
+		}
+	}
+}
+
+if ( ! function_exists( 'nxtcc_chat_filter_contact_ids_by_conversation_access' ) ) {
+	/**
+	 * Filter contact IDs by their conversation ticket scope.
+	 *
+	 * @param array $contact_ids Contact IDs.
+	 * @param bool  $manage Require mutation access.
+	 * @return array<int,int>
+	 */
+	function nxtcc_chat_filter_contact_ids_by_conversation_access( array $contact_ids, bool $manage = false ): array {
+		$tenant        = NXTCC_Access_Control::get_current_tenant_context();
+		$conversations = NXTCC_Conversations::instance()->get_for_contacts( $contact_ids, $tenant );
+		$allowed       = NXTCC_CRM_Access_Policy::filter_conversations( array_values( $conversations ), $tenant, $manage );
+
+		return array_values( array_filter( array_map( 'absint', wp_list_pluck( $allowed, 'contact_id' ) ) ) );
+	}
+}
+
 /**
  * AJAX handler: Fetch inbox summary.
  *
@@ -79,10 +117,77 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 		wp_send_json_error( array( 'message' => 'Phone number id not found for user.' ), 400 );
 	}
 
-	$repo = nxtcc_chat_repo();
-	$rows = $repo->get_inbox_summary_rows( $user_mailid, $phone_number_id );
+	$repo                  = nxtcc_chat_repo();
+	$rows                  = $repo->get_inbox_summary_rows( $user_mailid, $phone_number_id );
+	$tenant                = NXTCC_Access_Control::get_current_tenant_context();
+	$policy                = NXTCC_CRM_Access_Policy::get_policy( 0, $tenant, 'nxtcc_access_chat' );
+	$conversation_map      = NXTCC_Conversations::instance()->get_for_contacts(
+		array_map(
+			static function ( $row ): int {
+				return isset( $row->contact_id ) ? absint( $row->contact_id ) : 0;
+			},
+			$rows
+		),
+		$tenant
+	);
+	$allowed_conversations = NXTCC_CRM_Access_Policy::filter_conversations( array_values( $conversation_map ), $tenant );
+	$allowed_lookup        = array_fill_keys( array_map( 'absint', wp_list_pluck( $allowed_conversations, 'contact_id' ) ), true );
+	$rows                  = array_values(
+		array_filter(
+			$rows,
+			static function ( $row ) use ( $allowed_lookup ): bool {
+				return isset( $allowed_lookup[ absint( $row->contact_id ?? 0 ) ] );
+			}
+		)
+	);
+
+	$view          = isset( $_POST['ticket_view'] ) ? sanitize_key( wp_unslash( $_POST['ticket_view'] ) ) : 'all';
+	$now           = current_time( 'mysql', true );
+	$recent_cutoff = gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) );
+	$rows          = array_values(
+		array_filter(
+			$rows,
+			static function ( $row ) use ( $conversation_map, $view, $policy, $now, $recent_cutoff ): bool {
+				$conversation = $conversation_map[ absint( $row->contact_id ?? 0 ) ] ?? null;
+				if ( ! is_array( $conversation ) || 'all' === $view ) {
+					return is_array( $conversation );
+				}
+
+				if ( 'mine' === $view ) {
+					return absint( $conversation['assigned_user_id'] ?? 0 ) === absint( $policy['user_id'] ?? 0 );
+				}
+				if ( 'team' === $view ) {
+					return '' !== (string) ( $policy['role_key'] ?? '' )
+						&& (string) ( $conversation['assigned_role'] ?? '' ) === (string) $policy['role_key'];
+				}
+				if ( 'unassigned' === $view ) {
+					return 0 === absint( $conversation['assigned_user_id'] ?? 0 ) && '' === (string) ( $conversation['assigned_role'] ?? '' );
+				}
+				if ( 'overdue' === $view ) {
+					return ( ! empty( $conversation['first_response_due_at'] ) && (string) $conversation['first_response_due_at'] < $now && empty( $conversation['first_response_at'] ) )
+						|| ( ! empty( $conversation['resolution_due_at'] ) && (string) $conversation['resolution_due_at'] < $now && ! in_array( $conversation['status'], array( 'resolved', 'closed' ), true ) );
+				}
+				if ( 'resolved' === $view ) {
+					return in_array( $conversation['status'], array( 'resolved', 'closed' ), true )
+						&& ! empty( $conversation['updated_at'] )
+						&& (string) $conversation['updated_at'] >= $recent_cutoff;
+				}
+
+				return true;
+			}
+		)
+	);
 
 	foreach ( $rows as &$chat ) {
+		$chat->conversation = $conversation_map[ absint( $chat->contact_id ?? 0 ) ] ?? null;
+		$chat->assignment   = is_array( $chat->conversation )
+			? array(
+				'label'            => $chat->conversation['assignment_label'],
+				'target_type'      => absint( $chat->conversation['assigned_user_id'] ) > 0 ? 'user' : ( '' !== $chat->conversation['assigned_role'] ? 'role' : '' ),
+				'assigned_user_id' => absint( $chat->conversation['assigned_user_id'] ),
+				'assigned_role'    => $chat->conversation['assigned_role'],
+			)
+			: null;
 		if ( ! empty( $chat->last_msg_time ) ) {
 			$chat->last_msg_time = get_date_from_gmt( $chat->last_msg_time, 'Y-m-d h:i A' );
 		}
@@ -132,9 +237,73 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 	}
 	unset( $chat );
 
-	wp_send_json_success( array( 'contacts' => $rows ) );
+	wp_send_json_success(
+		array(
+			'contacts'           => $rows,
+			'assignment_targets' => nxtcc_list_contact_assignment_targets( $tenant ),
+			'access_policy'      => array(
+				'action_level' => (string) ( $policy['action_level'] ?? 'view_only' ),
+				'data_scope'   => (string) ( $policy['data_scope'] ?? 'assigned' ),
+				'can_manage'   => NXTCC_CRM_Access_Policy::can_manage( $policy ),
+				'can_reassign' => NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_reassign_conversations' ) ),
+			),
+		)
+	);
 }
 add_action( 'wp_ajax_nxtcc_fetch_inbox_summary', 'nxtcc_ajax_fetch_inbox_summary' );
+
+/**
+ * AJAX handler: Update the conversation assignment.
+ *
+ * @return void
+ */
+function nxtcc_ajax_chat_update_assignment(): void {
+	if ( ! is_user_logged_in() ) {
+		wp_send_json_error( array( 'message' => 'Not logged in.' ), 401 );
+	}
+
+	nxtcc_chat_ajax_require_caps();
+	if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_reassign_conversations' ) ) ) {
+		wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'nxt-cloud-chat' ) ), 403 );
+	}
+
+	check_ajax_referer( 'nxtcc_received_messages', 'nonce', true );
+
+	$contact_id = filter_input( INPUT_POST, 'contact_id', FILTER_SANITIZE_NUMBER_INT );
+	$target     = filter_input( INPUT_POST, 'assignment_target', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+	nxtcc_chat_require_contact_access( absint( $contact_id ), true );
+	$tenant       = NXTCC_Access_Control::get_current_tenant_context();
+	$conversation = NXTCC_Conversations::instance()->get_or_create_for_contact( absint( $contact_id ), $tenant );
+	$result       = NXTCC_Conversations::instance()->assign(
+		array_merge(
+			$tenant,
+			array(
+				'conversation_id'   => absint( $conversation['id'] ?? 0 ),
+				'assignment_target' => sanitize_text_field( wp_unslash( (string) $target ) ),
+				'note'              => isset( $_POST['note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note'] ) ) : '',
+				'actor_id'          => get_current_user_id(),
+				'source'            => 'manual',
+			)
+		)
+	);
+
+	if ( empty( $result['success'] ) ) {
+		wp_send_json_error(
+			array(
+				'message' => isset( $result['message'] ) ? (string) $result['message'] : __( 'Unable to update the assignment.', 'nxt-cloud-chat' ),
+			),
+			400
+		);
+	}
+
+	wp_send_json_success(
+		array(
+			'message'      => __( 'Assignment updated.', 'nxt-cloud-chat' ),
+			'conversation' => $result['conversation'] ?? null,
+		)
+	);
+}
+add_action( 'wp_ajax_nxtcc_chat_update_assignment', 'nxtcc_ajax_chat_update_assignment' );
 
 /**
  * AJAX handler: Fetch chat thread for a contact.
@@ -162,6 +331,7 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 	if ( 0 === $contact_id ) {
 		wp_send_json_error( array( 'message' => 'Missing contact id.' ), 400 );
 	}
+	nxtcc_chat_require_contact_access( $contact_id );
 
 	$requested_pnid = '';
 	if ( isset( $_POST['phone_number_id'] ) ) {
@@ -324,11 +494,13 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 	}
 
 	$last_incoming = $repo->get_last_incoming_time( $contact_id, $user_mailid );
+	$conversation  = NXTCC_Conversations::instance()->get_or_create_for_contact( $contact_id, NXTCC_Access_Control::get_current_tenant_context() );
 
 	wp_send_json_success(
 		array(
 			'messages'       => $messages,
 			'can_reply_24hr' => nxtcc_chat_can_reply_24h( $last_incoming ),
+			'conversation'   => $conversation,
 		)
 	);
 }
@@ -356,6 +528,7 @@ function nxtcc_ajax_mark_chat_read(): void {
 	if ( 0 === $contact_id ) {
 		wp_send_json_error( array( 'message' => 'Missing contact id.' ), 400 );
 	}
+	nxtcc_chat_require_contact_access( $contact_id, true );
 
 	$requested_pnid = '';
 	if ( isset( $_POST['phone_number_id'] ) ) {

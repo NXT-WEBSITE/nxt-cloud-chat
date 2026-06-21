@@ -24,7 +24,7 @@ final class NXTCC_Meta_Health_Status {
 	 *
 	 * @var string
 	 */
-	private const DEFAULT_GRAPH_VERSION = 'v19.0';
+	private const DEFAULT_GRAPH_VERSION = 'v25.0';
 
 	/**
 	 * Fetch health status for a tenant/node.
@@ -185,7 +185,8 @@ final class NXTCC_Meta_Health_Status {
 	 * @return string
 	 */
 	private static function graph_version( string $graph_version ): string {
-		$default = (string) apply_filters( 'nxtcc_meta_health_graph_version', self::DEFAULT_GRAPH_VERSION );
+		$default = function_exists( 'nxtcc_meta_graph_version' ) ? nxtcc_meta_graph_version() : self::DEFAULT_GRAPH_VERSION;
+		$default = (string) apply_filters( 'nxtcc_meta_health_graph_version', $default );
 		$version = '' !== $graph_version ? $graph_version : $default;
 		$version = sanitize_text_field( $version );
 

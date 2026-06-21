@@ -37,13 +37,16 @@ $nxtcc_has_connection = (
 	&& ! empty( $nxtcc_settings->phone_number_id )
 );
 
-$nxtcc_instance_id = uniqid( 'nxtcc_contacts_', true );
-$nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
+$nxtcc_instance_id     = uniqid( 'nxtcc_contacts_', true );
+$nxtcc_nonce           = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
+$nxtcc_can_manage_tags = NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_tags' ) );
+$nxtcc_crm_policy      = NXTCC_CRM_Access_Policy::get_policy( 0, $nxtcc_active_tenant, 'nxtcc_manage_contacts' );
+$nxtcc_can_manage_crm  = NXTCC_CRM_Access_Policy::can_manage( $nxtcc_crm_policy );
 ?>
 
 <div class="wrap nxtcc-contacts-screen">
 	<div
-		class="nxtcc-contacts-widget"
+		class="nxtcc-contacts-widget<?php echo $nxtcc_can_manage_crm ? '' : ' is-view-only'; ?>"
 		id="nxtcc-contacts-widget-<?php echo esc_attr( $nxtcc_instance_id ); ?>"
 		data-instance="<?php echo esc_attr( $nxtcc_instance_id ); ?>"
 		data-nonce="<?php echo esc_attr( $nxtcc_nonce ); ?>"
@@ -113,50 +116,94 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 			</div>
 		</div>
 
+		<div class="nxtcc-contacts-saved-views">
+			<div class="nxtcc-contacts-saved-view-select nxtcc-ui-filter-select-wrap">
+				<label class="screen-reader-text" for="nxtcc-saved-view-select"><?php esc_html_e( 'Saved contact view', 'nxt-cloud-chat' ); ?></label>
+				<select id="nxtcc-saved-view-select" class="nxtcc-filter-dropdown nxtcc-ui-filter-control">
+					<option value=""><?php esc_html_e( 'All Contacts', 'nxt-cloud-chat' ); ?></option>
+				</select>
+			</div>
+			<div class="nxtcc-contacts-saved-view-actions">
+				<button type="button" class="nxtcc-btn nxtcc-btn-outline" id="nxtcc-saved-view-create" <?php disabled( ! $nxtcc_has_connection ); ?>><?php esc_html_e( 'Save Current View', 'nxt-cloud-chat' ); ?></button>
+				<button type="button" class="nxtcc-btn nxtcc-btn-green" id="nxtcc-saved-view-update" disabled><?php esc_html_e( 'Update View', 'nxt-cloud-chat' ); ?></button>
+				<button type="button" class="nxtcc-btn nxtcc-btn-danger" id="nxtcc-saved-view-delete" disabled><?php esc_html_e( 'Delete View', 'nxt-cloud-chat' ); ?></button>
+			</div>
+		</div>
+
 		<div class="nxtcc-contacts-filterbar">
 			<div class="nxtcc-contacts-filter-field nxtcc-contacts-filter-field-search">
 				<label class="screen-reader-text" for="nxtcc-filter-name"><?php esc_html_e( 'Search contacts', 'nxt-cloud-chat' ); ?></label>
-				<input type="search" id="nxtcc-filter-name" class="nxtcc-filter-input" placeholder="<?php echo esc_attr__( 'Search name or phone number', 'nxt-cloud-chat' ); ?>">
+				<input type="search" id="nxtcc-filter-name" class="nxtcc-filter-input nxtcc-ui-filter-control" placeholder="<?php echo esc_attr__( 'Search name or phone number', 'nxt-cloud-chat' ); ?>">
 			</div>
 
-			<div class="nxtcc-contacts-filter-field">
+			<div class="nxtcc-contacts-filter-field nxtcc-ui-filter-select-wrap">
 				<label class="screen-reader-text" for="nxtcc-filter-group"><?php esc_html_e( 'Filter by group', 'nxt-cloud-chat' ); ?></label>
-				<select id="nxtcc-filter-group" class="nxtcc-filter-dropdown" title="<?php echo esc_attr__( 'Filter by group', 'nxt-cloud-chat' ); ?>">
+				<select id="nxtcc-filter-group" class="nxtcc-filter-dropdown nxtcc-ui-filter-control" title="<?php echo esc_attr__( 'Filter by group', 'nxt-cloud-chat' ); ?>">
 					<option value=""><?php esc_html_e( 'All Groups', 'nxt-cloud-chat' ); ?></option>
 				</select>
 			</div>
 
-			<div class="nxtcc-contacts-filter-field">
+			<div class="nxtcc-contacts-filter-field nxtcc-tag-filter">
+				<button
+					type="button"
+					id="nxtcc-filter-tags-toggle"
+					class="nxtcc-filter-dropdown nxtcc-tag-filter-toggle nxtcc-ui-filter-control"
+					aria-haspopup="true"
+					aria-expanded="false"
+					aria-controls="nxtcc-filter-tags-panel"
+				>
+					<?php esc_html_e( 'All Tags', 'nxt-cloud-chat' ); ?>
+				</button>
+				<div id="nxtcc-filter-tags-panel" class="nxtcc-tag-filter-panel" hidden>
+					<label class="nxtcc-tag-filter-select-all">
+						<input type="checkbox" id="nxtcc-filter-tags-select-all" disabled>
+						<span><?php esc_html_e( 'Select All', 'nxt-cloud-chat' ); ?></span>
+					</label>
+					<div id="nxtcc-filter-tags-options" class="nxtcc-tag-filter-options">
+						<div class="nxtcc-tag-filter-empty"><?php esc_html_e( 'No tags available', 'nxt-cloud-chat' ); ?></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="nxtcc-contacts-filter-field nxtcc-ui-filter-select-wrap">
 				<label class="screen-reader-text" for="nxtcc-filter-country"><?php esc_html_e( 'Filter by country code', 'nxt-cloud-chat' ); ?></label>
-				<select id="nxtcc-filter-country" class="nxtcc-filter-dropdown" title="<?php echo esc_attr__( 'Filter by country code', 'nxt-cloud-chat' ); ?>">
+				<select id="nxtcc-filter-country" class="nxtcc-filter-dropdown nxtcc-ui-filter-control" title="<?php echo esc_attr__( 'Filter by country code', 'nxt-cloud-chat' ); ?>">
 					<option value=""><?php esc_html_e( 'All Country Codes', 'nxt-cloud-chat' ); ?></option>
 				</select>
 			</div>
 
-			<div class="nxtcc-contacts-filter-field">
+			<div class="nxtcc-contacts-filter-field nxtcc-ui-filter-select-wrap">
 				<label class="screen-reader-text" for="nxtcc-filter-subscription"><?php esc_html_e( 'Filter by subscription status', 'nxt-cloud-chat' ); ?></label>
-				<select id="nxtcc-filter-subscription" class="nxtcc-filter-dropdown" title="<?php echo esc_attr__( 'Filter by subscription status', 'nxt-cloud-chat' ); ?>">
+				<select id="nxtcc-filter-subscription" class="nxtcc-filter-dropdown nxtcc-ui-filter-control" title="<?php echo esc_attr__( 'Filter by subscription status', 'nxt-cloud-chat' ); ?>">
 					<option value=""><?php esc_html_e( 'All Subscriptions', 'nxt-cloud-chat' ); ?></option>
 					<option value="1"><?php esc_html_e( 'Subscribed', 'nxt-cloud-chat' ); ?></option>
 					<option value="0"><?php esc_html_e( 'Unsubscribed', 'nxt-cloud-chat' ); ?></option>
 				</select>
 			</div>
 
-			<div class="nxtcc-contacts-filter-field">
+			<div class="nxtcc-contacts-filter-field nxtcc-ui-filter-select-wrap">
+				<label class="screen-reader-text" for="nxtcc-filter-assignment"><?php esc_html_e( 'Filter by assignment', 'nxt-cloud-chat' ); ?></label>
+				<select id="nxtcc-filter-assignment" class="nxtcc-filter-dropdown nxtcc-ui-filter-control" title="<?php echo esc_attr__( 'Filter by assignment', 'nxt-cloud-chat' ); ?>">
+					<option value=""><?php esc_html_e( 'All Assignments', 'nxt-cloud-chat' ); ?></option>
+					<option value="unassigned"><?php esc_html_e( 'Unassigned', 'nxt-cloud-chat' ); ?></option>
+				</select>
+			</div>
+
+			<div class="nxtcc-contacts-filter-field nxtcc-ui-filter-select-wrap">
 				<label class="screen-reader-text" for="nxtcc-filter-created-by"><?php esc_html_e( 'Filter by creator', 'nxt-cloud-chat' ); ?></label>
-				<select id="nxtcc-filter-created-by" class="nxtcc-filter-dropdown" title="<?php echo esc_attr__( 'Filter by creator', 'nxt-cloud-chat' ); ?>">
+				<select id="nxtcc-filter-created-by" class="nxtcc-filter-dropdown nxtcc-ui-filter-control" title="<?php echo esc_attr__( 'Filter by creator', 'nxt-cloud-chat' ); ?>">
 					<option value=""><?php esc_html_e( 'All Creators', 'nxt-cloud-chat' ); ?></option>
 				</select>
 			</div>
 
 			<div class="nxtcc-contacts-filter-field nxtcc-contacts-filter-dates">
 				<label class="screen-reader-text" for="nxtcc-filter-created-from"><?php esc_html_e( 'Created from', 'nxt-cloud-chat' ); ?></label>
-				<input type="date" id="nxtcc-filter-created-from" class="nxtcc-filter-input" title="<?php echo esc_attr__( 'Created from', 'nxt-cloud-chat' ); ?>">
+				<input type="date" id="nxtcc-filter-created-from" class="nxtcc-filter-input nxtcc-ui-filter-control" title="<?php echo esc_attr__( 'Created from', 'nxt-cloud-chat' ); ?>">
 
 				<span class="nxtcc-contacts-date-separator" aria-hidden="true"><?php esc_html_e( 'to', 'nxt-cloud-chat' ); ?></span>
 
 				<label class="screen-reader-text" for="nxtcc-filter-created-to"><?php esc_html_e( 'Created to', 'nxt-cloud-chat' ); ?></label>
-				<input type="date" id="nxtcc-filter-created-to" class="nxtcc-filter-input" title="<?php echo esc_attr__( 'Created to', 'nxt-cloud-chat' ); ?>">
+				<input type="date" id="nxtcc-filter-created-to" class="nxtcc-filter-input nxtcc-ui-filter-control" title="<?php echo esc_attr__( 'Created to', 'nxt-cloud-chat' ); ?>">
 			</div>
 		</div>
 
@@ -169,6 +216,8 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 			<span id="nxtcc-bulk-selected-count"></span>
 			<button type="button" id="nxtcc-bulk-delete" class="nxtcc-btn nxtcc-btn-danger"><?php esc_html_e( 'Delete', 'nxt-cloud-chat' ); ?></button>
 			<button type="button" id="nxtcc-bulk-edit-groups" class="nxtcc-btn nxtcc-btn-outline"><?php esc_html_e( 'Edit Groups', 'nxt-cloud-chat' ); ?></button>
+			<button type="button" id="nxtcc-bulk-edit-tags" class="nxtcc-btn nxtcc-btn-outline"><?php esc_html_e( 'Edit Tags', 'nxt-cloud-chat' ); ?></button>
+			<button type="button" id="nxtcc-bulk-edit-assignment" class="nxtcc-btn nxtcc-btn-outline"><?php esc_html_e( 'Assign', 'nxt-cloud-chat' ); ?></button>
 			<button type="button" id="nxtcc-bulk-edit-subscription" class="nxtcc-btn nxtcc-btn-outline"><?php esc_html_e( 'Edit Subscription', 'nxt-cloud-chat' ); ?></button>
 			<button type="button" id="nxtcc-bulk-export" class="nxtcc-btn nxtcc-btn-outline"><?php esc_html_e( 'Export', 'nxt-cloud-chat' ); ?></button>
 		</div>
@@ -177,13 +226,17 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 			<table class="nxtcc-contacts-table" id="nxtcc-contacts-table">
 				<thead>
 					<tr>
-						<th data-col="checkbox" scope="col">
-							<input type="checkbox" id="nxtcc-contacts-select-all" aria-label="<?php echo esc_attr__( 'Select all contacts', 'nxt-cloud-chat' ); ?>">
-						</th>
+						<?php if ( $nxtcc_can_manage_crm ) : ?>
+							<th data-col="checkbox" scope="col">
+								<input type="checkbox" id="nxtcc-contacts-select-all" aria-label="<?php echo esc_attr__( 'Select all contacts', 'nxt-cloud-chat' ); ?>">
+							</th>
+						<?php endif; ?>
 						<th data-col="name" scope="col"><?php esc_html_e( 'Name', 'nxt-cloud-chat' ); ?></th>
 						<th data-col="country_code" scope="col"><?php esc_html_e( 'Country Code', 'nxt-cloud-chat' ); ?></th>
 						<th data-col="phone_number" scope="col"><?php esc_html_e( 'Phone Number', 'nxt-cloud-chat' ); ?></th>
 						<th data-col="groups" scope="col"><?php esc_html_e( 'Groups', 'nxt-cloud-chat' ); ?></th>
+						<th data-col="tags" scope="col"><?php esc_html_e( 'Tags', 'nxt-cloud-chat' ); ?></th>
+						<th data-col="assignment" scope="col"><?php esc_html_e( 'Assigned To', 'nxt-cloud-chat' ); ?></th>
 						<th data-col="subscribed" scope="col"><?php esc_html_e( 'Subscription', 'nxt-cloud-chat' ); ?></th>
 						<th data-col="created_at" scope="col"><?php esc_html_e( 'Created At', 'nxt-cloud-chat' ); ?></th>
 						<th data-col="actions" class="actions-col" scope="col"><?php esc_html_e( 'Actions', 'nxt-cloud-chat' ); ?></th>
@@ -198,6 +251,34 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 
 			<div id="nxtcc-load-more-wrap" class="nxtcc-contacts-load-more" style="display:none;">
 				<button type="button" id="nxtcc-load-more" class="nxtcc-btn nxtcc-btn-outline"><?php esc_html_e( 'Load More', 'nxt-cloud-chat' ); ?></button>
+			</div>
+		</div>
+
+		<div class="nxtcc-modal" id="nxtcc-saved-view-modal" style="display:none;">
+			<div class="nxtcc-modal-overlay nxtcc-saved-view-dismiss"></div>
+			<div class="nxtcc-modal-content nxtcc-modal-content-compact" role="dialog" aria-modal="true" aria-labelledby="nxtcc-saved-view-modal-title">
+				<div class="nxtcc-modal-header">
+					<div class="nxtcc-modal-copy">
+						<h2 id="nxtcc-saved-view-modal-title"><?php esc_html_e( 'Save Contact View', 'nxt-cloud-chat' ); ?></h2>
+						<p class="nxtcc-modal-subtitle"><?php esc_html_e( 'Reuse the currently selected contact filters.', 'nxt-cloud-chat' ); ?></p>
+					</div>
+					<button type="button" class="nxtcc-modal-close nxtcc-saved-view-dismiss" aria-label="<?php echo esc_attr__( 'Close', 'nxt-cloud-chat' ); ?>">&times;</button>
+				</div>
+				<form id="nxtcc-saved-view-form">
+					<input type="hidden" id="nxtcc-saved-view-id" value="">
+					<div class="nxtcc-form-row">
+						<label for="nxtcc-saved-view-name"><?php esc_html_e( 'View Name', 'nxt-cloud-chat' ); ?> <span class="nxtcc-required">*</span></label>
+						<input type="text" id="nxtcc-saved-view-name" maxlength="120" required placeholder="<?php echo esc_attr__( 'Example: Unassigned VIP Contacts', 'nxt-cloud-chat' ); ?>">
+					</div>
+					<label class="nxtcc-saved-view-default">
+						<input type="checkbox" id="nxtcc-saved-view-default">
+						<span><?php esc_html_e( 'Open this view by default', 'nxt-cloud-chat' ); ?></span>
+					</label>
+					<div class="nxtcc-modal-footer">
+						<button type="button" class="nxtcc-btn nxtcc-btn-outline nxtcc-saved-view-dismiss"><?php esc_html_e( 'Cancel', 'nxt-cloud-chat' ); ?></button>
+						<button type="submit" class="nxtcc-btn nxtcc-btn-green" id="nxtcc-saved-view-submit"><?php esc_html_e( 'Save View', 'nxt-cloud-chat' ); ?></button>
+					</div>
+				</form>
 			</div>
 		</div>
 
@@ -256,6 +337,25 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 						</div>
 					</div>
 
+					<div class="nxtcc-form-row">
+						<label for="nxtcc-contact-tags"><?php esc_html_e( 'Tags', 'nxt-cloud-chat' ); ?></label>
+						<div class="nxtcc-input-with-inline-link">
+							<select id="nxtcc-contact-tags" name="tags[]" multiple></select>
+							<?php if ( $nxtcc_can_manage_tags ) : ?>
+								<a href="#" id="nxtcc-open-create-tag" class="nxtcc-inline-add-tag-link" title="<?php echo esc_attr__( 'Create new tag', 'nxt-cloud-chat' ); ?>">
+									<?php esc_html_e( 'Add Tag', 'nxt-cloud-chat' ); ?>
+								</a>
+							<?php endif; ?>
+						</div>
+					</div>
+
+					<div class="nxtcc-form-row">
+						<label for="nxtcc-contact-assignment"><?php esc_html_e( 'Assigned To', 'nxt-cloud-chat' ); ?></label>
+						<select id="nxtcc-contact-assignment" name="assignment_target">
+							<option value=""><?php esc_html_e( 'Unassigned', 'nxt-cloud-chat' ); ?></option>
+						</select>
+					</div>
+
 					<div id="nxtcc-dynamic-custom-fields-list"></div>
 
 					<div id="nxtcc-custom-fields-add-section" class="nxtcc-form-row nxtcc-custom-fields-add-section">
@@ -300,6 +400,37 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 		</div>
 	</div>
 
+	<div class="nxtcc-modal" id="nxtcc-bulk-tag-modal" style="display:none;">
+		<div class="nxtcc-modal-overlay"></div>
+		<div class="nxtcc-modal-content nxtcc-modal-content-compact" role="dialog" aria-modal="true">
+			<div class="nxtcc-modal-header">
+				<div class="nxtcc-modal-copy">
+					<h2><?php esc_html_e( 'Edit Tags', 'nxt-cloud-chat' ); ?></h2>
+					<p class="nxtcc-modal-subtitle"><?php esc_html_e( 'Add or remove tags from the selected contacts.', 'nxt-cloud-chat' ); ?></p>
+				</div>
+				<button type="button" class="nxtcc-modal-close" id="nxtcc-bulk-tag-close" aria-label="<?php echo esc_attr__( 'Close', 'nxt-cloud-chat' ); ?>">&times;</button>
+			</div>
+
+			<div class="nxtcc-form-row">
+				<label for="nxtcc-bulk-tag-operation"><?php esc_html_e( 'Operation', 'nxt-cloud-chat' ); ?></label>
+				<select id="nxtcc-bulk-tag-operation">
+					<option value="add"><?php esc_html_e( 'Add selected tags', 'nxt-cloud-chat' ); ?></option>
+					<option value="remove"><?php esc_html_e( 'Remove selected tags', 'nxt-cloud-chat' ); ?></option>
+				</select>
+			</div>
+
+			<div class="nxtcc-form-row">
+				<label for="nxtcc-bulk-tag-select"><?php esc_html_e( 'Tags', 'nxt-cloud-chat' ); ?></label>
+				<select id="nxtcc-bulk-tag-select" multiple></select>
+			</div>
+
+			<div class="nxtcc-modal-footer">
+				<button type="button" class="nxtcc-btn nxtcc-btn-outline" id="nxtcc-bulk-tag-cancel"><?php esc_html_e( 'Cancel', 'nxt-cloud-chat' ); ?></button>
+				<button type="button" class="nxtcc-btn nxtcc-btn-green" id="nxtcc-bulk-tag-apply"><?php esc_html_e( 'Apply', 'nxt-cloud-chat' ); ?></button>
+			</div>
+		</div>
+	</div>
+
 	<div class="nxtcc-modal" id="nxtcc-bulk-subscription-modal" style="display:none;">
 		<div class="nxtcc-modal-overlay"></div>
 		<div class="nxtcc-modal-content nxtcc-modal-content-compact" role="dialog" aria-modal="true">
@@ -330,6 +461,31 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 			<div class="nxtcc-modal-footer">
 				<button type="button" class="nxtcc-btn nxtcc-btn-outline" id="nxtcc-bulk-subscription-cancel"><?php esc_html_e( 'Cancel', 'nxt-cloud-chat' ); ?></button>
 				<button type="button" class="nxtcc-btn nxtcc-btn-green" id="nxtcc-bulk-subscription-apply"><?php esc_html_e( 'Apply', 'nxt-cloud-chat' ); ?></button>
+			</div>
+		</div>
+	</div>
+
+	<div class="nxtcc-modal" id="nxtcc-bulk-assignment-modal" style="display:none;">
+		<div class="nxtcc-modal-overlay"></div>
+		<div class="nxtcc-modal-content nxtcc-modal-content-compact" role="dialog" aria-modal="true">
+			<div class="nxtcc-modal-header">
+				<div class="nxtcc-modal-copy">
+					<h2><?php esc_html_e( 'Assign Contacts', 'nxt-cloud-chat' ); ?></h2>
+					<p class="nxtcc-modal-subtitle"><?php esc_html_e( 'Assign selected contacts and their chats to a team member or access role.', 'nxt-cloud-chat' ); ?></p>
+				</div>
+				<button type="button" class="nxtcc-modal-close" id="nxtcc-bulk-assignment-close" aria-label="<?php echo esc_attr__( 'Close', 'nxt-cloud-chat' ); ?>">&times;</button>
+			</div>
+
+			<div class="nxtcc-form-row">
+				<label for="nxtcc-bulk-assignment-select"><?php esc_html_e( 'Assigned To', 'nxt-cloud-chat' ); ?></label>
+				<select id="nxtcc-bulk-assignment-select">
+					<option value=""><?php esc_html_e( 'Unassigned', 'nxt-cloud-chat' ); ?></option>
+				</select>
+			</div>
+
+			<div class="nxtcc-modal-footer">
+				<button type="button" class="nxtcc-btn nxtcc-btn-outline" id="nxtcc-bulk-assignment-cancel"><?php esc_html_e( 'Cancel', 'nxt-cloud-chat' ); ?></button>
+				<button type="button" class="nxtcc-btn nxtcc-btn-green" id="nxtcc-bulk-assignment-apply"><?php esc_html_e( 'Apply', 'nxt-cloud-chat' ); ?></button>
 			</div>
 		</div>
 	</div>
@@ -410,6 +566,11 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 					<p class="nxtcc-form-hint"><?php esc_html_e( 'Verified groups are protected and cannot be selected as import defaults. Existing verified-group contacts keep that group during upsert.', 'nxt-cloud-chat' ); ?></p>
 				</div>
 
+				<div class="nxtcc-form-row">
+					<label for="nxtcc-import-default-tags"><?php esc_html_e( 'Default Tags', 'nxt-cloud-chat' ); ?></label>
+					<select id="nxtcc-import-default-tags" multiple></select>
+				</div>
+
 				<div class="nxtcc-modal-footer">
 					<button type="button" class="nxtcc-btn nxtcc-btn-outline" id="nxtcc-import-download-sample-csv"><?php esc_html_e( 'Download Sample CSV', 'nxt-cloud-chat' ); ?></button>
 					<button type="button" class="nxtcc-btn nxtcc-btn-green" id="nxtcc-import-next-1"><?php esc_html_e( 'Next', 'nxt-cloud-chat' ); ?></button>
@@ -420,7 +581,7 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 				<div class="nxtcc-form-row">
 					<label><?php esc_html_e( 'Map Fields', 'nxt-cloud-chat' ); ?></label>
 					<div id="nxtcc-import-mapping-grid" class="nxtcc-import-mapping-grid"></div>
-					<p class="nxtcc-form-hint"><?php esc_html_e( 'Required fields are Name, Country Code, and Phone Number. You can also map existing custom fields or add new ones.', 'nxt-cloud-chat' ); ?></p>
+					<p class="nxtcc-form-hint"><?php esc_html_e( 'Required fields are Name, Country Code, and Phone Number. You can also map Tags, existing custom fields, or add new custom fields.', 'nxt-cloud-chat' ); ?></p>
 				</div>
 
 				<div class="nxtcc-modal-footer">
@@ -477,3 +638,5 @@ $nxtcc_nonce       = wp_create_nonce( 'nxtcc_contacts_' . $nxtcc_instance_id );
 		</div>
 	</div>
 </div>
+
+<?php nxtcc_render_contact_profile_modal(); ?>

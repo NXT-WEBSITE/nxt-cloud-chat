@@ -153,6 +153,55 @@ final class NXTCC_Admin_Settings {
 	}
 
 	/**
+	 * Read an associative text map from POST.
+	 *
+	 * @param string $key Key name.
+	 * @return array<string,string>
+	 */
+	private static function post_text_map( string $key ): array {
+		$value = filter_input(
+			INPUT_POST,
+			$key,
+			FILTER_SANITIZE_FULL_SPECIAL_CHARS,
+			array(
+				'flags' => FILTER_REQUIRE_ARRAY,
+			)
+		);
+
+		if ( ! is_array( $value ) ) {
+			return array();
+		}
+
+		$clean = array();
+		foreach ( $value as $map_key => $map_value ) {
+			$map_key = sanitize_key( (string) $map_key );
+			if ( '' === $map_key ) {
+				continue;
+			}
+
+			$clean[ $map_key ] = sanitize_text_field( wp_unslash( (string) $map_value ) );
+		}
+
+		return $clean;
+	}
+
+	/**
+	 * Read per-capability data scopes from POST.
+	 *
+	 * @param string $key Key name.
+	 * @param array  $capabilities Selected capabilities.
+	 * @param string $fallback Default scope.
+	 * @return array<string,string>
+	 */
+	private static function post_capability_scopes( string $key, array $capabilities, string $fallback ): array {
+		return NXTCC_Access_Teams::sanitize_capability_scopes(
+			self::post_text_map( $key ),
+			$capabilities,
+			$fallback
+		);
+	}
+
+	/**
 	 * Read a sanitized "secret" (token, verify token etc.) from POST.
 	 *
 	 * This allows a broader safe character set than sanitize_text_field(), while
@@ -448,18 +497,25 @@ final class NXTCC_Admin_Settings {
 				continue;
 			}
 
-			$user_id     = (int) $row['wp_user_id'];
-			$user        = isset( $users_by_id[ $user_id ] ) ? $users_by_id[ $user_id ] : array();
-			$is_owner    = ! empty( $row['is_owner'] );
-			$cap_list    = isset( $row['capabilities'] ) && is_array( $row['capabilities'] ) ? array_values( $row['capabilities'] ) : array();
-			$role_key    = $is_owner ? 'owner' : NXTCC_Access_Control::sanitize_role_key( (string) ( $row['role_key'] ?? 'custom' ) );
-			$role_preset = isset( $role_presets[ $role_key ] ) ? $role_presets[ $role_key ] : null;
-			$role_label  = $is_owner ? __( 'Tenant Owner', 'nxt-cloud-chat' ) : ( is_array( $role_preset ) ? (string) $role_preset['label'] : __( 'Custom', 'nxt-cloud-chat' ) );
-			$role_note   = $is_owner ? __( 'Has every tenant capability.', 'nxt-cloud-chat' ) : ( is_array( $role_preset ) ? (string) $role_preset['description'] : __( 'Uses a custom permission mix for this tenant.', 'nxt-cloud-chat' ) );
-			$role_labels = isset( $user['roles'] ) && is_array( $user['roles'] ) ? array_values( $user['roles'] ) : array();
-			$is_eligible = ! empty( $user['is_staff_eligible'] );
-			$cap_labels  = array();
-			$status_note = $is_eligible
+			$user_id       = (int) $row['wp_user_id'];
+			$user          = isset( $users_by_id[ $user_id ] ) ? $users_by_id[ $user_id ] : array();
+			$is_owner      = ! empty( $row['is_owner'] );
+			$cap_list      = isset( $row['capabilities'] ) && is_array( $row['capabilities'] ) ? array_values( $row['capabilities'] ) : array();
+			$role_key      = $is_owner ? 'owner' : NXTCC_Access_Control::sanitize_role_key( (string) ( $row['role_key'] ?? 'custom' ) );
+			$role_preset   = isset( $role_presets[ $role_key ] ) ? $role_presets[ $role_key ] : null;
+			$role_label    = $is_owner ? __( 'Tenant Owner', 'nxt-cloud-chat' ) : ( is_array( $role_preset ) ? (string) $role_preset['label'] : __( 'Custom', 'nxt-cloud-chat' ) );
+			$role_note     = $is_owner ? __( 'Has every tenant capability.', 'nxt-cloud-chat' ) : ( is_array( $role_preset ) ? (string) $role_preset['description'] : __( 'Uses a custom permission mix for this tenant.', 'nxt-cloud-chat' ) );
+			$action_level  = $is_owner ? 'manage' : NXTCC_Access_Teams::sanitize_action_level( (string) ( $row['action_level'] ?? 'manage' ) );
+			$data_scope    = $is_owner ? 'all' : NXTCC_Access_Teams::sanitize_data_scope( (string) ( $row['data_scope'] ?? 'all' ) );
+			$scope_map     = isset( $row['capability_scopes'] ) && is_array( $row['capability_scopes'] )
+				? NXTCC_Access_Teams::sanitize_capability_scopes( $row['capability_scopes'], $cap_list, $data_scope )
+				: NXTCC_Access_Teams::sanitize_capability_scopes( array(), $cap_list, $data_scope );
+			$scope_values  = array_values( array_unique( array_values( $scope_map ) ) );
+			$scope_summary = 1 === count( $scope_values ) ? (string) $scope_values[0] : 'mixed';
+			$role_labels   = isset( $user['roles'] ) && is_array( $user['roles'] ) ? array_values( $user['roles'] ) : array();
+			$is_eligible   = ! empty( $user['is_staff_eligible'] );
+			$cap_labels    = array();
+			$status_note   = $is_eligible
 				? ''
 				: sprintf(
 					/* translators: %s: list of allowed WordPress roles */
@@ -510,6 +566,11 @@ final class NXTCC_Admin_Settings {
 				'capability_labels'      => $cap_labels,
 				'capability_preview'     => $preview,
 				'extra_capability_count' => max( 0, count( $cap_labels ) - count( $preview ) ),
+				'action_level'           => $action_level,
+				'data_scope'             => $data_scope,
+				'scope_summary'          => $scope_summary,
+				'capability_scopes'      => $scope_map,
+				'assignment_eligible'    => $is_owner || ! empty( $row['assignment_eligible'] ),
 				'is_owner'               => $is_owner,
 				'updated_at'             => isset( $row['updated_at'] ) ? (string) $row['updated_at'] : '',
 				'updated_at_display'     => self::admin_local_datetime( isset( $row['updated_at'] ) ? (string) $row['updated_at'] : '' ),
@@ -545,7 +606,9 @@ final class NXTCC_Admin_Settings {
 	 * @return void
 	 */
 	private static function handle_team_access_submission( array $tenant ): void {
-		$action = self::post_text( 'nxtcc_team_access_action' );
+		$action = self::post_has( 'nxtcc_delete_access_team' )
+			? 'access_team_delete'
+			: self::post_text( 'nxtcc_team_access_action' );
 
 		if ( '' === $action ) {
 			return;
@@ -569,6 +632,123 @@ final class NXTCC_Admin_Settings {
 				'nxtcc_team_access_missing_tenant',
 				__( 'Save the tenant connection first before managing team access.', 'nxt-cloud-chat' ),
 				'error'
+			);
+			return;
+		}
+
+		if ( in_array( $action, array( 'access_team_create', 'access_team_update', 'access_team_delete' ), true ) ) {
+			$access_teams = NXTCC_Access_Control::get_role_presets();
+
+			if ( 'access_team_delete' === $action ) {
+				$team_key = sanitize_key( self::post_text( 'nxtcc_access_team_key' ) );
+
+				if ( '' === $team_key || ! isset( $access_teams[ $team_key ] ) ) {
+					add_settings_error(
+						'nxtcc_settings',
+						'nxtcc_access_team_delete_invalid',
+						__( 'Choose a valid access team to delete.', 'nxt-cloud-chat' ),
+						'error'
+					);
+					return;
+				}
+
+				$ok = NXTCC_Access_Teams::delete_team( $tenant, $team_key );
+
+				add_settings_error(
+					'nxtcc_settings',
+					'nxtcc_access_team_deleted_' . $team_key,
+					$ok ? __( 'Access team deleted.', 'nxt-cloud-chat' ) : __( 'Could not delete the access team.', 'nxt-cloud-chat' ),
+					$ok ? 'updated' : 'error'
+				);
+				return;
+			}
+
+			if ( 'access_team_create' === $action ) {
+				$access_team_label = self::post_text( 'nxtcc_access_team_label' );
+
+				if ( '' === $access_team_label ) {
+					add_settings_error(
+						'nxtcc_settings',
+						'nxtcc_access_team_missing_label',
+						__( 'Enter an access team name before creating an access team.', 'nxt-cloud-chat' ),
+						'error'
+					);
+					return;
+				}
+
+				$access_team_slug = sanitize_key( sanitize_title( $access_team_label ) );
+				$access_team_slug = '' !== $access_team_slug ? $access_team_slug : 'access_team';
+				$team_key         = 'custom_' . $access_team_slug;
+				$base_key         = $team_key;
+				$suffix           = 2;
+
+				while ( isset( $access_teams[ $team_key ] ) || in_array( $team_key, array( 'owner', 'custom' ), true ) ) {
+					$team_key = $base_key . '_' . $suffix;
+					++$suffix;
+				}
+			} else {
+				$team_key = sanitize_key( self::post_text( 'nxtcc_access_team_key' ) );
+			}
+
+			if ( 'access_team_update' === $action && ! isset( $access_teams[ $team_key ] ) ) {
+				add_settings_error(
+					'nxtcc_settings',
+					'nxtcc_access_team_invalid',
+					__( 'Choose a valid access team to update.', 'nxt-cloud-chat' ),
+					'error'
+				);
+				return;
+			}
+
+			$capabilities = NXTCC_Access_Control::resolve_role_capabilities( 'custom', self::post_array( 'nxtcc_access_team_caps' ) );
+			$data_scope   = self::post_text( 'nxtcc_access_team_data_scope' );
+
+			if ( empty( $capabilities ) ) {
+				add_settings_error(
+					'nxtcc_settings',
+					'nxtcc_access_team_missing_caps',
+					__( 'Select at least one permission before saving the access team.', 'nxt-cloud-chat' ),
+					'error'
+				);
+				return;
+			}
+
+			$capability_scopes = self::post_capability_scopes( 'nxtcc_access_team_capability_scopes', $capabilities, $data_scope );
+
+			$ok = NXTCC_Access_Teams::upsert_team(
+				$tenant,
+				$team_key,
+				array(
+					'label'               => self::post_text( 'nxtcc_access_team_label' ),
+					'description'         => self::post_text( 'nxtcc_access_team_description' ),
+					'action_level'        => self::post_text( 'nxtcc_access_team_action_level' ),
+					'data_scope'          => $data_scope,
+					'assignment_eligible' => self::post_has( 'nxtcc_access_team_assignment_eligible' ),
+					'capabilities'        => $capabilities,
+					'capability_scopes'   => $capability_scopes,
+				),
+				get_current_user_id()
+			);
+			if ( $ok && 'access_team_update' === $action ) {
+				$ok = NXTCC_Tenant_Access_DAO::update_team_members(
+					$tenant,
+					$team_key,
+					$capabilities,
+					self::post_text( 'nxtcc_access_team_action_level' ),
+					$data_scope,
+					self::post_has( 'nxtcc_access_team_assignment_eligible' ),
+					get_current_user_id(),
+					$capability_scopes
+				);
+			}
+
+			add_settings_error(
+				'nxtcc_settings',
+				'nxtcc_access_team_saved_' . $team_key,
+				$ok
+					? ( 'access_team_create' === $action ? __( 'Access team created.', 'nxt-cloud-chat' ) : __( 'Access team saved.', 'nxt-cloud-chat' ) )
+					: __( 'Could not save the access team.', 'nxt-cloud-chat' ),
+				$ok ? 'updated' : 'error'
 			);
 			return;
 		}
@@ -613,8 +793,25 @@ final class NXTCC_Admin_Settings {
 				return;
 			}
 
-			$role_key     = NXTCC_Access_Control::sanitize_role_key( self::post_text( 'nxtcc_team_role_key' ) );
-			$capabilities = NXTCC_Access_Control::resolve_role_capabilities( $role_key, self::post_array( 'nxtcc_team_caps' ) );
+			$role_key            = NXTCC_Access_Control::sanitize_role_key( self::post_text( 'nxtcc_team_role_key' ) );
+			$capabilities        = NXTCC_Access_Control::resolve_role_capabilities( $role_key, self::post_array( 'nxtcc_team_caps' ) );
+			$role_preset         = NXTCC_Access_Control::get_role_preset( $role_key );
+			$action_level        = is_array( $role_preset )
+				? (string) ( $role_preset['action_level'] ?? 'manage' )
+				: self::post_text( 'nxtcc_team_action_level' );
+			$data_scope          = is_array( $role_preset )
+				? (string) ( $role_preset['data_scope'] ?? 'all' )
+				: self::post_text( 'nxtcc_team_data_scope' );
+			$capability_scopes   = is_array( $role_preset )
+				? NXTCC_Access_Teams::sanitize_capability_scopes(
+					isset( $role_preset['capability_scopes'] ) && is_array( $role_preset['capability_scopes'] ) ? $role_preset['capability_scopes'] : array(),
+					$capabilities,
+					$data_scope
+				)
+				: self::post_capability_scopes( 'nxtcc_team_capability_scopes', $capabilities, $data_scope );
+			$assignment_eligible = is_array( $role_preset )
+				? ! empty( $role_preset['assignment_eligible'] )
+				: self::post_has( 'nxtcc_team_assignment_eligible' );
 
 			if ( empty( $capabilities ) ) {
 				add_settings_error(
@@ -632,7 +829,11 @@ final class NXTCC_Admin_Settings {
 				$capabilities,
 				$acting_user_id,
 				false,
-				$role_key
+				$role_key,
+				$action_level,
+				$data_scope,
+				$assignment_eligible,
+				$capability_scopes
 			);
 
 			add_settings_error(

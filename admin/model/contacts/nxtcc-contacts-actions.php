@@ -401,6 +401,22 @@ function nxtcc_contacts_read_filters(): array {
 		$group_id = nxtcc_contacts_request_int( 'filter_group', 0 );
 	}
 
+	$tag_ids = nxtcc_contacts_int_list( nxtcc_contacts_post_list_raw( 'tag_ids' ) );
+	if ( empty( $tag_ids ) ) {
+		$tag_ids = nxtcc_contacts_int_list( nxtcc_contacts_post_list_raw( 'filter_tags' ) );
+	}
+	$tag_ids = array_slice( $tag_ids, 0, 50 );
+
+	$tag_match = nxtcc_contacts_request_text( 'tag_match', 'any' );
+	if ( null !== nxtcc_contacts_request_raw( 'filter_tag_match' ) ) {
+		$tag_match = nxtcc_contacts_request_text( 'filter_tag_match', 'any' );
+	}
+	$tag_match         = in_array( $tag_match, array( 'any', 'all', 'none' ), true ) ? $tag_match : 'any';
+	$assignment_target = nxtcc_contacts_request_text( 'filter_assignment', '' );
+	if ( ! preg_match( '/^(user:\d+|role:[a-z0-9_-]+|unassigned)$/', $assignment_target ) ) {
+		$assignment_target = '';
+	}
+
 	$page     = max( 1, nxtcc_contacts_request_int( 'page', 1 ) );
 	$per_page = max( 1, nxtcc_contacts_request_int( 'per_page', 25 ) );
 
@@ -425,17 +441,20 @@ function nxtcc_contacts_read_filters(): array {
 	$created_to   = preg_match( '/^\d{4}-\d{2}-\d{2}$/', $created_to ) ? $created_to : '';
 
 	return array(
-		'country'      => $country,
-		'created_by'   => $created_by,
-		'subscription' => $sub,
-		'created_from' => $created_from,
-		'created_to'   => $created_to,
-		'search_like'  => $search_like,
-		'name_like'    => $name_like,
-		'group_id'     => $group_id,
-		'page'         => $page,
-		'per_page'     => $per_page,
-		'offset'       => $offset,
+		'country'           => $country,
+		'created_by'        => $created_by,
+		'subscription'      => $sub,
+		'created_from'      => $created_from,
+		'created_to'        => $created_to,
+		'search_like'       => $search_like,
+		'name_like'         => $name_like,
+		'group_id'          => $group_id,
+		'tag_ids'           => $tag_ids,
+		'tag_match'         => $tag_match,
+		'assignment_target' => $assignment_target,
+		'page'              => $page,
+		'per_page'          => $per_page,
+		'offset'            => $offset,
 	);
 }
 
@@ -521,6 +540,40 @@ function nxtcc_contacts_updated_by_key( object $row ): string {
 }
 
 /**
+ * Build a normalized tenant tuple for CRM policy checks.
+ *
+ * @param string $user_mailid Tenant owner email.
+ * @param string $baid Business account ID.
+ * @param string $pnid Phone number ID.
+ * @return array<string,string>
+ */
+function nxtcc_contacts_policy_tenant( string $user_mailid, string $baid, string $pnid ): array {
+	return array(
+		'user_mailid'         => sanitize_email( $user_mailid ),
+		'business_account_id' => sanitize_text_field( $baid ),
+		'phone_number_id'     => sanitize_text_field( $pnid ),
+	);
+}
+
+/**
+ * Require record-scope access to one contact.
+ *
+ * @param int   $contact_id Contact ID.
+ * @param array $tenant Tenant tuple.
+ * @param bool  $manage Whether mutation access is required.
+ * @return void
+ */
+function nxtcc_contacts_require_record_access( int $contact_id, array $tenant, bool $manage = false ): void {
+	$allowed = $manage
+		? NXTCC_CRM_Access_Policy::user_can_manage_contact( $contact_id, $tenant )
+		: NXTCC_CRM_Access_Policy::user_can_view_contact( $contact_id, $tenant );
+
+	if ( ! $allowed ) {
+		wp_send_json_error( array( 'message' => __( 'This contact is outside your assigned record scope.', 'nxt-cloud-chat' ) ), 403 );
+	}
+}
+
+/**
  * Normalize requested group IDs for contacts while preserving locked verified groups.
  *
  * Verified groups cannot be newly assigned through Contacts editing/import flows,
@@ -582,8 +635,9 @@ function nxtcc_ajax_contacts_list(): void {
 	$args = array_merge(
 		$filter,
 		array(
-			'baid' => $baid,
-			'pnid' => $pnid,
+			'baid'          => $baid,
+			'pnid'          => $pnid,
+			'access_policy' => NXTCC_CRM_Access_Policy::get_query_scope( nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ) ),
 		)
 	);
 
@@ -615,16 +669,34 @@ function nxtcc_ajax_contacts_list(): void {
 		}
 	}
 
-	$group_names = $repo->group_names_by_ids( array_keys( $all_group_ids ) );
+	$group_names    = $repo->group_names_by_ids( array_keys( $all_group_ids ) );
+	$tag_map        = NXTCC_Tags::instance()->get_tags_for_contacts(
+		$ids,
+		array(
+			'user_mailid'         => $user_mailid,
+			'business_account_id' => $baid,
+			'phone_number_id'     => $pnid,
+		)
+	);
+	$assignment_map = NXTCC_Contact_Assignments::instance()->get_assignments_for_contacts(
+		$ids,
+		array(
+			'user_mailid'         => $user_mailid,
+			'business_account_id' => $baid,
+			'phone_number_id'     => $pnid,
+		)
+	);
 
 	wp_send_json_success(
 		array(
-			'rows'        => $rows,
-			'total'       => $total,
-			'page'        => (int) $filter['page'],
-			'per_page'    => (int) $filter['per_page'],
-			'group_map'   => $group_map,
-			'group_names' => $group_names,
+			'rows'           => $rows,
+			'total'          => $total,
+			'page'           => (int) $filter['page'],
+			'per_page'       => (int) $filter['per_page'],
+			'group_map'      => $group_map,
+			'group_names'    => $group_names,
+			'tag_map'        => $tag_map,
+			'assignment_map' => $assignment_map,
 		)
 	);
 }
@@ -639,8 +711,8 @@ function nxtcc_ajax_contacts_get(): void {
 	nxtcc_contacts_check_nonce();
 	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
-	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
-	if ( empty( $baid ) || empty( $pnid ) ) {
+	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
+	if ( empty( $user_mailid ) || empty( $baid ) || empty( $pnid ) ) {
 		wp_send_json_error( array( 'message' => 'Tenant not configured.' ) );
 	}
 
@@ -655,13 +727,32 @@ function nxtcc_ajax_contacts_get(): void {
 	if ( ! $contact ) {
 		wp_send_json_error( array( 'message' => 'Contact not found.' ) );
 	}
+	nxtcc_contacts_require_record_access( $id, nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ) );
 
-	$groups = $repo->current_groups_for_contact( (int) $contact->id );
+	$groups     = $repo->current_groups_for_contact( (int) $contact->id );
+	$tags       = NXTCC_Tags::instance()->get_contact_tags(
+		(int) $contact->id,
+		array(
+			'user_mailid'         => $user_mailid,
+			'business_account_id' => $baid,
+			'phone_number_id'     => $pnid,
+		)
+	);
+	$assignment = NXTCC_Contact_Assignments::instance()->get_assignment(
+		(int) $contact->id,
+		array(
+			'user_mailid'         => $user_mailid,
+			'business_account_id' => $baid,
+			'phone_number_id'     => $pnid,
+		)
+	);
 
 	wp_send_json_success(
 		array(
-			'contact'   => $contact,
-			'group_ids' => $groups,
+			'contact'    => $contact,
+			'group_ids'  => $groups,
+			'tag_ids'    => array_values( array_map( 'absint', wp_list_pluck( $tags, 'id' ) ) ),
+			'assignment' => $assignment,
 		)
 	);
 }
@@ -688,12 +779,15 @@ function nxtcc_ajax_contacts_save(): void {
 		wp_send_json_error( array( 'message' => 'Tenant not configured.' ) );
 	}
 
-	$id            = nxtcc_contacts_post_int( 'id', 0 );
-	$name          = trim( nxtcc_contacts_post_text( 'name', '' ) );
-	$country_code  = nxtcc_contacts_post_digits( 'country_code', '' );
-	$phone_number  = nxtcc_contacts_post_digits( 'phone_number', '' );
-	$is_subscribed = nxtcc_contacts_post_int( 'is_subscribed', 1 );
-	$group_ids     = nxtcc_contacts_post_list_raw( 'group_ids' );
+	$id                    = nxtcc_contacts_post_int( 'id', 0 );
+	$name                  = trim( nxtcc_contacts_post_text( 'name', '' ) );
+	$country_code          = nxtcc_contacts_post_digits( 'country_code', '' );
+	$phone_number          = nxtcc_contacts_post_digits( 'phone_number', '' );
+	$is_subscribed         = nxtcc_contacts_post_int( 'is_subscribed', 1 );
+	$group_ids             = nxtcc_contacts_post_list_raw( 'group_ids' );
+	$tag_ids               = nxtcc_contacts_post_list_raw( 'tag_ids' );
+	$assignment_target     = nxtcc_contacts_post_text( 'assignment_target', '' );
+	$has_assignment_target = null !== nxtcc_contacts_post_raw( 'assignment_target' );
 
 	$incoming_custom_fields = nxtcc_contacts_post_custom_fields();
 
@@ -724,6 +818,7 @@ function nxtcc_ajax_contacts_save(): void {
 		if ( ! $existing ) {
 			wp_send_json_error( array( 'message' => 'Contact not found.' ) );
 		}
+		nxtcc_contacts_require_record_access( $id, nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ), true );
 
 		$group_ids   = nxtcc_contacts_normalize_group_ids( $repo, $user_mailid, $group_ids, $id );
 		$is_verified = $repo->contact_verified_flag_from_groups( $group_ids );
@@ -751,6 +846,78 @@ function nxtcc_ajax_contacts_save(): void {
 		}
 
 		$repo->replace_contact_groups( $id, $group_ids );
+		nxtcc_update_contact_tags(
+			array(
+				'contact_id'          => $id,
+				'tag_ids'             => $tag_ids,
+				'operation'           => 'replace',
+				'source'              => 'manual',
+				'actor_id'            => $actor_id,
+				'user_mailid'         => $user_mailid,
+				'business_account_id' => $baid,
+				'phone_number_id'     => $pnid,
+			)
+		);
+		if ( $has_assignment_target ) {
+			nxtcc_assignments_save_target(
+				$id,
+				$assignment_target,
+				array(
+					'user_mailid'         => $user_mailid,
+					'business_account_id' => $baid,
+					'phone_number_id'     => $pnid,
+				)
+			);
+		}
+
+		$next_values    = array(
+			'name'          => $name,
+			'country_code'  => $country_code,
+			'phone_number'  => $phone_number,
+			'custom_fields' => $merged_json,
+			'is_verified'   => $is_verified,
+		);
+		$changed_fields = array();
+		foreach ( $next_values as $field => $next_value ) {
+			if ( (string) ( $existing->{$field} ?? '' ) !== (string) $next_value ) {
+				$changed_fields[] = $field;
+			}
+		}
+
+		if ( ! empty( $changed_fields ) && function_exists( 'nxtcc_record_crm_activity' ) ) {
+			nxtcc_record_crm_activity(
+				array(
+					'contact_id'          => $id,
+					'user_mailid'         => $user_mailid,
+					'business_account_id' => $baid,
+					'phone_number_id'     => $pnid,
+					'activity_type'       => 'contact_updated',
+					'source'              => 'manual',
+					'actor_id'            => $actor_id,
+					'metadata'            => array(
+						'changed_fields' => $changed_fields,
+					),
+				)
+			);
+		}
+
+		if ( (int) ( $existing->is_subscribed ?? 0 ) !== $is_subscribed && function_exists( 'nxtcc_record_crm_activity' ) ) {
+			nxtcc_record_crm_activity(
+				array(
+					'contact_id'          => $id,
+					'user_mailid'         => $user_mailid,
+					'business_account_id' => $baid,
+					'phone_number_id'     => $pnid,
+					'activity_type'       => 'subscription_status_changed',
+					'source'              => 'manual',
+					'actor_id'            => $actor_id,
+					'metadata'            => array(
+						'previous_status' => ! empty( $existing->is_subscribed ) ? 'subscribed' : 'unsubscribed',
+						'status'          => $is_subscribed ? 'subscribed' : 'unsubscribed',
+					),
+				)
+			);
+		}
 
 		wp_send_json_success(
 			array(
@@ -788,6 +955,52 @@ function nxtcc_ajax_contacts_save(): void {
 	}
 
 	$repo->map_groups_for_new_contact( $new_id, $group_ids );
+	nxtcc_update_contact_tags(
+		array(
+			'contact_id'          => $new_id,
+			'tag_ids'             => $tag_ids,
+			'operation'           => 'replace',
+			'source'              => 'manual',
+			'actor_id'            => $actor_id,
+			'user_mailid'         => $user_mailid,
+			'business_account_id' => $baid,
+			'phone_number_id'     => $pnid,
+		)
+	);
+	if ( $has_assignment_target ) {
+		nxtcc_assignments_save_target(
+			$new_id,
+			$assignment_target,
+			array(
+				'user_mailid'         => $user_mailid,
+				'business_account_id' => $baid,
+				'phone_number_id'     => $pnid,
+			)
+		);
+	} else {
+		$policy = NXTCC_CRM_Access_Policy::get_policy( 0, nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ), 'nxtcc_manage_contacts' );
+		if ( 'all' !== (string) ( $policy['data_scope'] ?? 'all' ) ) {
+			nxtcc_assignments_save_target(
+				$new_id,
+				'user:' . (string) get_current_user_id(),
+				nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid )
+			);
+		}
+	}
+
+	if ( function_exists( 'nxtcc_record_crm_activity' ) ) {
+		nxtcc_record_crm_activity(
+			array(
+				'contact_id'          => $new_id,
+				'user_mailid'         => $user_mailid,
+				'business_account_id' => $baid,
+				'phone_number_id'     => $pnid,
+				'activity_type'       => 'contact_created',
+				'source'              => 'manual',
+				'actor_id'            => $actor_id,
+			)
+		);
+	}
 
 	wp_send_json_success(
 		array(
@@ -808,7 +1021,7 @@ function nxtcc_ajax_contacts_delete(): void {
 	nxtcc_contacts_check_nonce();
 	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
-	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
+	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {
 		wp_send_json_error( array( 'message' => 'Tenant not configured.' ) );
 	}
@@ -817,6 +1030,7 @@ function nxtcc_ajax_contacts_delete(): void {
 	if ( $id <= 0 ) {
 		wp_send_json_error( array( 'message' => 'Invalid contact id.' ) );
 	}
+	nxtcc_contacts_require_record_access( $id, nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ), true );
 
 	$repo = NXTCC_Contacts_Handler_Repo::instance();
 	if ( $repo->contact_has_verified_group( $id ) ) {
@@ -838,7 +1052,7 @@ function nxtcc_ajax_contacts_bulk_delete(): void {
 	nxtcc_contacts_check_nonce();
 	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
-	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
+	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {
 		wp_send_json_error( array( 'message' => 'Tenant not configured.' ) );
 	}
@@ -851,6 +1065,7 @@ function nxtcc_ajax_contacts_bulk_delete(): void {
 	// Only contacts within the current tenant may be deleted in bulk.
 	$allowed = $repo->allowlist_contacts_in_tenant( $ids, $baid, $pnid );
 	$allowed = nxtcc_contacts_int_list( $allowed );
+	$allowed = NXTCC_CRM_Access_Policy::filter_contact_ids( $allowed, nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ), true );
 
 	if ( ! $allowed ) {
 		wp_send_json_error( array( 'message' => 'No valid contacts selected.' ) );
@@ -884,7 +1099,7 @@ function nxtcc_ajax_contacts_bulk_update_subscription(): void {
 	nxtcc_contacts_check_nonce();
 	nxtcc_verify_caps( 'nxtcc_manage_contacts' );
 
-	list( , $baid, $pnid ) = nxtcc_get_current_tenant();
+	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
 	if ( empty( $baid ) || empty( $pnid ) ) {
 		wp_send_json_error( array( 'message' => 'Tenant not configured.' ) );
 	}
@@ -898,6 +1113,7 @@ function nxtcc_ajax_contacts_bulk_update_subscription(): void {
 	$repo    = NXTCC_Contacts_Handler_Repo::instance();
 	$allowed = $repo->allowlist_contacts_in_tenant( $ids, $baid, $pnid );
 	$allowed = nxtcc_contacts_int_list( $allowed );
+	$allowed = NXTCC_CRM_Access_Policy::filter_contact_ids( $allowed, nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ), true );
 
 	if ( ! $allowed ) {
 		wp_send_json_error( array( 'message' => 'No valid contacts selected.' ) );
@@ -913,9 +1129,12 @@ function nxtcc_ajax_contacts_bulk_update_subscription(): void {
 				array(
 					'contact_id'          => (int) $cid,
 					'status'              => $status,
+					'user_mailid'         => $user_mailid,
 					'business_account_id' => $baid,
 					'phone_number_id'     => $pnid,
 					'reason'              => 'manual',
+					'source'              => 'manual',
+					'actor_id'            => get_current_user_id(),
 				)
 			);
 
@@ -971,6 +1190,7 @@ function nxtcc_ajax_contacts_bulk_update_groups(): void {
 
 	$allowed_contacts = $repo->allowlist_contacts_in_tenant( $ids, $baid, $pnid );
 	$allowed_contacts = nxtcc_contacts_int_list( $allowed_contacts );
+	$allowed_contacts = NXTCC_CRM_Access_Policy::filter_contact_ids( $allowed_contacts, nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ), true );
 
 	if ( ! $allowed_contacts ) {
 		wp_send_json_error( array( 'message' => 'No valid contacts selected.' ) );

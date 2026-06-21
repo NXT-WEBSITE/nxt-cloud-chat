@@ -79,7 +79,7 @@ if ( class_exists( 'NXTCC_Contacts_Handler_Repo' ) && is_user_logged_in() ) {
 				<input
 					type="search"
 					id="nxtcc-groups-search"
-					class="nxtcc-groups-search-input"
+					class="nxtcc-groups-search-input nxtcc-ui-filter-control"
 					placeholder="<?php echo esc_attr__( 'Search group name', 'nxt-cloud-chat' ); ?>"
 					aria-label="<?php echo esc_attr__( 'Search groups', 'nxt-cloud-chat' ); ?>"
 				>

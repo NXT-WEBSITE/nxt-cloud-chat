@@ -21,12 +21,15 @@ jQuery( function ( $ ) {
 	var userPickerNote = document.getElementById( 'nxtcc-team-access-user-picker-note' );
 	var userPreviewNote = document.getElementById( 'nxtcc-team-access-user-preview-note' );
 	var roleSelect = document.getElementById( 'nxtcc_team_role_preset' );
+	var actionLevelSelect = document.getElementById( 'nxtcc_team_action_level' );
+	var dataScopeSelect = document.getElementById( 'nxtcc_team_data_scope' );
+	var assignmentEligible = document.getElementById( 'nxtcc_team_assignment_eligible' );
 	var capabilitiesPanel = document.getElementById( 'nxtcc-team-access-capabilities' );
 	var roleDescription = document.getElementById( 'nxtcc-team-access-role-description' );
-	var summaryRole = document.getElementById( 'nxtcc-team-access-summary-role' );
-	var summaryCopy = document.getElementById( 'nxtcc-team-access-summary-copy' );
-	var summaryChips = document.getElementById( 'nxtcc-team-access-summary-chips' );
 	var addButton = document.getElementById( 'nxtcc-team-access-add-member' );
+	var newAccessTeamButton = document.getElementById( 'nxtcc-team-access-new-team' );
+	var newAccessTeamPanel = document.getElementById( 'nxtcc-team-access-team-create' );
+	var newAccessTeamCancel = document.getElementById( 'nxtcc-team-access-team-create-cancel' );
 	var submitButton = document.getElementById( 'nxtcc-team-access-submit' );
 	var closeButton = document.getElementById( 'nxtcc-team-access-modal-close' );
 	var cancelButton = document.getElementById( 'nxtcc-team-access-cancel' );
@@ -37,7 +40,9 @@ jQuery( function ( $ ) {
 	var capabilityInputs = Array.prototype.slice.call(
 		document.querySelectorAll( '#nxtcc-team-access-capabilities input[name="nxtcc_team_caps[]"]' )
 	);
-	var capabilityLabels = {};
+	var capabilityScopeInputs = Array.prototype.slice.call(
+		document.querySelectorAll( '#nxtcc-team-access-capabilities .nxtcc-team-access-row-scope' )
+	);
 	var boot = {};
 	var rolePresets = {};
 	var strings = {};
@@ -51,34 +56,220 @@ jQuery( function ( $ ) {
 	rolePresets = boot.rolePresets || {};
 	strings = boot.strings || {};
 
-	capabilityInputs.forEach( function ( input ) {
-		capabilityLabels[ input.value ] = input.getAttribute( 'data-cap-label' ) || input.value;
-	} );
-
 	/**
-	 * Create a chip node.
+	 * Find a permission checkbox by value inside a root node.
 	 *
-	 * @param {string} label Chip text.
-	 * @param {boolean} muted Whether chip uses muted style.
-	 * @return {Element} Chip node.
+	 * @param {Element} root Root node.
+	 * @param {string} capability Capability key.
+	 * @return {HTMLInputElement|null} Matching checkbox.
 	 */
-	function createChip( label, muted ) {
-		var chip = document.createElement( 'span' );
-		chip.className = muted ? 'nxtcc-team-access-chip is-muted' : 'nxtcc-team-access-chip';
-		chip.textContent = label;
-		return chip;
+	function findPermissionInput( root, capability ) {
+		var inputs;
+		var i;
+
+		if ( ! root || ! capability ) {
+			return null;
+		}
+
+		inputs = root.querySelectorAll( '.nxtcc-team-access-permission-input' );
+		for ( i = 0; i < inputs.length; i++ ) {
+			if ( inputs[ i ].value === capability ) {
+				return inputs[ i ];
+			}
+		}
+
+		return null;
 	}
 
 	/**
-	 * Remove all child nodes.
+	 * Keep manage permissions and their view partner consistent.
 	 *
-	 * @param {Element} node Target node.
+	 * @param {Element} root Root node.
 	 * @return {void}
 	 */
-	function clearNode( node ) {
-		while ( node && node.firstChild ) {
-			node.removeChild( node.firstChild );
+	function normalizePermissionMatrix( root ) {
+		var manageInputs;
+
+		if ( ! root ) {
+			return;
 		}
+
+		manageInputs = root.querySelectorAll( '.nxtcc-team-access-permission-manage' );
+		Array.prototype.forEach.call( manageInputs, function ( input ) {
+			var viewCap = input.getAttribute( 'data-view-cap' ) || '';
+			var viewInput;
+
+			if ( ! input.checked || ! viewCap ) {
+				return;
+			}
+
+			viewInput = findPermissionInput( root, viewCap );
+			if ( viewInput ) {
+				viewInput.checked = true;
+			}
+		} );
+	}
+
+	/**
+	 * React to one permission checkbox change.
+	 *
+	 * @param {HTMLInputElement} input Changed input.
+	 * @return {void}
+	 */
+	function handlePermissionChange( input ) {
+		var root;
+		var linkedCap;
+		var linkedInput;
+
+		if ( ! input ) {
+			return;
+		}
+
+		root = input.closest( 'form' ) || input.closest( '.nxtcc-team-access-permission-matrix' ) || document;
+
+		if ( input.classList.contains( 'nxtcc-team-access-permission-manage' ) && input.checked ) {
+			linkedCap = input.getAttribute( 'data-view-cap' ) || '';
+			linkedInput = findPermissionInput( root, linkedCap );
+			if ( linkedInput ) {
+				linkedInput.checked = true;
+			}
+		}
+
+		if ( input.classList.contains( 'nxtcc-team-access-permission-view' ) && ! input.checked ) {
+			linkedCap = input.getAttribute( 'data-manage-cap' ) || '';
+			linkedInput = findPermissionInput( root, linkedCap );
+			if ( linkedInput ) {
+				linkedInput.checked = false;
+			}
+		}
+
+		normalizePermissionMatrix( root );
+		syncActionLevel( root );
+	}
+
+	/**
+	 * Get the hidden action-level input for a form.
+	 *
+	 * @param {Element} root Root node.
+	 * @return {HTMLInputElement|null} Action-level field.
+	 */
+	function getActionLevelField( root ) {
+		return root ? root.querySelector( '.nxtcc-team-access-action-field' ) : null;
+	}
+
+	/**
+	 * Store the form action level from checked manage permissions.
+	 *
+	 * @param {Element} root Root node.
+	 * @return {void}
+	 */
+	function syncActionLevel( root ) {
+		var actionField = getActionLevelField( root );
+		var manageInputs;
+		var hasManage = false;
+
+		if ( ! root || ! actionField || actionField.disabled ) {
+			return;
+		}
+
+		manageInputs = root.querySelectorAll( '.nxtcc-team-access-permission-manage' );
+		Array.prototype.forEach.call( manageInputs, function ( input ) {
+			if ( input.checked ) {
+				hasManage = true;
+			}
+		} );
+
+		actionField.value = hasManage ? 'manage' : 'view_only';
+	}
+
+	/**
+	 * Get the master data-scope select for a form.
+	 *
+	 * @param {Element} root Root node.
+	 * @return {HTMLSelectElement|null} Master select.
+	 */
+	function getMasterScope( root ) {
+		return root ? root.querySelector( '.nxtcc-team-access-master-scope' ) : null;
+	}
+
+	/**
+	 * Mirror one visible row-scope select into its hidden POST inputs.
+	 *
+	 * @param {HTMLSelectElement} select Row scope select.
+	 * @return {void}
+	 */
+	function syncRowScopeInputs( select ) {
+		var row;
+
+		if ( ! select ) {
+			return;
+		}
+
+		row = select.closest( 'tr' );
+		if ( ! row ) {
+			return;
+		}
+
+		Array.prototype.forEach.call( row.querySelectorAll( '.nxtcc-team-access-row-scope-input' ), function ( input ) {
+			input.value = select.value || 'all';
+		} );
+	}
+
+	/**
+	 * Sync all hidden row-scope inputs inside a root node.
+	 *
+	 * @param {Element} root Root node.
+	 * @return {void}
+	 */
+	function syncAllRowScopeInputs( root ) {
+		if ( ! root ) {
+			return;
+		}
+
+		Array.prototype.forEach.call( root.querySelectorAll( '.nxtcc-team-access-row-scope' ), syncRowScopeInputs );
+	}
+
+	/**
+	 * Apply a per-capability scope map to visible row scope selects.
+	 *
+	 * @param {Element} root Root node.
+	 * @param {Object} scopeMap Scope map keyed by capability.
+	 * @param {string} fallback Fallback scope.
+	 * @return {void}
+	 */
+	function applyCapabilityScopes( root, scopeMap, fallback ) {
+		scopeMap = scopeMap || {};
+		fallback = fallback || 'all';
+
+		if ( ! root ) {
+			return;
+		}
+
+		Array.prototype.forEach.call( root.querySelectorAll( '.nxtcc-team-access-row-scope' ), function ( select ) {
+			var viewCap = select.getAttribute( 'data-view-cap' ) || '';
+			var manageCap = select.getAttribute( 'data-manage-cap' ) || '';
+			var scope = fallback;
+
+			if ( manageCap && Object.prototype.hasOwnProperty.call( scopeMap, manageCap ) ) {
+				scope = scopeMap[ manageCap ];
+			} else if ( viewCap && Object.prototype.hasOwnProperty.call( scopeMap, viewCap ) ) {
+				scope = scopeMap[ viewCap ];
+			}
+
+			select.value = scope || fallback;
+			syncRowScopeInputs( select );
+		} );
+	}
+
+	/**
+	 * Initialize all matrix rows inside one form.
+	 *
+	 * @param {Element} root Root node.
+	 * @return {void}
+	 */
+	function initializeMatrix( root ) {
+		normalizePermissionMatrix( root );
+		syncAllRowScopeInputs( root );
 	}
 
 	/**
@@ -96,38 +287,25 @@ jQuery( function ( $ ) {
 	}
 
 	/**
-	 * Return the currently checked capability keys.
-	 *
-	 * @return {Array<string>} Capability keys.
-	 */
-	function getCheckedCapabilities() {
-		var selected = [];
-
-		capabilityInputs.forEach( function ( input ) {
-			if ( input.checked ) {
-				selected.push( input.value );
-			}
-		} );
-
-		return selected;
-	}
-
-	/**
 	 * Apply capability checkbox state from keys.
 	 *
 	 * @param {Array<string>} capabilities Capability keys.
+	 * @param {string} actionLevel Action level.
 	 * @return {void}
 	 */
-	function setCapabilities( capabilities ) {
+	function setCapabilities( capabilities, actionLevel ) {
 		var lookup = {};
+		var allowManage = 'manage' === String( actionLevel || ( actionLevelSelect ? actionLevelSelect.value : 'manage' ) || 'manage' );
 
 		( capabilities || [] ).forEach( function ( capability ) {
 			lookup[ capability ] = true;
 		} );
 
 		capabilityInputs.forEach( function ( input ) {
-			input.checked = !! lookup[ input.value ];
+			input.checked = !! lookup[ input.value ] && ( allowManage || ! input.classList.contains( 'nxtcc-team-access-permission-manage' ) );
 		} );
+
+		normalizePermissionMatrix( capabilitiesPanel );
 	}
 
 	/**
@@ -172,82 +350,6 @@ jQuery( function ( $ ) {
 	}
 
 	/**
-	 * Return the active role key.
-	 *
-	 * @return {string} Role key.
-	 */
-	function getActiveRoleKey() {
-		var selectedRole = roleSelect ? String( roleSelect.value || 'custom' ) : 'custom';
-		return selectedRole;
-	}
-
-	/**
-	 * Return the active capability set.
-	 *
-	 * @return {Array<string>} Capability keys.
-	 */
-	function getActiveCapabilities() {
-		var selectedRole = roleSelect ? String( roleSelect.value || 'custom' ) : 'custom';
-		var preset = getRolePreset( selectedRole );
-
-		if ( 'custom' === selectedRole ) {
-			return getCheckedCapabilities();
-		}
-
-		if ( preset && $.isArray( preset.capabilities ) ) {
-			return preset.capabilities.slice();
-		}
-
-		return [];
-	}
-
-	/**
-	 * Render the side summary.
-	 *
-	 * @return {void}
-	 */
-	function syncSummary() {
-		var roleKey = getActiveRoleKey();
-		var preset = getRolePreset( roleSelect ? roleSelect.value : '' );
-		var labels = [];
-		var summaryLabel = strings.customRoleLabel || 'Custom';
-		var summaryDesc = strings.customRoleDesc || '';
-		var capabilities = getActiveCapabilities();
-
-		if ( 'custom' !== roleKey && preset ) {
-			summaryLabel = preset.label || summaryLabel;
-			summaryDesc = preset.description || '';
-		}
-
-		if ( summaryRole ) {
-			summaryRole.textContent = summaryLabel;
-		}
-
-		if ( summaryCopy ) {
-			summaryCopy.textContent = summaryDesc;
-		}
-
-		clearNode( summaryChips );
-
-		capabilities.forEach( function ( capability ) {
-			if ( Object.prototype.hasOwnProperty.call( capabilityLabels, capability ) ) {
-				labels.push( capabilityLabels[ capability ] );
-			}
-		} );
-
-		labels = labels.slice( 0, 8 );
-
-		if ( ! labels.length ) {
-			summaryChips.appendChild( createChip( strings.noPermissions || 'No permissions selected yet.', true ) );
-			return;
-		}
-
-		labels.forEach( function ( label ) {
-			summaryChips.appendChild( createChip( label, false ) );
-		} );
-	}
-
-	/**
 	 * Refresh form state based on the selected role.
 	 *
 	 * @param {boolean} seedPreset Whether to seed preset capabilities.
@@ -269,13 +371,40 @@ jQuery( function ( $ ) {
 			}
 		}
 
+		if ( seedPreset && ! isCustom && preset ) {
+			if ( actionLevelSelect ) {
+				actionLevelSelect.value = preset.action_level || 'manage';
+			}
+			if ( dataScopeSelect ) {
+				dataScopeSelect.value = preset.data_scope || 'all';
+			}
+			if ( assignmentEligible ) {
+				assignmentEligible.checked = !! preset.assignment_eligible;
+			}
+			if ( capabilitiesPanel ) {
+				applyCapabilityScopes( capabilitiesPanel, preset.capability_scopes || {}, preset.data_scope || 'all' );
+			}
+		}
+
 		if ( seedPreset && ! isCustom && presetCaps.length ) {
-			setCapabilities( presetCaps );
+			setCapabilities( presetCaps, preset && preset.action_level ? preset.action_level : 'manage' );
 		}
 
 		capabilityInputs.forEach( function ( input ) {
 			input.disabled = ! isCustom;
 		} );
+		capabilityScopeInputs.forEach( function ( input ) {
+			input.disabled = ! isCustom;
+		} );
+		if ( actionLevelSelect ) {
+			actionLevelSelect.disabled = ! isCustom;
+		}
+		if ( dataScopeSelect ) {
+			dataScopeSelect.disabled = ! isCustom;
+		}
+		if ( assignmentEligible ) {
+			assignmentEligible.disabled = ! isCustom;
+		}
 
 		if ( roleKeyField ) {
 			roleKeyField.value = selectedRole;
@@ -283,9 +412,8 @@ jQuery( function ( $ ) {
 
 		if ( capabilitiesPanel ) {
 			capabilitiesPanel.classList.toggle( 'is-readonly', ! isCustom );
+			syncAllRowScopeInputs( capabilitiesPanel );
 		}
-
-		syncSummary();
 	}
 
 	/**
@@ -365,7 +493,7 @@ jQuery( function ( $ ) {
 			submitButton.disabled = ! hasAvailableUsers;
 		}
 
-		setCapabilities( [] );
+		setCapabilities( [], 'view_only' );
 		syncRoleState( true );
 		openModal();
 
@@ -439,8 +567,20 @@ jQuery( function ( $ ) {
 			roleSelect.value = preset ? member.role_key : 'custom';
 		}
 
-		setCapabilities( $.isArray( member.capabilities ) ? member.capabilities : [] );
+		if ( actionLevelSelect ) {
+			actionLevelSelect.value = member.action_level || 'manage';
+		}
+		if ( dataScopeSelect ) {
+			dataScopeSelect.value = member.data_scope || 'all';
+		}
+		if ( assignmentEligible ) {
+			assignmentEligible.checked = !! member.assignment_eligible;
+		}
+		setCapabilities( $.isArray( member.capabilities ) ? member.capabilities : [], member.action_level || 'manage' );
 		syncRoleState( !! preset );
+		if ( capabilitiesPanel ) {
+			applyCapabilityScopes( capabilitiesPanel, member.capability_scopes || {}, member.data_scope || 'all' );
+		}
 		openModal();
 
 		if ( roleSelect ) {
@@ -487,6 +627,23 @@ jQuery( function ( $ ) {
 		} );
 	}
 
+	if ( newAccessTeamButton && newAccessTeamPanel ) {
+		newAccessTeamButton.addEventListener( 'click', function () {
+			newAccessTeamPanel.hidden = false;
+			initializeMatrix( newAccessTeamPanel );
+
+			if ( newAccessTeamPanel.scrollIntoView ) {
+				newAccessTeamPanel.scrollIntoView( { block: 'nearest' } );
+			}
+		} );
+	}
+
+	if ( newAccessTeamCancel && newAccessTeamPanel ) {
+		newAccessTeamCancel.addEventListener( 'click', function () {
+			newAccessTeamPanel.hidden = true;
+		} );
+	}
+
 	$( widget ).on( 'click', '.nxtcc-team-access-edit', function () {
 		var raw = $( this ).attr( 'data-member' ) || '{}';
 		prepareEditMode( parseMember( raw ) );
@@ -522,8 +679,28 @@ jQuery( function ( $ ) {
 
 	capabilityInputs.forEach( function ( input ) {
 		input.addEventListener( 'change', function () {
-			syncSummary();
+			handlePermissionChange( input );
 		} );
+	} );
+
+	$( document ).on( 'change', '.nxtcc-team-access-team-form .nxtcc-team-access-permission-input', function () {
+		handlePermissionChange( this );
+	} );
+
+	$( document ).on( 'change', '.nxtcc-team-access-master-scope', function () {
+		var root = this.closest( 'form' ) || this.closest( '.nxtcc-team-access-team' ) || document;
+
+		applyCapabilityScopes( root, {}, this.value || 'all' );
+	} );
+
+	$( document ).on( 'change', '.nxtcc-team-access-row-scope', function () {
+		var root = this.closest( 'form' ) || this.closest( '.nxtcc-team-access-capabilities' ) || document;
+		var masterScope = getMasterScope( root );
+
+		if ( masterScope && ! masterScope.disabled ) {
+			masterScope.value = this.value;
+		}
+		syncRowScopeInputs( this );
 	} );
 
 	if ( form ) {
@@ -531,12 +708,61 @@ jQuery( function ( $ ) {
 			var action = actionField ? String( actionField.value || 'add' ) : 'add';
 			var selectedUser = userSelect ? String( userSelect.value || '' ) : '';
 
+			syncActionLevel( form );
+
 			if ( ( 'add' === action || 'update' === action ) && ! selectedUser ) {
 				event.preventDefault();
 				window.alert( strings.userRequired || 'Select a WordPress user before saving access.' );
 			}
 		} );
 	}
+
+	/**
+	 * Confirm access team deletion.
+	 *
+	 * @param {HTMLButtonElement} button Delete button.
+	 * @return {boolean} Whether deletion may continue.
+	 */
+	function confirmTeamDelete( button ) {
+		var teamName = button ? button.getAttribute( 'data-team-name' ) : '';
+		var pattern = strings.deleteConfirm || 'Delete access team "%s"? This cannot be undone.';
+		var message = pattern.replace( '%s', teamName || 'this access team' );
+
+		return window.confirm( message );
+	}
+
+	$( document ).on( 'submit', '.nxtcc-team-access-team-form', function ( event ) {
+		var submitter = event.originalEvent && event.originalEvent.submitter ? event.originalEvent.submitter : null;
+
+		if ( submitter && submitter.classList && submitter.classList.contains( 'nxtcc-team-access-team-delete' ) ) {
+			if ( '1' === this.getAttribute( 'data-nxtcc-delete-confirmed' ) ) {
+				this.removeAttribute( 'data-nxtcc-delete-confirmed' );
+				return true;
+			}
+
+			if ( ! confirmTeamDelete( submitter ) ) {
+				event.preventDefault();
+				return false;
+			}
+
+			return true;
+		}
+
+		syncActionLevel( this );
+	} );
+
+	$( document ).on( 'click', '.nxtcc-team-access-team-delete', function ( event ) {
+		if ( ! confirmTeamDelete( this ) ) {
+			event.preventDefault();
+			return false;
+		}
+
+		if ( this.form ) {
+			this.form.setAttribute( 'data-nxtcc-delete-confirmed', '1' );
+		}
+
+		return true;
+	} );
 
 	$( widget ).on( 'submit', '.nxtcc-team-access-remove-form', function () {
 		return window.confirm( strings.removeConfirm || 'Remove this team member from the current tenant?' );
@@ -550,6 +776,7 @@ jQuery( function ( $ ) {
 		roleFilter.addEventListener( 'change', applyFilters );
 	}
 
+	Array.prototype.forEach.call( document.querySelectorAll( '.nxtcc-team-access-team-form' ), initializeMatrix );
 	applyFilters();
 	syncRoleState( true );
 } );

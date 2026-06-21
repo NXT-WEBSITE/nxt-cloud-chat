@@ -114,6 +114,7 @@ function nxtcc_ajax_chat_toggle_favorite(): void {
 		if ( ! $row || ! isset( $row->is_favorite ) ) {
 			continue;
 		}
+		nxtcc_chat_require_contact_access( absint( $row->contact_id ?? 0 ), true );
 
 		$is_fav = (int) $row->is_favorite;
 
@@ -167,8 +168,12 @@ function nxtcc_ajax_chat_soft_delete(): void {
 		wp_send_json_error( array( 'message' => 'No messages selected.' ), 400 );
 	}
 
-	$now  = current_time( 'mysql', true );
-	$repo = nxtcc_chat_repo();
+	$now         = current_time( 'mysql', true );
+	$repo        = nxtcc_chat_repo();
+	$contact_ids = $repo->get_message_contact_ids( $ids, $user_mailid, $phone_number_id );
+	foreach ( $contact_ids as $contact_id ) {
+		nxtcc_chat_require_contact_access( $contact_id, true );
+	}
 
 	$repo->soft_delete_messages( $ids, $user_mailid, $phone_number_id, $now );
 

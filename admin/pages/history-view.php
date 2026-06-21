@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 ?>
-<div class="wrap nxtcc-history-screen">
+<div class="wrap nxtcc-history-screen nxtcc-ui-control-scope">
 	<div class="nxtcc-history-widget">
 		<div class="nxtcc-history-header">
 			<div>
@@ -33,23 +33,27 @@ if ( ! defined( 'ABSPATH' ) ) {
 					placeholder="<?php echo esc_attr__( 'Search name, number, template, message, or broadcast ID', 'nxt-cloud-chat' ); ?>"
 				/>
 
-				<select id="nxtcc-history-message-type" class="nxtcc-history-select">
-					<option value=""><?php esc_html_e( 'All Messages', 'nxt-cloud-chat' ); ?></option>
-					<option value="broadcast"><?php esc_html_e( 'Campaign Messages', 'nxt-cloud-chat' ); ?></option>
-					<option value="individual"><?php esc_html_e( 'Individual Messages', 'nxt-cloud-chat' ); ?></option>
-				</select>
+				<span class="nxtcc-ui-filter-select-wrap">
+					<select id="nxtcc-history-message-type" class="nxtcc-history-select">
+						<option value=""><?php esc_html_e( 'All Messages', 'nxt-cloud-chat' ); ?></option>
+						<option value="broadcast"><?php esc_html_e( 'Campaign Messages', 'nxt-cloud-chat' ); ?></option>
+						<option value="individual"><?php esc_html_e( 'Individual Messages', 'nxt-cloud-chat' ); ?></option>
+					</select>
+				</span>
 
-				<select id="nxtcc-history-status" class="nxtcc-history-select">
-					<option value=""><?php esc_html_e( 'All Statuses', 'nxt-cloud-chat' ); ?></option>
-					<option value="sent"><?php esc_html_e( 'Sent', 'nxt-cloud-chat' ); ?></option>
-					<option value="delivered"><?php esc_html_e( 'Delivered', 'nxt-cloud-chat' ); ?></option>
-					<option value="read"><?php esc_html_e( 'Read', 'nxt-cloud-chat' ); ?></option>
-					<option value="failed"><?php esc_html_e( 'Failed', 'nxt-cloud-chat' ); ?></option>
-					<option value="sending"><?php esc_html_e( 'Sending', 'nxt-cloud-chat' ); ?></option>
-					<option value="pending"><?php esc_html_e( 'Pending', 'nxt-cloud-chat' ); ?></option>
-					<option value="scheduled"><?php esc_html_e( 'Scheduled', 'nxt-cloud-chat' ); ?></option>
-					<option value="received"><?php esc_html_e( 'Received', 'nxt-cloud-chat' ); ?></option>
-				</select>
+				<span class="nxtcc-ui-filter-select-wrap">
+					<select id="nxtcc-history-status" class="nxtcc-history-select">
+						<option value=""><?php esc_html_e( 'All Statuses', 'nxt-cloud-chat' ); ?></option>
+						<option value="sent"><?php esc_html_e( 'Sent', 'nxt-cloud-chat' ); ?></option>
+						<option value="delivered"><?php esc_html_e( 'Delivered', 'nxt-cloud-chat' ); ?></option>
+						<option value="read"><?php esc_html_e( 'Read', 'nxt-cloud-chat' ); ?></option>
+						<option value="failed"><?php esc_html_e( 'Failed', 'nxt-cloud-chat' ); ?></option>
+						<option value="sending"><?php esc_html_e( 'Sending', 'nxt-cloud-chat' ); ?></option>
+						<option value="pending"><?php esc_html_e( 'Pending', 'nxt-cloud-chat' ); ?></option>
+						<option value="scheduled"><?php esc_html_e( 'Scheduled', 'nxt-cloud-chat' ); ?></option>
+						<option value="received"><?php esc_html_e( 'Received', 'nxt-cloud-chat' ); ?></option>
+					</select>
+				</span>
 
 				<button id="nxtcc-history-refresh" type="button" class="nxtcc-history-button">
 					<?php esc_html_e( 'Search', 'nxt-cloud-chat' ); ?>
@@ -59,11 +63,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 		<div class="nxtcc-history-toolbar nxtcc-history-toolbar-bulk">
 			<div class="nxtcc-history-toolbar-left">
-				<select id="nxtcc-history-bulk-action" class="nxtcc-history-select">
-					<option value=""><?php esc_html_e( 'Bulk actions', 'nxt-cloud-chat' ); ?></option>
-					<option value="delete"><?php esc_html_e( 'Delete Selected', 'nxt-cloud-chat' ); ?></option>
-					<option value="export"><?php esc_html_e( 'Export (CSV)', 'nxt-cloud-chat' ); ?></option>
-				</select>
+				<span class="nxtcc-ui-select-wrap">
+					<select id="nxtcc-history-bulk-action" class="nxtcc-history-select">
+						<option value=""><?php esc_html_e( 'Bulk actions', 'nxt-cloud-chat' ); ?></option>
+						<option value="delete"><?php esc_html_e( 'Delete Selected', 'nxt-cloud-chat' ); ?></option>
+						<option value="export"><?php esc_html_e( 'Export (CSV)', 'nxt-cloud-chat' ); ?></option>
+					</select>
+				</span>
 
 				<button id="nxtcc-history-apply" type="button" class="nxtcc-history-button nxtcc-history-button-secondary">
 					<?php esc_html_e( 'Apply', 'nxt-cloud-chat' ); ?>

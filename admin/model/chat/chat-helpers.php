@@ -415,7 +415,7 @@ if ( ! function_exists( 'nxtcc_chat_download_graph_media_to_wp' ) ) {
 		}
 
 		$meta = nxtcc_chat_remote_get(
-			'https://graph.facebook.com/v19.0/' . rawurlencode( $media_id ),
+			nxtcc_meta_graph_url( rawurlencode( $media_id ) ),
 			array(
 				'headers' => array(
 					'Authorization' => 'Bearer ' . (string) $creds['access_token'],

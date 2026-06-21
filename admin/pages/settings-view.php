@@ -64,7 +64,7 @@ $nxtcc_ajax_nonce = wp_create_nonce( 'nxtcc_admin_ajax' );
 		</div>
 
 		<a href="https://nxtcloudchat.com/user-guide" target="_blank" rel="noreferrer noopener" class="nxtcc-settings-help-link">
-			<?php echo esc_html__( 'User Guide', 'nxt-cloud-chat' ); ?>
+			<?php echo esc_html__( 'How to Set Up a Connection?', 'nxt-cloud-chat' ); ?>
 		</a>
 	</div>
 

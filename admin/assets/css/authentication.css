@@ -34,15 +34,6 @@
 .nxtcc-select,.nxtcc-input{
 	min-width:260px;
 	max-width:100%;
-	padding:.45rem .6rem;
-	border:1px solid #d1d5db;
-	border-radius:8px;
-	background:#fff;
-	box-sizing:border-box;
-}
-.nxtcc-select:focus,.nxtcc-input:focus{
-	outline:2px solid #0A7C66;
-	outline-offset:1px;
 }
 
 /* Help text */
@@ -148,10 +139,6 @@
 	border-radius:8px;
 }
 
-/* Flash states */
-.nxtcc-ok{color:#065f46}
-.nxtcc-err{color:#b91c1c}
-
 /* Error style used by JS notify() on help lines */
 .nxtcc-error{color:#b91c1c !important}
 
@@ -198,19 +185,6 @@
 	color:#05443d;
 }
 
-/* PRO badge */
-.nxtcc-pro-badge{
-	display:inline-block;
-	background:#0A7C66; /* matches header green */
-	color:#fff;
-	font-size:10px;
-	font-weight:600;
-	padding:2px 6px;
-	border-radius:4px;
-	margin-left:6px;
-	vertical-align:middle;
-}
-
 /* Minimal toggle switch (used for Grace Period) */
 .nxtcc-switch{
 	position:relative;
@@ -254,11 +228,6 @@
 #nxtcc-auth-owner{
 	min-width:280px; /* a touch wider than template select */
 }
-.nxtcc-owner-note{
-	font-size:12.5px;
-	color:#6b7280;
-	margin-left:.25rem;
-}
 
 /* ===== Allowed Countries (Admin) ===== */
 #nxtcc-allowed-countries .nxtcc-ac-utils{
@@ -272,7 +241,10 @@
 #nxtcc-allowed-countries .nxtcc-ac-count{
 	margin-left:.5rem; color:#6b7280; font-size:12.5px;
 }
-#nxtcc-allowed-countries #nxtcc-ac-search{ margin-top:.4rem; width:100% }
+#nxtcc-allowed-countries #nxtcc-ac-search{
+	width:100%;
+	margin-top:.4rem;
+}
 
 #nxtcc-allowed-countries .nxtcc-ac-list{
 	margin-top:.5rem; border:1px solid #e5e7eb; border-radius:10px;
@@ -313,6 +285,4 @@
 	opacity:.6;
 	cursor:not-allowed;
 }
-
-
 

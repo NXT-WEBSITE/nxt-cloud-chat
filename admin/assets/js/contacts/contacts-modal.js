@@ -26,6 +26,7 @@ jQuery( function ( $ ) {
 	const $widget    = R.$widget;
 	const ajaxurl    = R.ajaxurl;
 	const nonce      = R.nonce;
+	const tagsNonce  = R.tagsNonce;
 	const instanceId = R.instanceId;
 	const S          = R.state || {};
 	const U          = R.utils || {};
@@ -180,6 +181,22 @@ jQuery( function ( $ ) {
 		return [];
 	}
 
+	/**
+	 * Normalize tag IDs into a string array.
+	 *
+	 * @param {*} val Raw value.
+	 * @return {Array} Tag IDs.
+	 */
+	function normalizeTags( val ) {
+		if ( Array.isArray( val ) ) {
+			return val.map( function ( tag ) {
+				return String( tag && 'object' === typeof tag ? tag.id || '' : tag || '' );
+			} ).filter( Boolean );
+		}
+
+		return [];
+	}
+
 	// -------------------------------------------------------------------------
 	// Modal state.
 	// -------------------------------------------------------------------------
@@ -265,6 +282,51 @@ jQuery( function ( $ ) {
 	}
 
 	/**
+	 * Render the contact tags dropdown.
+	 *
+	 * @param {Array} selectedTags Selected tag IDs.
+	 * @return {void}
+	 */
+	function loadTagsDropdown( selectedTags ) {
+		const $sel   = $( '#nxtcc-contact-tags' );
+		const selDom = firstDom( $sel );
+
+		if ( ! selDom ) {
+			return;
+		}
+
+		emptyNode( selDom );
+		const selectedSet = new Set( ( selectedTags || [] ).map( String ) );
+
+		( S.allTags || [] ).forEach( function ( tag ) {
+			const opt = el( 'option', { value: String( tag.id ), text: String( tag.tag_name || tag.id ) } );
+			opt.selected = selectedSet.has( String( tag.id ) );
+			selDom.appendChild( opt );
+		} );
+
+		enableMultiSelectToggle( $sel );
+	}
+
+	/**
+	 * Render and select the current assignment.
+	 *
+	 * @param {Object|null} assignment Assignment row.
+	 * @return {void}
+	 */
+	function loadAssignmentDropdown( assignment ) {
+		let value = '';
+		if ( assignment && 'user' === String( assignment.target_type || '' ) ) {
+			value = 'user:' + String( assignment.assigned_user_id || '' );
+		} else if ( assignment && 'role' === String( assignment.target_type || '' ) ) {
+			value = 'role:' + String( assignment.assigned_role || '' );
+		}
+
+		if ( R.actions && 'function' === typeof R.actions.renderAssignmentSelect ) {
+			R.actions.renderAssignmentSelect( '#nxtcc-contact-assignment', value, false );
+		}
+	}
+
+	/**
 	 * Create a group via AJAX.
 	 *
 	 * @param {string} groupName Group name.
@@ -279,6 +341,22 @@ jQuery( function ( $ ) {
 		};
 
 		return $.post( ajaxurl, payload );
+	}
+
+	/**
+	 * Create a tag via AJAX.
+	 *
+	 * @param {string} tagName Tag name.
+	 * @return {jqXHR} Request.
+	 */
+	function apiCreateTag( tagName ) {
+		return $.post( ajaxurl, {
+			action: 'nxtcc_tags_save',
+			nonce: tagsNonce,
+			instance_id: instanceId,
+			tag_name: ( tagName || '' ).trim(),
+			color: '#2271b1',
+		} );
 	}
 
 	$widget.on( 'click', '.nxtcc-inline-add-link', function ( e ) {
@@ -341,6 +419,39 @@ jQuery( function ( $ ) {
 			} )
 			.fail( function () {
 				alert( 'Network error while creating group.' );
+			} );
+	} );
+
+	$widget.on( 'click', '.nxtcc-inline-add-tag-link', function ( e ) {
+		e.preventDefault();
+
+		const tagName = String( prompt( 'Enter new tag name:' ) || '' ).trim();
+		if ( ! tagName ) {
+			return;
+		}
+
+		apiCreateTag( tagName )
+			.done( function ( resp ) {
+				if ( ! resp || ! resp.success ) {
+					alert( resp && resp.data && resp.data.message ? resp.data.message : 'Failed to create tag.' );
+					return;
+				}
+
+				const result = resp.data && resp.data.result ? resp.data.result : {};
+				const newId  = result.tag_id || ( result.tag && result.tag.id ) || null;
+
+				if ( R.actions && 'function' === typeof R.actions.fetchTags ) {
+					R.actions.fetchTags().always( function () {
+						const selected = ( $( '#nxtcc-contact-tags' ).val() || [] ).map( String );
+						if ( newId && ! selected.includes( String( newId ) ) ) {
+							selected.push( String( newId ) );
+						}
+						loadTagsDropdown( selected );
+					} );
+				}
+			} )
+			.fail( function () {
+				alert( 'Network error while creating tag.' );
 			} );
 	} );
 
@@ -700,6 +811,7 @@ jQuery( function ( $ ) {
 
 		const parsedCustomFields = normalizeCustomFields( payload.custom_fields );
 		const groupsArr          = normalizeGroups( payload.groups );
+		const tagsArr            = normalizeTags( payload.tags );
 
 		$( '#nxtcc-contact-id' ).val( payload.id || '' );
 		$( '#nxtcc-contact-name' ).val( payload.name || '' );
@@ -735,6 +847,8 @@ jQuery( function ( $ ) {
 			hasProtectedVerifiedGroup: hasProtectedVerifiedGroup,
 			lockedVerifiedGroupId: modalLockedVerifiedGroupId,
 		} );
+		loadTagsDropdown( tagsArr );
+		loadAssignmentDropdown( payload.assignment || null );
 
 		/*
 		 * Render dynamic custom fields from columns and saved values.
@@ -879,6 +993,8 @@ jQuery( function ( $ ) {
 				 * Modal expects groups array in data.groups.
 				 */
 				c.groups = resp.data.group_ids || [];
+				c.tags   = resp.data.tag_ids || [];
+				c.assignment = resp.data.assignment || null;
 
 				/*
 				 * custom_fields may come as JSON string.
@@ -918,6 +1034,7 @@ jQuery( function ( $ ) {
 				.replace( /\D/g, '' ),
 			phone_number: String( $( '#nxtcc-phone-number' ).val() || '' ).replace( /\D/g, '' ),
 			is_subscribed: $( '#nxtcc-contact-subscribed' ).is( ':checked' ) ? 1 : 0,
+			assignment_target: String( $( '#nxtcc-contact-assignment' ).val() || '' ),
 		};
 
 		/*
@@ -934,6 +1051,9 @@ jQuery( function ( $ ) {
 		}
 
 		payload.group_ids = groupIds;
+		payload.tag_ids   = ( $( '#nxtcc-contact-tags' ).val() || [] )
+			.map( ( x ) => parseInt( x, 10 ) )
+			.filter( Boolean );
 
 		/*
 		 * custom_fields_json:

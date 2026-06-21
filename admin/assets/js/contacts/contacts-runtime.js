@@ -60,6 +60,7 @@ jQuery( function ( $ ) {
 		$widget.data( 'nonce' ) || $widget.attr( 'data-nonce' ) || ''
 	).trim();
 	const nonce          = localizedNonce || widgetNonce || '';
+	const tagsNonce      = readObjString( data, 'tags_nonce' );
 
 	const ajaxurl =
 		readObjString( data, 'ajaxurl' ) ||
@@ -95,10 +96,12 @@ jQuery( function ( $ ) {
 	R.$widget          = $widget;
 	R.ajaxurl          = ajaxurl;
 	R.nonce            = nonce;
+	R.tagsNonce        = tagsNonce;
 	R.instanceId       = instanceId;
 	R.currentUserEmail = currentUserEmail;
 	R.tenantKey        = tenantKey;
 	R.storageScopeKey  = storageScopeKey;
+	R.strings          = data && data.strings && 'object' === typeof data.strings ? data.strings : {};
 
 	// -------------------------------------------------------------------------
 	// DOM helpers (no HTML strings).
@@ -502,6 +505,8 @@ jQuery( function ( $ ) {
 	R.state = R.state || {
 		allContacts: [],
 		allGroups: [],
+		allTags: [],
+		assignmentTargets: { users: [], roles: [], teams: [] },
 		allCountryCodes: [],
 		creatorsServer: [],
 
@@ -524,4 +529,3 @@ jQuery( function ( $ ) {
 	// Widget banner warning implies a disconnected tenant/config state.
 	R.state.hasConnection = ! $widget.find( '.nxtcc-banner-warning' ).length;
 } );
-

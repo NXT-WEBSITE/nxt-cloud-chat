@@ -48,21 +48,322 @@ foreach ( $nxtcc_team_role_presets as $nxtcc_team_role_key => $nxtcc_team_role_m
 	$nxtcc_team_role_filter[ $nxtcc_team_role_key ] = (string) $nxtcc_team_role_meta['label'];
 }
 
+$nxtcc_team_scope_labels = array(
+	'assigned' => __( 'Assigned only', 'nxt-cloud-chat' ),
+	'team'     => __( 'Assigned and team queue', 'nxt-cloud-chat' ),
+	'all'      => __( 'All tenant records', 'nxt-cloud-chat' ),
+);
+
+$nxtcc_team_permission_label_overrides = array(
+	'dashboard'              => __( 'Dashboard', 'nxt-cloud-chat' ),
+	'chat_window'            => __( 'Chat Window', 'nxt-cloud-chat' ),
+	'assignments'            => __( 'Assignments', 'nxt-cloud-chat' ),
+	'reassign_conversations' => __( 'Reassign Conversations', 'nxt-cloud-chat' ),
+	'resolve_conversations'  => __( 'Resolve Conversations', 'nxt-cloud-chat' ),
+	'crm_notes'              => __( 'Internal Notes', 'nxt-cloud-chat' ),
+	'crm_activity'           => __( 'CRM Activity', 'nxt-cloud-chat' ),
+	'crm_tasks'              => __( 'CRM Tasks', 'nxt-cloud-chat' ),
+	'lifecycle_stages'       => __( 'Lifecycle Stages', 'nxt-cloud-chat' ),
+	'pipelines'              => __( 'Sales Pipelines', 'nxt-cloud-chat' ),
+);
+
+$nxtcc_team_permission_order = array_flip(
+	array(
+		'dashboard',
+		'chat_window',
+		'assignments',
+		'reassign_conversations',
+		'resolve_conversations',
+		'crm_notes',
+		'contacts',
+		'groups',
+		'tags',
+		'crm_activity',
+		'crm_tasks',
+		'lifecycle_stages',
+		'deals',
+		'pipelines',
+		'history',
+		'authentication',
+		'templates',
+		'broadcasts',
+		'segments',
+		'abandoned_carts',
+		'workflows',
+		'workflow_runs',
+	)
+);
+
+$nxtcc_team_permission_rows         = array();
+$nxtcc_team_permission_seen_caps    = array();
+$nxtcc_team_permission_row_index    = 0;
+$nxtcc_team_capability_to_matrix    = static function ( $nxtcc_capability_key ) {
+	$nxtcc_capability_key = (string) $nxtcc_capability_key;
+
+	if ( 0 === strpos( $nxtcc_capability_key, 'nxtcc_view_' ) ) {
+		return array( substr( $nxtcc_capability_key, strlen( 'nxtcc_view_' ) ), 'view' );
+	}
+
+	if ( 0 === strpos( $nxtcc_capability_key, 'nxtcc_manage_' ) ) {
+		return array( substr( $nxtcc_capability_key, strlen( 'nxtcc_manage_' ) ), 'manage' );
+	}
+
+	$nxtcc_direct_map = array(
+		'nxtcc_access_dashboard'       => array( 'dashboard', 'view' ),
+		'nxtcc_access_chat'            => array( 'chat_window', 'view' ),
+		'nxtcc_reassign_conversations' => array( 'reassign_conversations', 'manage' ),
+		'nxtcc_resolve_conversations'  => array( 'resolve_conversations', 'manage' ),
+	);
+
+	return isset( $nxtcc_direct_map[ $nxtcc_capability_key ] )
+		? $nxtcc_direct_map[ $nxtcc_capability_key ]
+		: array( $nxtcc_capability_key, 'manage' );
+};
+$nxtcc_team_format_permission_label = static function ( $nxtcc_row_key, $nxtcc_fallback_label ) use ( $nxtcc_team_permission_label_overrides ) {
+	$nxtcc_row_key = (string) $nxtcc_row_key;
+
+	if ( isset( $nxtcc_team_permission_label_overrides[ $nxtcc_row_key ] ) ) {
+		return $nxtcc_team_permission_label_overrides[ $nxtcc_row_key ];
+	}
+
+	$nxtcc_label = preg_replace( '/^(View|Manage)\s+/i', '', (string) $nxtcc_fallback_label );
+	$nxtcc_label = is_string( $nxtcc_label ) ? trim( $nxtcc_label ) : '';
+
+	return '' !== $nxtcc_label ? $nxtcc_label : ucwords( str_replace( '_', ' ', $nxtcc_row_key ) );
+};
+$nxtcc_team_add_permission_cap      = static function ( $nxtcc_capability_key, $nxtcc_capability_meta, $nxtcc_section_label = '' ) use ( &$nxtcc_team_permission_rows, &$nxtcc_team_permission_seen_caps, &$nxtcc_team_permission_row_index, $nxtcc_team_capability_to_matrix, $nxtcc_team_format_permission_label ) {
+	$nxtcc_capability_key = (string) $nxtcc_capability_key;
+
+	if ( isset( $nxtcc_team_permission_seen_caps[ $nxtcc_capability_key ] ) ) {
+		return;
+	}
+
+	if ( ! is_array( $nxtcc_capability_meta ) || ! empty( $nxtcc_capability_meta['owner_only'] ) ) {
+		return;
+	}
+
+	list( $nxtcc_row_key, $nxtcc_column ) = $nxtcc_team_capability_to_matrix( $nxtcc_capability_key );
+
+	$nxtcc_label       = isset( $nxtcc_capability_meta['label'] ) ? (string) $nxtcc_capability_meta['label'] : $nxtcc_capability_key;
+	$nxtcc_description = isset( $nxtcc_capability_meta['description'] ) ? (string) $nxtcc_capability_meta['description'] : '';
+
+	if ( ! isset( $nxtcc_team_permission_rows[ $nxtcc_row_key ] ) ) {
+		$nxtcc_team_permission_rows[ $nxtcc_row_key ] = array(
+			'key'          => $nxtcc_row_key,
+			'label'        => $nxtcc_team_format_permission_label( $nxtcc_row_key, $nxtcc_label ),
+			'description'  => $nxtcc_description,
+			'section'      => (string) $nxtcc_section_label,
+			'view_cap'     => '',
+			'manage_cap'   => '',
+			'view_label'   => '',
+			'manage_label' => '',
+			'order'        => $nxtcc_team_permission_row_index,
+		);
+		++$nxtcc_team_permission_row_index;
+	}
+
+	$nxtcc_capability_label_key = 'manage' === $nxtcc_column ? 'manage_label' : 'view_label';
+	$nxtcc_capability_cap_key   = 'manage' === $nxtcc_column ? 'manage_cap' : 'view_cap';
+
+	$nxtcc_team_permission_rows[ $nxtcc_row_key ][ $nxtcc_capability_cap_key ]   = $nxtcc_capability_key;
+	$nxtcc_team_permission_rows[ $nxtcc_row_key ][ $nxtcc_capability_label_key ] = $nxtcc_label;
+
+	if ( 'manage' === $nxtcc_column || '' === (string) $nxtcc_team_permission_rows[ $nxtcc_row_key ]['description'] ) {
+		$nxtcc_team_permission_rows[ $nxtcc_row_key ]['description'] = $nxtcc_description;
+	}
+
+	$nxtcc_team_permission_seen_caps[ $nxtcc_capability_key ] = true;
+};
+
+foreach ( $nxtcc_team_cap_sections as $nxtcc_team_section ) {
+	if ( ! is_array( $nxtcc_team_section ) || empty( $nxtcc_team_section['capabilities'] ) || ! is_array( $nxtcc_team_section['capabilities'] ) ) {
+		continue;
+	}
+
+	$nxtcc_team_section_label = isset( $nxtcc_team_section['label'] ) ? (string) $nxtcc_team_section['label'] : '';
+
+	foreach ( $nxtcc_team_section['capabilities'] as $nxtcc_capability_key => $nxtcc_capability_meta ) {
+		$nxtcc_team_add_permission_cap( $nxtcc_capability_key, $nxtcc_capability_meta, $nxtcc_team_section_label );
+	}
+}
+
+foreach ( $nxtcc_team_capabilities as $nxtcc_capability_key => $nxtcc_capability_meta ) {
+	$nxtcc_team_add_permission_cap( $nxtcc_capability_key, $nxtcc_capability_meta );
+}
+
+$nxtcc_team_permission_rows = array_values( $nxtcc_team_permission_rows );
+usort(
+	$nxtcc_team_permission_rows,
+	static function ( $nxtcc_left, $nxtcc_right ) use ( $nxtcc_team_permission_order ) {
+		$nxtcc_left_key  = isset( $nxtcc_left['key'] ) ? (string) $nxtcc_left['key'] : '';
+		$nxtcc_right_key = isset( $nxtcc_right['key'] ) ? (string) $nxtcc_right['key'] : '';
+		$nxtcc_left_pos  = isset( $nxtcc_team_permission_order[ $nxtcc_left_key ] ) ? (int) $nxtcc_team_permission_order[ $nxtcc_left_key ] : 999;
+		$nxtcc_right_pos = isset( $nxtcc_team_permission_order[ $nxtcc_right_key ] ) ? (int) $nxtcc_team_permission_order[ $nxtcc_right_key ] : 999;
+
+		if ( $nxtcc_left_pos === $nxtcc_right_pos ) {
+			return (int) ( $nxtcc_left['order'] ?? 0 ) <=> (int) ( $nxtcc_right['order'] ?? 0 );
+		}
+
+		return $nxtcc_left_pos <=> $nxtcc_right_pos;
+	}
+);
+
+$nxtcc_render_permission_matrix = static function ( $nxtcc_args ) use ( $nxtcc_team_permission_rows, $nxtcc_team_scope_labels ) {
+	$nxtcc_args          = is_array( $nxtcc_args ) ? $nxtcc_args : array();
+	$nxtcc_name          = isset( $nxtcc_args['name'] ) ? (string) $nxtcc_args['name'] : 'nxtcc_team_caps[]';
+	$nxtcc_scope_name    = isset( $nxtcc_args['scope_name'] ) ? (string) $nxtcc_args['scope_name'] : '';
+	$nxtcc_id_prefix     = isset( $nxtcc_args['id_prefix'] ) ? sanitize_key( (string) $nxtcc_args['id_prefix'] ) : 'nxtcc_perm';
+	$nxtcc_selected_caps = isset( $nxtcc_args['selected'] ) && is_array( $nxtcc_args['selected'] ) ? array_map( 'strval', $nxtcc_args['selected'] ) : array();
+	$nxtcc_scope         = isset( $nxtcc_args['scope'] ) ? (string) $nxtcc_args['scope'] : 'all';
+	$nxtcc_scope_map     = isset( $nxtcc_args['scope_map'] ) && is_array( $nxtcc_args['scope_map'] )
+		? NXTCC_Access_Teams::sanitize_capability_scopes( $nxtcc_args['scope_map'], $nxtcc_selected_caps, $nxtcc_scope )
+		: array();
+	$nxtcc_action_level  = isset( $nxtcc_args['action_level'] ) ? (string) $nxtcc_args['action_level'] : 'manage';
+	$nxtcc_manage_active = 'manage' === $nxtcc_action_level;
+	$nxtcc_readonly      = ! empty( $nxtcc_args['readonly'] );
+	$nxtcc_row_scope_for = static function ( $nxtcc_view_cap, $nxtcc_manage_cap ) use ( $nxtcc_selected_caps, $nxtcc_scope_map, $nxtcc_scope, $nxtcc_manage_active ) {
+		$nxtcc_view_cap   = (string) $nxtcc_view_cap;
+		$nxtcc_manage_cap = (string) $nxtcc_manage_cap;
+
+		if ( $nxtcc_manage_active && '' !== $nxtcc_manage_cap && in_array( $nxtcc_manage_cap, $nxtcc_selected_caps, true ) && isset( $nxtcc_scope_map[ $nxtcc_manage_cap ] ) ) {
+			return $nxtcc_scope_map[ $nxtcc_manage_cap ];
+		}
+
+		if ( '' !== $nxtcc_view_cap && in_array( $nxtcc_view_cap, $nxtcc_selected_caps, true ) && isset( $nxtcc_scope_map[ $nxtcc_view_cap ] ) ) {
+			return $nxtcc_scope_map[ $nxtcc_view_cap ];
+		}
+
+		if ( '' !== $nxtcc_manage_cap && isset( $nxtcc_scope_map[ $nxtcc_manage_cap ] ) ) {
+			return $nxtcc_scope_map[ $nxtcc_manage_cap ];
+		}
+
+		if ( '' !== $nxtcc_view_cap && isset( $nxtcc_scope_map[ $nxtcc_view_cap ] ) ) {
+			return $nxtcc_scope_map[ $nxtcc_view_cap ];
+		}
+
+		return $nxtcc_scope;
+	};
+	?>
+	<div class="nxtcc-team-access-permission-matrix">
+		<table class="nxtcc-team-access-permission-table">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Permission', 'nxt-cloud-chat' ); ?></th>
+					<th class="nxtcc-team-access-check-col"><?php esc_html_e( 'View', 'nxt-cloud-chat' ); ?></th>
+					<th class="nxtcc-team-access-check-col"><?php esc_html_e( 'Manage', 'nxt-cloud-chat' ); ?></th>
+					<th><?php esc_html_e( 'Data Scope', 'nxt-cloud-chat' ); ?></th>
+					<th><?php esc_html_e( 'Description', 'nxt-cloud-chat' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $nxtcc_team_permission_rows as $nxtcc_row ) : ?>
+					<?php
+					$nxtcc_row_key    = isset( $nxtcc_row['key'] ) ? (string) $nxtcc_row['key'] : '';
+					$nxtcc_view_cap   = isset( $nxtcc_row['view_cap'] ) ? (string) $nxtcc_row['view_cap'] : '';
+					$nxtcc_manage_cap = isset( $nxtcc_row['manage_cap'] ) ? (string) $nxtcc_row['manage_cap'] : '';
+					$nxtcc_view_id    = $nxtcc_id_prefix . '_' . sanitize_key( $nxtcc_row_key ) . '_view';
+					$nxtcc_manage_id  = $nxtcc_id_prefix . '_' . sanitize_key( $nxtcc_row_key ) . '_manage';
+					$nxtcc_row_scope  = NXTCC_Access_Teams::sanitize_data_scope( (string) $nxtcc_row_scope_for( $nxtcc_view_cap, $nxtcc_manage_cap ) );
+					/* translators: %s: permission label */
+					$nxtcc_view_aria = sprintf( __( 'View %s', 'nxt-cloud-chat' ), (string) $nxtcc_row['label'] );
+					/* translators: %s: permission label */
+					$nxtcc_manage_aria = sprintf( __( 'Manage %s', 'nxt-cloud-chat' ), (string) $nxtcc_row['label'] );
+					?>
+					<tr>
+						<td>
+							<strong><?php echo esc_html( isset( $nxtcc_row['label'] ) ? (string) $nxtcc_row['label'] : $nxtcc_row_key ); ?></strong>
+							<?php if ( ! empty( $nxtcc_row['section'] ) ) : ?>
+								<span><?php echo esc_html( (string) $nxtcc_row['section'] ); ?></span>
+							<?php endif; ?>
+						</td>
+						<td class="nxtcc-team-access-permission-check">
+							<?php if ( '' !== $nxtcc_view_cap ) : ?>
+								<input
+									id="<?php echo esc_attr( $nxtcc_view_id ); ?>"
+									type="checkbox"
+									class="nxtcc-team-access-permission-input nxtcc-team-access-permission-view"
+									name="<?php echo esc_attr( $nxtcc_name ); ?>"
+									value="<?php echo esc_attr( $nxtcc_view_cap ); ?>"
+									data-cap-label="<?php echo esc_attr( isset( $nxtcc_row['view_label'] ) && '' !== (string) $nxtcc_row['view_label'] ? (string) $nxtcc_row['view_label'] : (string) $nxtcc_row['label'] ); ?>"
+									data-manage-cap="<?php echo esc_attr( $nxtcc_manage_cap ); ?>"
+									aria-label="<?php echo esc_attr( $nxtcc_view_aria ); ?>"
+									<?php checked( in_array( $nxtcc_view_cap, $nxtcc_selected_caps, true ) ); ?>
+									<?php disabled( $nxtcc_readonly ); ?>
+								>
+							<?php else : ?>
+								<span class="nxtcc-team-access-empty-permission">-</span>
+							<?php endif; ?>
+						</td>
+						<td class="nxtcc-team-access-permission-check">
+							<?php if ( '' !== $nxtcc_manage_cap ) : ?>
+								<input
+									id="<?php echo esc_attr( $nxtcc_manage_id ); ?>"
+									type="checkbox"
+									class="nxtcc-team-access-permission-input nxtcc-team-access-permission-manage"
+									name="<?php echo esc_attr( $nxtcc_name ); ?>"
+									value="<?php echo esc_attr( $nxtcc_manage_cap ); ?>"
+									data-cap-label="<?php echo esc_attr( isset( $nxtcc_row['manage_label'] ) && '' !== (string) $nxtcc_row['manage_label'] ? (string) $nxtcc_row['manage_label'] : (string) $nxtcc_row['label'] ); ?>"
+									data-view-cap="<?php echo esc_attr( $nxtcc_view_cap ); ?>"
+									aria-label="<?php echo esc_attr( $nxtcc_manage_aria ); ?>"
+									<?php checked( $nxtcc_manage_active && in_array( $nxtcc_manage_cap, $nxtcc_selected_caps, true ) ); ?>
+									<?php disabled( $nxtcc_readonly ); ?>
+								>
+							<?php else : ?>
+								<span class="nxtcc-team-access-empty-permission">-</span>
+							<?php endif; ?>
+						</td>
+						<td>
+							<select
+								class="nxtcc-team-access-field nxtcc-team-access-row-scope"
+								data-view-cap="<?php echo esc_attr( $nxtcc_view_cap ); ?>"
+								data-manage-cap="<?php echo esc_attr( $nxtcc_manage_cap ); ?>"
+								<?php disabled( $nxtcc_readonly ); ?>
+							>
+								<?php foreach ( $nxtcc_team_scope_labels as $nxtcc_scope_key => $nxtcc_scope_label ) : ?>
+									<option value="<?php echo esc_attr( (string) $nxtcc_scope_key ); ?>" <?php selected( $nxtcc_row_scope, (string) $nxtcc_scope_key ); ?>>
+										<?php echo esc_html( (string) $nxtcc_scope_label ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+							<?php if ( '' !== $nxtcc_scope_name && '' !== $nxtcc_view_cap ) : ?>
+								<input
+									type="hidden"
+									class="nxtcc-team-access-row-scope-input"
+									name="<?php echo esc_attr( $nxtcc_scope_name . '[' . $nxtcc_view_cap . ']' ); ?>"
+									value="<?php echo esc_attr( $nxtcc_row_scope ); ?>"
+									data-capability="<?php echo esc_attr( $nxtcc_view_cap ); ?>"
+								>
+							<?php endif; ?>
+							<?php if ( '' !== $nxtcc_scope_name && '' !== $nxtcc_manage_cap ) : ?>
+								<input
+									type="hidden"
+									class="nxtcc-team-access-row-scope-input"
+									name="<?php echo esc_attr( $nxtcc_scope_name . '[' . $nxtcc_manage_cap . ']' ); ?>"
+									value="<?php echo esc_attr( $nxtcc_row_scope ); ?>"
+									data-capability="<?php echo esc_attr( $nxtcc_manage_cap ); ?>"
+								>
+							<?php endif; ?>
+						</td>
+						<td><?php echo esc_html( isset( $nxtcc_row['description'] ) ? (string) $nxtcc_row['description'] : '' ); ?></td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
+	</div>
+	<?php
+};
+
 $nxtcc_team_boot = array(
-	'defaultRole' => isset( $nxtcc_team_role_presets['viewer'] ) ? 'viewer' : 'custom',
+	'defaultRole' => 'custom',
 	'rolePresets' => $nxtcc_team_role_presets,
 	'strings'     => array(
-		'addTitle'            => __( 'Add Team Member', 'nxt-cloud-chat' ),
-		'editTitle'           => __( 'Update Team Access', 'nxt-cloud-chat' ),
-		'customRoleLabel'     => __( 'Custom', 'nxt-cloud-chat' ),
-		'customRoleDesc'      => __( 'Choose the exact capabilities this member should have inside the current tenant.', 'nxt-cloud-chat' ),
-		'noPermissions'       => __( 'No permissions selected yet.', 'nxt-cloud-chat' ),
-		'ownerRoleLabel'      => __( 'Tenant Owner', 'nxt-cloud-chat' ),
-		'ownerRoleDesc'       => __( 'The owner always keeps every tenant capability.', 'nxt-cloud-chat' ),
-		'removeConfirm'       => __( 'Remove this team member from the current tenant?', 'nxt-cloud-chat' ),
-		'userRequired'        => __( 'Select a WordPress user before saving access.', 'nxt-cloud-chat' ),
-		'ownerOnlyHeading'    => __( 'Owner Only', 'nxt-cloud-chat' ),
-		'availableUsersEmpty' => __( 'All current WordPress users are already assigned to this tenant.', 'nxt-cloud-chat' ),
+		'addTitle'       => __( 'Add Team Member', 'nxt-cloud-chat' ),
+		'editTitle'      => __( 'Update Team Access', 'nxt-cloud-chat' ),
+		'customRoleDesc' => __( 'Choose the exact capabilities this member should have inside the current tenant.', 'nxt-cloud-chat' ),
+		'removeConfirm'  => __( 'Remove this team member from the current tenant?', 'nxt-cloud-chat' ),
+		/* translators: %s: access team name */
+		'deleteConfirm'  => __( 'Delete access team "%s"? This cannot be undone.', 'nxt-cloud-chat' ),
+		'userRequired'   => __( 'Select a WordPress user before saving access.', 'nxt-cloud-chat' ),
 	),
 );
 
@@ -137,18 +438,20 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 				<input
 					type="search"
 					id="nxtcc-team-access-search"
-					class="nxtcc-team-access-filter-input nxtcc-team-access-filter-search"
+					class="nxtcc-team-access-filter-input nxtcc-team-access-filter-search nxtcc-ui-filter-control"
 					placeholder="<?php echo esc_attr__( 'Search user, email, or permission', 'nxt-cloud-chat' ); ?>"
 				/>
 
-				<select id="nxtcc-team-access-role-filter" class="nxtcc-team-access-filter-input nxtcc-team-access-filter-role">
-					<option value=""><?php esc_html_e( 'All Roles', 'nxt-cloud-chat' ); ?></option>
-					<?php foreach ( $nxtcc_team_role_filter as $nxtcc_team_role_key => $nxtcc_team_role_label ) : ?>
-						<option value="<?php echo esc_attr( (string) $nxtcc_team_role_key ); ?>">
-							<?php echo esc_html( (string) $nxtcc_team_role_label ); ?>
-						</option>
-					<?php endforeach; ?>
-				</select>
+				<span class="nxtcc-ui-filter-select-wrap nxtcc-team-access-filter-role">
+					<select id="nxtcc-team-access-role-filter" class="nxtcc-team-access-filter-input nxtcc-ui-filter-control">
+						<option value=""><?php esc_html_e( 'All Teams', 'nxt-cloud-chat' ); ?></option>
+						<?php foreach ( $nxtcc_team_role_filter as $nxtcc_team_role_key => $nxtcc_team_role_label ) : ?>
+							<option value="<?php echo esc_attr( (string) $nxtcc_team_role_key ); ?>">
+								<?php echo esc_html( (string) $nxtcc_team_role_label ); ?>
+							</option>
+						<?php endforeach; ?>
+					</select>
+				</span>
 			</div>
 
 			<button
@@ -200,8 +503,9 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 				<thead>
 					<tr>
 						<th><?php esc_html_e( 'User', 'nxt-cloud-chat' ); ?></th>
+						<th><?php esc_html_e( 'Record Access', 'nxt-cloud-chat' ); ?></th>
 						<th><?php esc_html_e( 'WordPress Role', 'nxt-cloud-chat' ); ?></th>
-						<th><?php esc_html_e( 'Access Role', 'nxt-cloud-chat' ); ?></th>
+						<th><?php esc_html_e( 'Team', 'nxt-cloud-chat' ); ?></th>
 						<th><?php esc_html_e( 'Permissions', 'nxt-cloud-chat' ); ?></th>
 						<th><?php esc_html_e( 'Updated', 'nxt-cloud-chat' ); ?></th>
 						<th><?php esc_html_e( 'Actions', 'nxt-cloud-chat' ); ?></th>
@@ -210,7 +514,7 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 				<tbody>
 					<?php if ( empty( $nxtcc_team_access_members ) ) : ?>
 						<tr class="nxtcc-team-access-empty-row">
-							<td colspan="6"><?php esc_html_e( 'No users have tenant access yet.', 'nxt-cloud-chat' ); ?></td>
+							<td colspan="7"><?php esc_html_e( 'No users have tenant access yet.', 'nxt-cloud-chat' ); ?></td>
 						</tr>
 					<?php else : ?>
 						<?php foreach ( $nxtcc_team_access_members as $nxtcc_team_member ) : ?>
@@ -222,6 +526,10 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 								'user_login'          => isset( $nxtcc_team_member['user_login'] ) ? (string) $nxtcc_team_member['user_login'] : '',
 								'roles_display'       => isset( $nxtcc_team_member['roles_display'] ) ? (string) $nxtcc_team_member['roles_display'] : '',
 								'role_key'            => isset( $nxtcc_team_member['role_key'] ) ? (string) $nxtcc_team_member['role_key'] : 'custom',
+								'action_level'        => isset( $nxtcc_team_member['action_level'] ) ? (string) $nxtcc_team_member['action_level'] : 'manage',
+								'data_scope'          => isset( $nxtcc_team_member['data_scope'] ) ? (string) $nxtcc_team_member['data_scope'] : 'all',
+								'capability_scopes'   => isset( $nxtcc_team_member['capability_scopes'] ) && is_array( $nxtcc_team_member['capability_scopes'] ) ? $nxtcc_team_member['capability_scopes'] : array(),
+								'assignment_eligible' => ! empty( $nxtcc_team_member['assignment_eligible'] ),
 								'capabilities'        => isset( $nxtcc_team_member['capabilities'] ) && is_array( $nxtcc_team_member['capabilities'] ) ? array_values( $nxtcc_team_member['capabilities'] ) : array(),
 								'is_owner'            => ! empty( $nxtcc_team_member['is_owner'] ),
 								'wp_role_eligible'    => ! empty( $nxtcc_team_member['wp_role_eligible'] ),
@@ -242,6 +550,23 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 										<?php if ( ! empty( $nxtcc_team_member['user_login'] ) ) : ?>
 											<code><?php echo esc_html( (string) $nxtcc_team_member['user_login'] ); ?></code>
 										<?php endif; ?>
+									</div>
+								</td>
+								<td>
+									<div class="nxtcc-team-access-permissions">
+										<span class="nxtcc-team-access-chip">
+											<?php echo esc_html( 'manage' === (string) $nxtcc_team_member['action_level'] ? __( 'Manage', 'nxt-cloud-chat' ) : __( 'View only', 'nxt-cloud-chat' ) ); ?>
+										</span>
+										<span class="nxtcc-team-access-chip is-muted">
+											<?php
+											$nxtcc_team_scope_summary = isset( $nxtcc_team_member['scope_summary'] ) ? (string) $nxtcc_team_member['scope_summary'] : (string) ( $nxtcc_team_member['data_scope'] ?? 'assigned' );
+											echo esc_html(
+												'mixed' === $nxtcc_team_scope_summary
+													? __( 'Mixed per permission', 'nxt-cloud-chat' )
+													: ( $nxtcc_team_scope_labels[ $nxtcc_team_scope_summary ] ?? __( 'Assigned only', 'nxt-cloud-chat' ) )
+											);
+											?>
+										</span>
 									</div>
 								</td>
 								<td>
@@ -317,13 +642,155 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 					<?php endif; ?>
 
 					<tr class="nxtcc-team-access-empty-row is-filtered" hidden>
-						<td colspan="6"><?php esc_html_e( 'No team members match the current filters.', 'nxt-cloud-chat' ); ?></td>
+						<td colspan="7"><?php esc_html_e( 'No team members match the current filters.', 'nxt-cloud-chat' ); ?></td>
 					</tr>
 				</tbody>
 			</table>
 		</div>
 	<?php endif; ?>
 </div>
+
+<?php if ( $nxtcc_team_tenant_ready ) : ?>
+	<div class="nxtcc-team-access-widget nxtcc-team-access-teams-widget">
+		<div class="nxtcc-team-access-toolbar">
+			<div>
+				<h3 class="nxtcc-heading-title"><?php esc_html_e( 'Teams', 'nxt-cloud-chat' ); ?></h3>
+				<p class="nxtcc-team-access-subtitle">
+					<?php esc_html_e( 'Edit the default record scope and permissions inherited by members using each access team.', 'nxt-cloud-chat' ); ?>
+				</p>
+			</div>
+			<button type="button" id="nxtcc-team-access-new-team" class="nxtcc-button nxtcc-button-success nxtcc-size-sm">
+				<?php esc_html_e( '+ New Team', 'nxt-cloud-chat' ); ?>
+			</button>
+		</div>
+
+		<div class="nxtcc-team-access-team-list">
+			<?php
+			$nxtcc_new_access_team_template = array(
+				'action_level'        => 'view_only',
+				'data_scope'          => 'assigned',
+				'capability_scopes'   => array(),
+				'assignment_eligible' => true,
+				'capabilities'        => array(),
+			);
+			?>
+			<div class="nxtcc-team-access-team-create" id="nxtcc-team-access-team-create" hidden>
+				<form method="post" action="" class="nxtcc-team-access-team-form">
+					<?php wp_nonce_field( 'nxtcc_team_access_save', 'nxtcc_team_access_nonce' ); ?>
+					<input type="hidden" name="nxtcc_settings_active_tab" value="team-access">
+					<input type="hidden" name="nxtcc_team_access_action" value="access_team_create">
+					<input type="hidden" class="nxtcc-team-access-action-field" id="nxtcc_access_team_action_new" name="nxtcc_access_team_action_level" value="<?php echo esc_attr( (string) ( $nxtcc_new_access_team_template['action_level'] ?? 'view_only' ) ); ?>">
+					<input type="hidden" class="nxtcc-team-access-master-scope" id="nxtcc_access_team_scope_new" name="nxtcc_access_team_data_scope" value="<?php echo esc_attr( (string) ( $nxtcc_new_access_team_template['data_scope'] ?? 'assigned' ) ); ?>">
+
+					<div class="nxtcc-team-access-field-group">
+						<label for="nxtcc_access_team_label_new"><?php esc_html_e( 'Team Name', 'nxt-cloud-chat' ); ?></label>
+						<input class="nxtcc-team-access-field" id="nxtcc_access_team_label_new" name="nxtcc_access_team_label" placeholder="<?php echo esc_attr__( 'Example: Sales Support', 'nxt-cloud-chat' ); ?>" required>
+					</div>
+
+					<div class="nxtcc-team-access-field-group">
+						<label for="nxtcc_access_team_description_new"><?php esc_html_e( 'Description', 'nxt-cloud-chat' ); ?></label>
+						<input class="nxtcc-team-access-field" id="nxtcc_access_team_description_new" name="nxtcc_access_team_description" placeholder="<?php echo esc_attr__( 'Short note shown when selecting this access team', 'nxt-cloud-chat' ); ?>">
+					</div>
+
+					<label class="nxtcc-team-access-toggle">
+						<input type="checkbox" name="nxtcc_access_team_assignment_eligible" value="1" <?php checked( ! empty( $nxtcc_new_access_team_template['assignment_eligible'] ) ); ?>>
+						<span><?php esc_html_e( 'Members using this access team can receive contact and chat assignments', 'nxt-cloud-chat' ); ?></span>
+					</label>
+
+					<?php
+					$nxtcc_render_permission_matrix(
+						array(
+							'name'         => 'nxtcc_access_team_caps[]',
+							'scope_name'   => 'nxtcc_access_team_capability_scopes',
+							'id_prefix'    => 'nxtcc_access_team_new',
+							'selected'     => isset( $nxtcc_new_access_team_template['capabilities'] ) && is_array( $nxtcc_new_access_team_template['capabilities'] ) ? $nxtcc_new_access_team_template['capabilities'] : array(),
+							'scope'        => isset( $nxtcc_new_access_team_template['data_scope'] ) ? (string) $nxtcc_new_access_team_template['data_scope'] : 'assigned',
+							'scope_map'    => isset( $nxtcc_new_access_team_template['capability_scopes'] ) && is_array( $nxtcc_new_access_team_template['capability_scopes'] ) ? $nxtcc_new_access_team_template['capability_scopes'] : array(),
+							'action_level' => isset( $nxtcc_new_access_team_template['action_level'] ) ? (string) $nxtcc_new_access_team_template['action_level'] : 'view_only',
+						)
+					);
+					?>
+
+					<div class="nxtcc-button-wrapper">
+						<button type="button" class="nxtcc-button-warning nxtcc-size-sm" id="nxtcc-team-access-team-create-cancel"><?php esc_html_e( 'Cancel', 'nxt-cloud-chat' ); ?></button>
+						<button type="submit" class="nxtcc-button nxtcc-button-success nxtcc-size-sm"><?php esc_html_e( 'Create Team', 'nxt-cloud-chat' ); ?></button>
+					</div>
+				</form>
+			</div>
+
+			<?php foreach ( $nxtcc_team_role_presets as $nxtcc_access_team_key => $nxtcc_access_team ) : ?>
+				<details class="nxtcc-team-access-team">
+					<summary>
+						<strong><?php echo esc_html( (string) ( $nxtcc_access_team['label'] ?? $nxtcc_access_team_key ) ); ?></strong>
+						<span>
+							<?php
+							echo esc_html(
+								sprintf(
+									/* translators: 1: action level, 2: data scope */
+									__( '%1$s, %2$s scope', 'nxt-cloud-chat' ),
+									'manage' === (string) ( $nxtcc_access_team['action_level'] ?? '' ) ? __( 'Manage', 'nxt-cloud-chat' ) : __( 'View only', 'nxt-cloud-chat' ),
+									(string) ( $nxtcc_access_team['data_scope'] ?? 'all' )
+								)
+							);
+							?>
+						</span>
+					</summary>
+
+					<form method="post" action="" class="nxtcc-team-access-team-form">
+						<?php wp_nonce_field( 'nxtcc_team_access_save', 'nxtcc_team_access_nonce' ); ?>
+						<input type="hidden" name="nxtcc_settings_active_tab" value="team-access">
+						<input type="hidden" name="nxtcc_team_access_action" value="access_team_update">
+						<input type="hidden" name="nxtcc_access_team_key" value="<?php echo esc_attr( (string) $nxtcc_access_team_key ); ?>">
+						<input type="hidden" class="nxtcc-team-access-action-field" id="nxtcc_access_team_action_<?php echo esc_attr( (string) $nxtcc_access_team_key ); ?>" name="nxtcc_access_team_action_level" value="<?php echo esc_attr( (string) ( $nxtcc_access_team['action_level'] ?? 'manage' ) ); ?>">
+						<input type="hidden" class="nxtcc-team-access-master-scope" id="nxtcc_access_team_scope_<?php echo esc_attr( (string) $nxtcc_access_team_key ); ?>" name="nxtcc_access_team_data_scope" value="<?php echo esc_attr( (string) ( $nxtcc_access_team['data_scope'] ?? 'all' ) ); ?>">
+
+						<div class="nxtcc-team-access-field-group">
+							<label for="nxtcc_access_team_label_<?php echo esc_attr( (string) $nxtcc_access_team_key ); ?>"><?php esc_html_e( 'Team Name', 'nxt-cloud-chat' ); ?></label>
+							<input class="nxtcc-team-access-field" id="nxtcc_access_team_label_<?php echo esc_attr( (string) $nxtcc_access_team_key ); ?>" name="nxtcc_access_team_label" value="<?php echo esc_attr( (string) ( $nxtcc_access_team['label'] ?? '' ) ); ?>" required>
+						</div>
+
+						<div class="nxtcc-team-access-field-group">
+							<label for="nxtcc_access_team_description_<?php echo esc_attr( (string) $nxtcc_access_team_key ); ?>"><?php esc_html_e( 'Description', 'nxt-cloud-chat' ); ?></label>
+							<input class="nxtcc-team-access-field" id="nxtcc_access_team_description_<?php echo esc_attr( (string) $nxtcc_access_team_key ); ?>" name="nxtcc_access_team_description" value="<?php echo esc_attr( (string) ( $nxtcc_access_team['description'] ?? '' ) ); ?>">
+						</div>
+
+						<label class="nxtcc-team-access-toggle">
+							<input type="checkbox" name="nxtcc_access_team_assignment_eligible" value="1" <?php checked( ! empty( $nxtcc_access_team['assignment_eligible'] ) ); ?>>
+							<span><?php esc_html_e( 'Members using this access team can receive contact and chat assignments', 'nxt-cloud-chat' ); ?></span>
+						</label>
+
+						<?php
+						$nxtcc_render_permission_matrix(
+							array(
+								'name'         => 'nxtcc_access_team_caps[]',
+								'scope_name'   => 'nxtcc_access_team_capability_scopes',
+								'id_prefix'    => 'nxtcc_access_team_' . (string) $nxtcc_access_team_key,
+								'selected'     => isset( $nxtcc_access_team['capabilities'] ) && is_array( $nxtcc_access_team['capabilities'] ) ? $nxtcc_access_team['capabilities'] : array(),
+								'scope'        => isset( $nxtcc_access_team['data_scope'] ) ? (string) $nxtcc_access_team['data_scope'] : 'all',
+								'scope_map'    => isset( $nxtcc_access_team['capability_scopes'] ) && is_array( $nxtcc_access_team['capability_scopes'] ) ? $nxtcc_access_team['capability_scopes'] : array(),
+								'action_level' => isset( $nxtcc_access_team['action_level'] ) ? (string) $nxtcc_access_team['action_level'] : 'manage',
+							)
+						);
+						?>
+
+						<div class="nxtcc-button-wrapper">
+							<button type="submit" class="nxtcc-button nxtcc-button-success"><?php esc_html_e( 'Save Team', 'nxt-cloud-chat' ); ?></button>
+							<button
+								type="submit"
+								name="nxtcc_delete_access_team"
+								value="1"
+								class="nxtcc-button nxtcc-button-danger nxtcc-team-access-team-delete"
+								data-team-name="<?php echo esc_attr( (string) ( $nxtcc_access_team['label'] ?? $nxtcc_access_team_key ) ); ?>"
+							>
+								<?php esc_html_e( 'Delete Team', 'nxt-cloud-chat' ); ?>
+							</button>
+						</div>
+					</form>
+				</details>
+			<?php endforeach; ?>
+		</div>
+	</div>
+<?php endif; ?>
 
 <?php if ( $nxtcc_team_tenant_ready ) : ?>
 	<div id="nxtcc-team-access-modal" class="nxtcc-team-access-modal" hidden>
@@ -340,6 +807,8 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 					<input type="hidden" name="nxtcc_settings_active_tab" value="team-access">
 					<input type="hidden" name="nxtcc_team_access_action" id="nxtcc_team_access_action" value="add">
 					<input type="hidden" name="nxtcc_team_role_key" id="nxtcc_team_role_key" value="custom">
+					<input type="hidden" class="nxtcc-team-access-action-field" id="nxtcc_team_action_level" name="nxtcc_team_action_level" value="manage">
+					<input type="hidden" class="nxtcc-team-access-master-scope" id="nxtcc_team_data_scope" name="nxtcc_team_data_scope" value="all">
 
 					<div class="nxtcc-team-access-field-group" id="nxtcc-team-access-user-picker-group">
 						<label for="nxtcc_team_user_id_modal"><?php esc_html_e( 'WordPress User', 'nxt-cloud-chat' ); ?></label>
@@ -390,7 +859,7 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 					</div>
 
 					<div class="nxtcc-team-access-field-group">
-						<label for="nxtcc_team_role_preset"><?php esc_html_e( 'Access Role', 'nxt-cloud-chat' ); ?></label>
+						<label for="nxtcc_team_role_preset"><?php esc_html_e( 'Access Team', 'nxt-cloud-chat' ); ?></label>
 						<select id="nxtcc_team_role_preset" class="nxtcc-team-access-field">
 							<?php foreach ( $nxtcc_team_role_presets as $nxtcc_team_role_key => $nxtcc_team_role_meta ) : ?>
 								<option value="<?php echo esc_attr( (string) $nxtcc_team_role_key ); ?>">
@@ -408,49 +877,24 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 							<?php esc_html_e( 'Select Custom to edit the exact permissions for this tenant. Preset roles keep the mapped permissions locked.', 'nxt-cloud-chat' ); ?>
 						</p>
 						<div class="nxtcc-team-access-capabilities" id="nxtcc-team-access-capabilities">
-							<table class="nxtcc-team-access-capability-table">
-								<thead>
-									<tr>
-										<th><?php esc_html_e( 'Allow', 'nxt-cloud-chat' ); ?></th>
-										<th><?php esc_html_e( 'Permission', 'nxt-cloud-chat' ); ?></th>
-										<th><?php esc_html_e( 'Description', 'nxt-cloud-chat' ); ?></th>
-									</tr>
-								</thead>
-								<tbody>
-									<?php foreach ( $nxtcc_team_cap_sections as $nxtcc_team_section ) : ?>
-										<?php
-										if ( ! is_array( $nxtcc_team_section ) || empty( $nxtcc_team_section['capabilities'] ) ) {
-											continue;
-										}
-										?>
-										<tr class="nxtcc-team-access-capability-group-row">
-											<td colspan="3">
-												<?php echo esc_html( isset( $nxtcc_team_section['label'] ) ? (string) $nxtcc_team_section['label'] : '' ); ?>
-											</td>
-										</tr>
-										<?php foreach ( $nxtcc_team_section['capabilities'] as $nxtcc_team_capability_key => $nxtcc_team_capability_meta ) : ?>
-											<tr>
-												<td class="nxtcc-team-access-capability-check">
-													<input
-														type="checkbox"
-														name="nxtcc_team_caps[]"
-														value="<?php echo esc_attr( (string) $nxtcc_team_capability_key ); ?>"
-														data-cap-label="<?php echo esc_attr( isset( $nxtcc_team_capability_meta['label'] ) ? (string) $nxtcc_team_capability_meta['label'] : (string) $nxtcc_team_capability_key ); ?>"
-													>
-												</td>
-												<td>
-													<strong><?php echo esc_html( isset( $nxtcc_team_capability_meta['label'] ) ? (string) $nxtcc_team_capability_meta['label'] : (string) $nxtcc_team_capability_key ); ?></strong>
-												</td>
-												<td>
-													<?php echo esc_html( isset( $nxtcc_team_capability_meta['description'] ) ? (string) $nxtcc_team_capability_meta['description'] : '' ); ?>
-												</td>
-											</tr>
-										<?php endforeach; ?>
-									<?php endforeach; ?>
-								</tbody>
-							</table>
+							<?php
+							$nxtcc_render_permission_matrix(
+								array(
+									'name'       => 'nxtcc_team_caps[]',
+									'scope_name' => 'nxtcc_team_capability_scopes',
+									'id_prefix'  => 'nxtcc_team_member',
+									'selected'   => array(),
+									'scope'      => 'all',
+								)
+							);
+							?>
 						</div>
 					</div>
+
+					<label class="nxtcc-team-access-toggle">
+						<input type="checkbox" id="nxtcc_team_assignment_eligible" name="nxtcc_team_assignment_eligible" value="1">
+						<span><?php esc_html_e( 'This member can receive contact and chat assignments', 'nxt-cloud-chat' ); ?></span>
+					</label>
 
 					<div class="nxtcc-button-wrapper">
 						<button type="button" class="nxtcc-button-warning" id="nxtcc-team-access-cancel">
@@ -461,30 +905,6 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 						</button>
 					</div>
 				</form>
-			</div>
-
-			<div class="nxtcc-team-access-modal-side">
-				<div class="nxtcc-team-access-side-card">
-					<span class="nxtcc-team-access-side-label"><?php esc_html_e( 'Access Summary', 'nxt-cloud-chat' ); ?></span>
-					<strong class="nxtcc-team-access-side-title" id="nxtcc-team-access-summary-role"><?php esc_html_e( 'Viewer', 'nxt-cloud-chat' ); ?></strong>
-					<p class="nxtcc-team-access-side-copy" id="nxtcc-team-access-summary-copy"></p>
-					<div class="nxtcc-team-access-side-chips" id="nxtcc-team-access-summary-chips"></div>
-				</div>
-
-				<div class="nxtcc-team-access-side-card">
-					<span class="nxtcc-team-access-side-label"><?php esc_html_e( 'Owner Only', 'nxt-cloud-chat' ); ?></span>
-					<ul class="nxtcc-team-access-owner-list">
-						<?php foreach ( $nxtcc_team_owner_caps as $nxtcc_team_owner_cap_meta ) : ?>
-							<?php if ( ! is_array( $nxtcc_team_owner_cap_meta ) || empty( $nxtcc_team_owner_cap_meta['label'] ) ) : ?>
-								<?php continue; ?>
-							<?php endif; ?>
-							<li>
-								<strong><?php echo esc_html( (string) $nxtcc_team_owner_cap_meta['label'] ); ?></strong>
-								<span><?php echo esc_html( isset( $nxtcc_team_owner_cap_meta['description'] ) ? (string) $nxtcc_team_owner_cap_meta['description'] : '' ); ?></span>
-							</li>
-						<?php endforeach; ?>
-					</ul>
-				</div>
 			</div>
 		</div>
 	</div>

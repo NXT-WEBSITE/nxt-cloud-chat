@@ -62,3 +62,195 @@
 	color: #2bb24c;
 }
 
+/* Shared plugin form controls: match the custom All Tags dropdown. */
+.nxtcc-ui-filter-control,
+.nxtcc-ui-control-scope input[type="text"],
+.nxtcc-ui-control-scope input[type="search"],
+.nxtcc-ui-control-scope input[type="number"],
+.nxtcc-ui-control-scope select {
+	height: 36px !important;
+	min-height: 36px !important;
+	padding: 7px 10px !important;
+	border: 1px solid #dcdcde !important;
+	border-radius: 7px !important;
+	background-color: #ffffff !important;
+	color: #1d2327 !important;
+	font-family: inherit !important;
+	font-size: 12px !important;
+	font-weight: 400 !important;
+	line-height: 1.4 !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+}
+
+.nxtcc-ui-filter-control {
+	width: 100% !important;
+	min-width: 0 !important;
+}
+
+select.nxtcc-ui-filter-control,
+.nxtcc-ui-control-scope select {
+	display: block !important;
+	padding-right: 30px !important;
+	background-image: none !important;
+	appearance: none !important;
+	-webkit-appearance: none !important;
+	-moz-appearance: none !important;
+	cursor: pointer;
+}
+
+.nxtcc-ui-filter-control::placeholder,
+.nxtcc-ui-control-scope input::placeholder {
+	color: #646970;
+	opacity: 1;
+}
+
+.nxtcc-ui-filter-control:focus,
+.nxtcc-ui-control-scope input[type="text"]:focus,
+.nxtcc-ui-control-scope input[type="search"]:focus,
+.nxtcc-ui-control-scope input[type="number"]:focus,
+.nxtcc-ui-control-scope select:focus {
+	outline: none !important;
+	border-color: #0b6a62 !important;
+	box-shadow: 0 0 0 3px rgba(11, 106, 98, 0.18) !important;
+}
+
+.nxtcc-ui-select-wrap,
+.nxtcc-ui-filter-select-wrap {
+	position: relative;
+	max-width: 100%;
+}
+
+.nxtcc-ui-select-wrap {
+	display: inline-block;
+}
+
+.nxtcc-ui-filter-select-wrap {
+	display: block;
+	min-width: 0;
+}
+
+.nxtcc-ui-select-wrap::after,
+.nxtcc-ui-filter-select-wrap::after {
+	position: absolute;
+	top: 50%;
+	right: 11px;
+	width: 0;
+	height: 0;
+	border-top: 5px solid #50575e;
+	border-right: 4px solid transparent;
+	border-left: 4px solid transparent;
+	content: "";
+	pointer-events: none;
+	transform: translateY(-35%);
+}
+
+/* Admin-wide compact brand controls for Free and Pro NXT Cloud Chat pages. */
+body.toplevel_page_nxt-cloud-chat,
+body[class*="_page_nxtcc-"] {
+	--nxtcc-admin-control-border: #dcdcde;
+	--nxtcc-admin-control-focus: rgba(11, 106, 98, 0.18);
+	--nxtcc-admin-control-accent: #0b6a62;
+	--nxtcc-admin-control-text: #1d2327;
+	--nxtcc-admin-control-muted: #646970;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select, .nxtcc-filter-dropdown, .nxtcc-group-picker-toggle, .nxtcc-segment-multi-trigger),
+body[class*="_page_nxtcc-"] :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select, .nxtcc-filter-dropdown, .nxtcc-group-picker-toggle, .nxtcc-segment-multi-trigger) {
+	min-height: 36px !important;
+	padding: 7px 10px !important;
+	border: 1px solid var(--nxtcc-admin-control-border) !important;
+	border-radius: 7px !important;
+	background-color: #ffffff !important;
+	color: var(--nxtcc-admin-control-text) !important;
+	font-family: inherit !important;
+	font-size: 12px !important;
+	font-weight: 400 !important;
+	line-height: 1.4 !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select),
+body[class*="_page_nxtcc-"] :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select) {
+	height: 36px !important;
+	max-width: 100% !important;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(textarea):not(.nxtcc-chat-textarea),
+body[class*="_page_nxtcc-"] :where(textarea):not(.nxtcc-chat-textarea) {
+	min-height: 72px !important;
+	padding: 8px 10px !important;
+	border: 1px solid var(--nxtcc-admin-control-border) !important;
+	border-radius: 7px !important;
+	background-color: #ffffff !important;
+	color: var(--nxtcc-admin-control-text) !important;
+	font-family: inherit !important;
+	font-size: 12px !important;
+	font-weight: 400 !important;
+	line-height: 1.45 !important;
+	box-shadow: none !important;
+	box-sizing: border-box !important;
+	resize: vertical;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(select),
+body[class*="_page_nxtcc-"] :where(select) {
+	padding-right: 30px !important;
+	background-image:
+		linear-gradient(45deg, transparent 50%, var(--nxtcc-admin-control-muted) 50%),
+		linear-gradient(135deg, var(--nxtcc-admin-control-muted) 50%, transparent 50%) !important;
+	background-repeat: no-repeat !important;
+	background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50% !important;
+	background-size: 5px 5px, 5px 5px !important;
+	appearance: none !important;
+	-webkit-appearance: none !important;
+	-moz-appearance: none !important;
+	cursor: pointer;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(.nxtcc-ui-select-wrap, .nxtcc-ui-filter-select-wrap) select,
+body[class*="_page_nxtcc-"] :where(.nxtcc-ui-select-wrap, .nxtcc-ui-filter-select-wrap) select {
+	background-image: none !important;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(select[multiple]),
+body[class*="_page_nxtcc-"] :where(select[multiple]) {
+	height: auto !important;
+	min-height: 92px !important;
+	padding: 8px !important;
+	background-image: none !important;
+	overflow-y: auto;
+}
+
+body.toplevel_page_nxt-cloud-chat input::placeholder,
+body.toplevel_page_nxt-cloud-chat textarea::placeholder,
+body[class*="_page_nxtcc-"] input::placeholder,
+body[class*="_page_nxtcc-"] textarea::placeholder {
+	color: var(--nxtcc-admin-control-muted) !important;
+	opacity: 1 !important;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select, textarea, .nxtcc-filter-dropdown, .nxtcc-group-picker-toggle, .nxtcc-segment-multi-trigger):focus,
+body.toplevel_page_nxt-cloud-chat :where(.nxtcc-filter-dropdown, .nxtcc-group-picker-toggle, .nxtcc-segment-multi-trigger):focus-visible,
+body[class*="_page_nxtcc-"] :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select, textarea, .nxtcc-filter-dropdown, .nxtcc-group-picker-toggle, .nxtcc-segment-multi-trigger):focus,
+body[class*="_page_nxtcc-"] :where(.nxtcc-filter-dropdown, .nxtcc-group-picker-toggle, .nxtcc-segment-multi-trigger):focus-visible {
+	outline: none !important;
+	border-color: var(--nxtcc-admin-control-accent) !important;
+	box-shadow: 0 0 0 3px var(--nxtcc-admin-control-focus) !important;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select, textarea):disabled,
+body.toplevel_page_nxt-cloud-chat :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select, textarea)[readonly],
+body[class*="_page_nxtcc-"] :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select, textarea):disabled,
+body[class*="_page_nxtcc-"] :where(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="tel"], input[type="url"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"], select, textarea)[readonly] {
+	background-color: #f6f7f7 !important;
+	color: var(--nxtcc-admin-control-muted) !important;
+	cursor: not-allowed;
+}
+
+body.toplevel_page_nxt-cloud-chat :where(input[type="color"], input[type="file"], input[type="checkbox"], input[type="radio"], input[type="range"]),
+body[class*="_page_nxtcc-"] :where(input[type="color"], input[type="file"], input[type="checkbox"], input[type="radio"], input[type="range"]) {
+	font-size: inherit;
+	box-shadow: none;
+}

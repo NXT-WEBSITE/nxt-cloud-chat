@@ -87,14 +87,15 @@ function nxtcc_export_request_ids_raw() {
 }
 
 /**
- * Build export rows from contacts + group map.
+ * Build export rows from contacts, groups, and tags.
  *
  * @param array $contacts List of contact objects.
  * @param array $group_map contact_id => [group_ids].
  * @param array $group_names group_id => name.
+ * @param array $tag_map contact_id => tag rows.
  * @return array
  */
-function nxtcc_contacts_export_rows( array $contacts, array $group_map, array $group_names ): array {
+function nxtcc_contacts_export_rows( array $contacts, array $group_map, array $group_names, array $tag_map = array() ): array {
 	$rows   = array();
 	$rows[] = array(
 		'id',
@@ -108,6 +109,7 @@ function nxtcc_contacts_export_rows( array $contacts, array $group_map, array $g
 		'created_at',
 		'updated_at',
 		'groups',
+		'tags',
 		'custom_fields_json',
 	);
 
@@ -133,6 +135,14 @@ function nxtcc_contacts_export_rows( array $contacts, array $group_map, array $g
 			$gid = (int) $gid;
 			if ( isset( $group_names[ $gid ] ) ) {
 				$gnames[] = (string) $group_names[ $gid ];
+			}
+		}
+
+		$tag_names = array();
+		$tags      = isset( $tag_map[ $cid_i ] ) ? (array) $tag_map[ $cid_i ] : ( isset( $tag_map[ $cid_s ] ) ? (array) $tag_map[ $cid_s ] : array() );
+		foreach ( $tags as $tag ) {
+			if ( is_array( $tag ) && ! empty( $tag['tag_name'] ) ) {
+				$tag_names[] = (string) $tag['tag_name'];
 			}
 		}
 
@@ -163,6 +173,7 @@ function nxtcc_contacts_export_rows( array $contacts, array $group_map, array $g
 				nxtcc_excel_safe( isset( $c->created_at ) ? (string) $c->created_at : '' ),
 				nxtcc_excel_safe( isset( $c->updated_at ) ? (string) $c->updated_at : '' ),
 				nxtcc_excel_safe( implode( '|', $gnames ) ),
+				nxtcc_excel_safe( implode( '|', $tag_names ) ),
 				nxtcc_excel_safe( (string) $custom_fields ),
 			);
 	}
@@ -213,7 +224,6 @@ function nxtcc_ajax_contacts_export_filtered(): void {
 	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
-	unset( $user_mailid );
 
 	if ( empty( $baid ) || empty( $pnid ) ) {
 		wp_send_json_error( array( 'message' => 'Tenant not configured.' ) );
@@ -225,10 +235,11 @@ function nxtcc_ajax_contacts_export_filtered(): void {
 	$args = array_merge(
 		(array) $filter,
 		array(
-			'baid'     => $baid,
-			'pnid'     => $pnid,
-			'per_page' => 0,
-			'offset'   => 0,
+			'baid'          => $baid,
+			'pnid'          => $pnid,
+			'per_page'      => 0,
+			'offset'        => 0,
+			'access_policy' => NXTCC_CRM_Access_Policy::get_query_scope( nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ) ),
 		)
 	);
 
@@ -251,7 +262,15 @@ function nxtcc_ajax_contacts_export_filtered(): void {
 	}
 
 	$group_names = $all_group_ids ? $repo->group_names_by_ids( array_keys( $all_group_ids ) ) : array();
-	$out_rows    = nxtcc_contacts_export_rows( (array) $rows, (array) $group_map, (array) $group_names );
+	$tag_map     = NXTCC_Tags::instance()->get_tags_for_contacts(
+		$ids,
+		array(
+			'user_mailid'         => $user_mailid,
+			'business_account_id' => $baid,
+			'phone_number_id'     => $pnid,
+		)
+	);
+	$out_rows    = nxtcc_contacts_export_rows( (array) $rows, (array) $group_map, (array) $group_names, (array) $tag_map );
 
 	$filename = 'nxtcc-contacts-export-filtered-' . gmdate( 'Y-m-d-His' ) . '.csv';
 	nxtcc_contacts_export_output( $filename, $out_rows );
@@ -269,7 +288,6 @@ function nxtcc_ajax_contacts_export_selected(): void {
 	nxtcc_verify_caps( array( 'nxtcc_view_contacts', 'nxtcc_manage_contacts' ) );
 
 	list( $user_mailid, $baid, $pnid ) = nxtcc_get_current_tenant();
-	unset( $user_mailid );
 
 	if ( empty( $baid ) || empty( $pnid ) ) {
 		wp_send_json_error( array( 'message' => 'Tenant not configured.' ) );
@@ -286,6 +304,7 @@ function nxtcc_ajax_contacts_export_selected(): void {
 
 	$allowed = $repo->allowlist_contacts_in_tenant( $ids, $baid, $pnid );
 	$allowed = nxtcc_contacts_int_list( $allowed );
+	$allowed = NXTCC_CRM_Access_Policy::filter_contact_ids( $allowed, nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid ) );
 
 	if ( empty( $allowed ) ) {
 		wp_send_json_error( array( 'message' => 'No valid contacts selected.' ) );
@@ -310,7 +329,15 @@ function nxtcc_ajax_contacts_export_selected(): void {
 	}
 
 	$group_names = $all_group_ids ? $repo->group_names_by_ids( array_keys( $all_group_ids ) ) : array();
-	$out_rows    = nxtcc_contacts_export_rows( (array) $rows, (array) $group_map, (array) $group_names );
+	$tag_map     = NXTCC_Tags::instance()->get_tags_for_contacts(
+		$ids2,
+		array(
+			'user_mailid'         => $user_mailid,
+			'business_account_id' => $baid,
+			'phone_number_id'     => $pnid,
+		)
+	);
+	$out_rows    = nxtcc_contacts_export_rows( (array) $rows, (array) $group_map, (array) $group_names, (array) $tag_map );
 
 	$filename = 'nxtcc-contacts-export-selected-' . gmdate( 'Y-m-d-His' ) . '.csv';
 	nxtcc_contacts_export_output( $filename, $out_rows );

@@ -106,7 +106,7 @@ final class NXTCC_API_Connection {
 		}
 
 		// 1) WABA Profile.
-		$url                     = 'https://graph.facebook.com/v19.0/' . rawurlencode( $business_account_id );
+		$url                     = nxtcc_meta_graph_url( rawurlencode( $business_account_id ) );
 		$response                = nxtcc_safe_remote_get(
 			$url,
 			array(
@@ -117,7 +117,7 @@ final class NXTCC_API_Connection {
 		$results['WABA Profile'] = self::format_result( 'WABA Profile', $url, $response );
 
 		// 2) Templates List.
-		$url                       = 'https://graph.facebook.com/v19.0/' . rawurlencode( $business_account_id ) . '/message_templates';
+		$url                       = nxtcc_meta_graph_url( rawurlencode( $business_account_id ) . '/message_templates' );
 		$response                  = nxtcc_safe_remote_get(
 			$url,
 			array(
@@ -128,7 +128,7 @@ final class NXTCC_API_Connection {
 		$results['Templates List'] = self::format_result( 'Templates List', $url, $response );
 
 		// 3) Phone Number Profile.
-		$url                             = 'https://graph.facebook.com/v19.0/' . rawurlencode( $phone_number_id );
+		$url                             = nxtcc_meta_graph_url( rawurlencode( $phone_number_id ) );
 		$response                        = nxtcc_safe_remote_get(
 			$url,
 			array(
@@ -140,7 +140,7 @@ final class NXTCC_API_Connection {
 
 		// 4) Optional: Send a template message to confirm messaging permissions and template validity.
 		if ( $test_number && $test_template ) {
-			$url     = 'https://graph.facebook.com/v19.0/' . rawurlencode( $phone_number_id ) . '/messages';
+			$url     = nxtcc_meta_graph_url( rawurlencode( $phone_number_id ) . '/messages' );
 			$payload = array(
 				'messaging_product' => 'whatsapp',
 				'to'                => $test_number,

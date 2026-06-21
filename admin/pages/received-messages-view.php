@@ -31,8 +31,10 @@ if ( function_exists( 'wp_enqueue_media' ) ) {
 	wp_enqueue_media();
 }
 
-$nxtcc_active_tenant = NXTCC_Access_Control::get_current_tenant_context();
-$nxtcc_user_mailid   = isset( $nxtcc_active_tenant['user_mailid'] ) ? sanitize_email( (string) $nxtcc_active_tenant['user_mailid'] ) : '';
+$nxtcc_active_tenant   = NXTCC_Access_Control::get_current_tenant_context();
+$nxtcc_user_mailid     = isset( $nxtcc_active_tenant['user_mailid'] ) ? sanitize_email( (string) $nxtcc_active_tenant['user_mailid'] ) : '';
+$nxtcc_crm_policy      = NXTCC_CRM_Access_Policy::get_policy( 0, $nxtcc_active_tenant, 'nxtcc_access_chat' );
+$nxtcc_can_manage_chat = NXTCC_CRM_Access_Policy::can_manage( $nxtcc_crm_policy );
 
 /*
  * Load the latest connection settings row for this admin.
@@ -54,7 +56,7 @@ $nxtcc_instance_id         = isset( $instance_id ) ? (string) $instance_id : 'ad
 ?>
 
 <div
-	class="nxtcc-whatsapp-widget"
+	class="nxtcc-whatsapp-widget<?php echo $nxtcc_can_manage_chat ? '' : ' is-view-only'; ?>"
 	data-instance="<?php echo esc_attr( $nxtcc_instance_id ); ?>"
 	data-business-account-id="<?php echo esc_attr( $nxtcc_business_account_id ); ?>"
 	data-phone-number-id="<?php echo esc_attr( $nxtcc_phone_number_id ); ?>"
@@ -71,6 +73,14 @@ $nxtcc_instance_id         = isset( $instance_id ) ? (string) $instance_id : 'ad
 				class="nxtcc-inbox-search"
 				placeholder="<?php esc_attr_e( 'Search contacts...', 'nxt-cloud-chat' ); ?>"
 			/>
+			<select class="nxtcc-ticket-view" aria-label="<?php echo esc_attr__( 'Saved ticket view', 'nxt-cloud-chat' ); ?>">
+				<option value="all"><?php esc_html_e( 'All Tickets', 'nxt-cloud-chat' ); ?></option>
+				<option value="mine"><?php esc_html_e( 'My Tickets', 'nxt-cloud-chat' ); ?></option>
+				<option value="team"><?php esc_html_e( 'Team Queue', 'nxt-cloud-chat' ); ?></option>
+				<option value="unassigned"><?php esc_html_e( 'Unassigned', 'nxt-cloud-chat' ); ?></option>
+				<option value="overdue"><?php esc_html_e( 'Overdue', 'nxt-cloud-chat' ); ?></option>
+				<option value="resolved"><?php esc_html_e( 'Recently Resolved', 'nxt-cloud-chat' ); ?></option>
+			</select>
 		</div>
 
 		<div class="nxtcc-chat-list">
@@ -105,6 +115,34 @@ $nxtcc_instance_id         = isset( $instance_id ) ? (string) $instance_id : 'ad
 				</div>
 				<div class="nxtcc-chat-contact-number"></div>
 			</div>
+
+			<button
+				type="button"
+				class="nxtcc-chat-profile-btn nxtcc-contact-profile-trigger"
+				title="<?php echo esc_attr__( 'Open contact profile', 'nxt-cloud-chat' ); ?>"
+				aria-label="<?php echo esc_attr__( 'Open contact profile', 'nxt-cloud-chat' ); ?>"
+				disabled
+			>
+				<i class="fa-solid fa-address-card" aria-hidden="true"></i>
+				<span><?php esc_html_e( 'Profile', 'nxt-cloud-chat' ); ?></span>
+			</button>
+
+			<button
+				type="button"
+				class="nxtcc-ticket-toggle"
+				title="<?php echo esc_attr__( 'Open ticket details', 'nxt-cloud-chat' ); ?>"
+				aria-label="<?php echo esc_attr__( 'Open ticket details', 'nxt-cloud-chat' ); ?>"
+				disabled
+			>
+				<i class="fa-solid fa-ticket" aria-hidden="true"></i>
+			</button>
+
+			<label class="nxtcc-chat-assignment-wrap">
+				<span class="screen-reader-text"><?php esc_html_e( 'Assigned To', 'nxt-cloud-chat' ); ?></span>
+				<select class="nxtcc-chat-assignment" title="<?php echo esc_attr__( 'Assign this conversation', 'nxt-cloud-chat' ); ?>" disabled>
+					<option value=""><?php esc_html_e( 'Unassigned', 'nxt-cloud-chat' ); ?></option>
+				</select>
+			</label>
 
 			<div class="nxtcc-chat-actions" style="display:none;">
 				<span class="nxtcc-selected-count">0</span>
@@ -271,4 +309,80 @@ $nxtcc_instance_id         = isset( $instance_id ) ? (string) $instance_id : 'ad
 		</div>
 
 	</div>
+
+	<aside class="nxtcc-ticket-panel" aria-label="<?php echo esc_attr__( 'Conversation ticket', 'nxt-cloud-chat' ); ?>">
+		<div class="nxtcc-ticket-panel-header">
+			<div>
+				<strong class="nxtcc-ticket-number"><?php esc_html_e( 'No ticket selected', 'nxt-cloud-chat' ); ?></strong>
+				<div class="nxtcc-ticket-updated"></div>
+			</div>
+			<div class="nxtcc-ticket-header-actions">
+				<button type="button" class="nxtcc-ticket-watch" title="<?php echo esc_attr__( 'Follow ticket', 'nxt-cloud-chat' ); ?>" disabled>
+					<i class="fa-regular fa-eye" aria-hidden="true"></i>
+				</button>
+				<button type="button" class="nxtcc-ticket-close" title="<?php echo esc_attr__( 'Close ticket details', 'nxt-cloud-chat' ); ?>">
+					<i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+				</button>
+			</div>
+		</div>
+
+		<div class="nxtcc-ticket-panel-body">
+			<label class="nxtcc-ticket-field">
+				<span><?php esc_html_e( 'Subject', 'nxt-cloud-chat' ); ?></span>
+				<input type="text" class="nxtcc-ticket-subject" maxlength="191">
+			</label>
+			<label class="nxtcc-ticket-field">
+				<span><?php esc_html_e( 'Category', 'nxt-cloud-chat' ); ?></span>
+				<input type="text" class="nxtcc-ticket-category" maxlength="100">
+			</label>
+			<div class="nxtcc-ticket-field-row">
+				<label class="nxtcc-ticket-field">
+					<span><?php esc_html_e( 'Status', 'nxt-cloud-chat' ); ?></span>
+					<select class="nxtcc-ticket-status"></select>
+				</label>
+				<label class="nxtcc-ticket-field">
+					<span><?php esc_html_e( 'Priority', 'nxt-cloud-chat' ); ?></span>
+					<select class="nxtcc-ticket-priority"></select>
+				</label>
+			</div>
+			<label class="nxtcc-ticket-field nxtcc-ticket-snooze-field">
+				<span><?php esc_html_e( 'Snoozed Until', 'nxt-cloud-chat' ); ?></span>
+				<input type="datetime-local" class="nxtcc-ticket-snoozed-until">
+			</label>
+			<div class="nxtcc-ticket-sla">
+				<div>
+					<span><?php esc_html_e( 'First response due', 'nxt-cloud-chat' ); ?></span>
+					<strong class="nxtcc-ticket-first-response-due"></strong>
+				</div>
+				<div>
+					<span><?php esc_html_e( 'Resolution due', 'nxt-cloud-chat' ); ?></span>
+					<strong class="nxtcc-ticket-resolution-due"></strong>
+				</div>
+			</div>
+			<button type="button" class="nxtcc-ticket-save"><?php esc_html_e( 'Save Ticket', 'nxt-cloud-chat' ); ?></button>
+
+			<div class="nxtcc-ticket-section nxtcc-ticket-assignment-section">
+				<h4><?php esc_html_e( 'Assignment & Handoff', 'nxt-cloud-chat' ); ?></h4>
+				<select class="nxtcc-ticket-assignment">
+					<option value=""><?php esc_html_e( 'Unassigned', 'nxt-cloud-chat' ); ?></option>
+				</select>
+				<textarea class="nxtcc-ticket-handoff-note" rows="3" placeholder="<?php echo esc_attr__( 'Required when handing off an assigned ticket', 'nxt-cloud-chat' ); ?>"></textarea>
+				<input type="text" class="nxtcc-ticket-handoff-reason" maxlength="191" placeholder="<?php echo esc_attr__( 'Reason (optional)', 'nxt-cloud-chat' ); ?>">
+				<button type="button" class="nxtcc-ticket-assign"><?php esc_html_e( 'Assign / Hand Off', 'nxt-cloud-chat' ); ?></button>
+			</div>
+
+			<div class="nxtcc-ticket-section nxtcc-ticket-note-section">
+				<h4><?php esc_html_e( 'Internal Note', 'nxt-cloud-chat' ); ?></h4>
+				<textarea class="nxtcc-ticket-note" rows="3" placeholder="<?php echo esc_attr__( 'Visible only to the team', 'nxt-cloud-chat' ); ?>"></textarea>
+				<button type="button" class="nxtcc-ticket-add-note"><?php esc_html_e( 'Add Note', 'nxt-cloud-chat' ); ?></button>
+			</div>
+
+			<div class="nxtcc-ticket-section">
+				<h4><?php esc_html_e( 'Activity', 'nxt-cloud-chat' ); ?></h4>
+				<div class="nxtcc-ticket-activity"></div>
+			</div>
+		</div>
+	</aside>
 </div>
+
+<?php nxtcc_render_contact_profile_modal(); ?>

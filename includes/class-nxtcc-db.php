@@ -83,6 +83,195 @@ final class NXTCC_DB {
 	}
 
 	/**
+	 * Tags table.
+	 *
+	 * @return string
+	 */
+	public function t_tags(): string {
+		return $this->db->prefix . 'nxtcc_tags';
+	}
+
+	/**
+	 * Tag-contact map table.
+	 *
+	 * @return string
+	 */
+	public function t_tag_contact_map(): string {
+		return $this->db->prefix . 'nxtcc_tag_contact_map';
+	}
+
+	/**
+	 * Current contact assignments table.
+	 *
+	 * @return string
+	 */
+	public function t_contact_assignments(): string {
+		return $this->db->prefix . 'nxtcc_contact_assignments';
+	}
+
+	/**
+	 * Contact assignment history table.
+	 *
+	 * @return string
+	 */
+	public function t_contact_assignment_history(): string {
+		return $this->db->prefix . 'nxtcc_contact_assignment_history';
+	}
+
+	/**
+	 * Assignment routing cursor table.
+	 *
+	 * @return string
+	 */
+	public function t_assignment_routing_state(): string {
+		return $this->db->prefix . 'nxtcc_assignment_routing_state';
+	}
+
+	/**
+	 * CRM activity timeline table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_activities(): string {
+		return $this->db->prefix . 'nxtcc_crm_activities';
+	}
+
+	/**
+	 * CRM lifecycle stage definitions table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_lifecycle_stages(): string {
+		return $this->db->prefix . 'nxtcc_crm_lifecycle_stages';
+	}
+
+	/**
+	 * Contact lifecycle stage table.
+	 *
+	 * @return string
+	 */
+	public function t_contact_lifecycle_stage(): string {
+		return $this->db->prefix . 'nxtcc_contact_lifecycle_stage';
+	}
+
+	/**
+	 * CRM tasks table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_tasks(): string {
+		return $this->db->prefix . 'nxtcc_crm_tasks';
+	}
+
+	/**
+	 * CRM saved contact views table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_saved_views(): string {
+		return $this->db->prefix . 'nxtcc_crm_saved_views';
+	}
+
+	/**
+	 * CRM sales pipelines table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_pipelines(): string {
+		return $this->db->prefix . 'nxtcc_crm_pipelines';
+	}
+
+	/**
+	 * CRM sales pipeline stages table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_pipeline_stages(): string {
+		return $this->db->prefix . 'nxtcc_crm_pipeline_stages';
+	}
+
+	/**
+	 * CRM deals table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_deals(): string {
+		return $this->db->prefix . 'nxtcc_crm_deals';
+	}
+
+	/**
+	 * CRM deal contacts table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_deal_contacts(): string {
+		return $this->db->prefix . 'nxtcc_crm_deal_contacts';
+	}
+
+	/**
+	 * CRM deal products table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_deal_products(): string {
+		return $this->db->prefix . 'nxtcc_crm_deal_products';
+	}
+
+	/**
+	 * CRM deal stage history table.
+	 *
+	 * @return string
+	 */
+	public function t_crm_deal_stage_history(): string {
+		return $this->db->prefix . 'nxtcc_crm_deal_stage_history';
+	}
+
+	/**
+	 * Conversation tickets table.
+	 *
+	 * @return string
+	 */
+	public function t_conversations(): string {
+		return $this->db->prefix . 'nxtcc_conversations';
+	}
+
+	/**
+	 * Conversation assignment history table.
+	 *
+	 * @return string
+	 */
+	public function t_conversation_assignment_history(): string {
+		return $this->db->prefix . 'nxtcc_conversation_assignment_history';
+	}
+
+	/**
+	 * Conversation watchers table.
+	 *
+	 * @return string
+	 */
+	public function t_conversation_watchers(): string {
+		return $this->db->prefix . 'nxtcc_conversation_watchers';
+	}
+
+	/**
+	 * Tenant access teams table.
+	 *
+	 * @return string
+	 */
+	public function t_access_teams(): string {
+		return $this->db->prefix . 'nxtcc_access_teams';
+	}
+
+	/**
+	 * Tenant user access table.
+	 *
+	 * @return string
+	 */
+	public function t_tenant_user_access(): string {
+		return $this->db->prefix . 'nxtcc_tenant_user_access';
+	}
+
+	/**
 	 * Auth bindings table.
 	 *
 	 * @return string

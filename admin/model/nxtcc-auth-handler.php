@@ -206,7 +206,7 @@ function nxtcc_auth_fetch_templates( string $access_token, string $business_id )
 	do {
 		++$loop;
 
-		$url = "https://graph.facebook.com/v19.0/{$business_id}/message_templates?fields={$fields}&limit={$limit}";
+		$url = nxtcc_meta_graph_url( rawurlencode( $business_id ) . "/message_templates?fields={$fields}&limit={$limit}" );
 		if ( null !== $after && '' !== $after ) {
 			$url .= '&after=' . rawurlencode( $after );
 		}
@@ -436,7 +436,7 @@ function nxtcc_ajax_generate_default_template(): void {
 
 	$business_id = (string) $row['business_account_id'];
 
-	$check_url = 'https://graph.facebook.com/v19.0/' . $business_id . '/message_templates?name=' . rawurlencode( $tpl_name );
+	$check_url = nxtcc_meta_graph_url( rawurlencode( $business_id ) . '/message_templates?name=' . rawurlencode( $tpl_name ) );
 	$check     = nxtcc_auth_remote_get(
 		$check_url,
 		array(
@@ -475,7 +475,7 @@ function nxtcc_ajax_generate_default_template(): void {
 		'components' => nxtcc_auth_build_default_components( $expiry ),
 	);
 
-	$create_url = 'https://graph.facebook.com/v19.0/' . $business_id . '/message_templates';
+	$create_url = nxtcc_meta_graph_url( rawurlencode( $business_id ) . '/message_templates' );
 
 	$res = nxtcc_auth_remote_post(
 		$create_url,
@@ -966,7 +966,7 @@ function nxtcc_auth_send_whatsapp_copy_code(
 		),
 	);
 
-	$url = 'https://graph.facebook.com/v19.0/' . rawurlencode( (string) $settings['phone_number_id'] ) . '/messages';
+	$url = nxtcc_meta_graph_url( rawurlencode( (string) $settings['phone_number_id'] ) . '/messages' );
 
 	$res = nxtcc_auth_remote_post(
 		$url,

@@ -324,7 +324,7 @@ function nxtcc_upload_media_to_whatsapp( string $phone_number_id, string $token,
 		);
 	}
 
-	$url      = 'https://graph.facebook.com/v19.0/' . rawurlencode( $phone_number_id ) . '/media';
+	$url      = nxtcc_meta_graph_url( rawurlencode( $phone_number_id ) . '/media' );
 	$eol      = "\r\n";
 	$boundary = '--------------------------nxtcc' . wp_generate_password( 12, false, false );
 
@@ -531,7 +531,7 @@ function nxtcc_send_text_message_internal( array $args, bool $require_user_auth 
 		);
 	}
 
-	$url = 'https://graph.facebook.com/v19.0/' . rawurlencode( $phone_number_id ) . '/messages';
+	$url = nxtcc_meta_graph_url( rawurlencode( $phone_number_id ) . '/messages' );
 
 	$payload = array(
 		'messaging_product' => 'whatsapp',
@@ -780,7 +780,7 @@ function nxtcc_send_media_link_immediately( array $args ): array {
 		);
 	}
 
-	$url = 'https://graph.facebook.com/v19.0/' . rawurlencode( $phone_number_id ) . '/messages';
+	$url = nxtcc_meta_graph_url( rawurlencode( $phone_number_id ) . '/messages' );
 
 	// Keep your existing behavior: sticker sends as image link (not an actual WA "sticker" type).
 	$kind_for_api = ( 'sticker' === $kind_in ) ? 'image' : $kind_in;

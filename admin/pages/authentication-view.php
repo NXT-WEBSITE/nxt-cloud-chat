@@ -138,7 +138,7 @@ if ( ! in_array( $nxtcc_login_button_corner, array( 'rounded', 'rectangle' ), tr
 $nxtcc_woo_active = class_exists( 'WooCommerce' );
 
 ?>
-<div class="wrap nxtcc-auth-wrap">
+<div class="wrap nxtcc-auth-wrap nxtcc-ui-control-scope">
 	<h1 class="wp-heading-inline">
 		<?php esc_html_e( 'Authentication', 'nxt-cloud-chat' ); ?>
 	</h1>
@@ -173,11 +173,13 @@ $nxtcc_woo_active = class_exists( 'WooCommerce' );
 					<?php esc_html_e( 'Default profile for authentication', 'nxt-cloud-chat' ); ?>
 				</label>
 				<div class="nxtcc-row">
-					<select id="nxtcc-auth-owner" class="nxtcc-select">
-						<option value="">
-							<?php esc_html_e( '- Select profile -', 'nxt-cloud-chat' ); ?>
-						</option>
-					</select>
+					<span class="nxtcc-ui-select-wrap">
+						<select id="nxtcc-auth-owner" class="nxtcc-select">
+							<option value="">
+								<?php esc_html_e( '- Select profile -', 'nxt-cloud-chat' ); ?>
+							</option>
+						</select>
+					</span>
 				</div>
 				<p class="nxtcc-help">
 					<?php
@@ -197,11 +199,13 @@ $nxtcc_woo_active = class_exists( 'WooCommerce' );
 					<?php esc_html_e( 'Authentication template', 'nxt-cloud-chat' ); ?>
 				</label>
 				<div class="nxtcc-row">
-					<select id="nxtcc-auth-template" class="nxtcc-select">
-						<option value="">
-							<?php esc_html_e( '- Select template -', 'nxt-cloud-chat' ); ?>
-						</option>
-					</select>
+					<span class="nxtcc-ui-select-wrap">
+						<select id="nxtcc-auth-template" class="nxtcc-select">
+							<option value="">
+								<?php esc_html_e( '- Select template -', 'nxt-cloud-chat' ); ?>
+							</option>
+						</select>
+					</span>
 					<button id="nxtcc-generate-default" class="button button-primary" type="button">
 						<?php esc_html_e( 'Generate', 'nxt-cloud-chat' ); ?>
 					</button>
@@ -566,14 +570,16 @@ $nxtcc_woo_active = class_exists( 'WooCommerce' );
 							<label for="nxtcc-login-button-corner" class="nxtcc-label">
 								<?php esc_html_e( 'Corner style', 'nxt-cloud-chat' ); ?>
 							</label>
-							<select id="nxtcc-login-button-corner" class="nxtcc-select">
-								<option value="rounded" <?php selected( $nxtcc_login_button_corner, 'rounded' ); ?>>
-									<?php esc_html_e( 'Rounded', 'nxt-cloud-chat' ); ?>
-								</option>
-								<option value="rectangle" <?php selected( $nxtcc_login_button_corner, 'rectangle' ); ?>>
-									<?php esc_html_e( 'Rectangle', 'nxt-cloud-chat' ); ?>
-								</option>
-							</select>
+							<span class="nxtcc-ui-select-wrap">
+								<select id="nxtcc-login-button-corner" class="nxtcc-select">
+									<option value="rounded" <?php selected( $nxtcc_login_button_corner, 'rounded' ); ?>>
+										<?php esc_html_e( 'Rounded', 'nxt-cloud-chat' ); ?>
+									</option>
+									<option value="rectangle" <?php selected( $nxtcc_login_button_corner, 'rectangle' ); ?>>
+										<?php esc_html_e( 'Rectangle', 'nxt-cloud-chat' ); ?>
+									</option>
+								</select>
+							</span>
 						</div>
 
 						<div class="nxtcc-auth-preview-wrap">

@@ -107,8 +107,10 @@ jQuery( function ( $ ) {
 	const $widget    = R.$widget;
 	const ajaxurl    = R.ajaxurl;
 	const nonce      = R.nonce;
+	const tagsNonce  = R.tagsNonce;
 	const instanceId = R.instanceId;
 	const S          = R.state;
+	const strings    = R.strings || {};
 
 	/**
 	 * Enable the multi-select dropdown UI (provided by runtime utilities).
@@ -150,6 +152,11 @@ jQuery( function ( $ ) {
 	}
 
 	function updateBulkToolbar() {
+		if ( $widget.hasClass( 'is-view-only' ) ) {
+			$( '#nxtcc-bulk-toolbar' ).hide();
+			return;
+		}
+
 		ensureExportButton();
 
 		const checked = $widget.find( '.nxtcc-contact-select:checked' ).length;
@@ -191,24 +198,83 @@ jQuery( function ( $ ) {
 	// Filters (server-side).
 	// -----------------------------
 	let filterGroup        = '';
+	let filterTags         = [];
 	let filterCountry      = '';
 	let filterName         = '';
 	let filterCreatedBy    = '';
 	let filterCreatedFrom  = '';
 	let filterCreatedTo    = '';
 	let filterSubscription = ''; // '' | '1' | '0'.
+	let filterAssignment   = '';
 
 	function currentFilterPayload() {
 		return {
 			filter_group: filterGroup || '',
+			filter_tags: filterTags,
+			filter_tag_match: 'any',
 			filter_country: filterCountry || '',
 			filter_created_by: filterCreatedBy || '',
 			filter_created_from: filterCreatedFrom || '',
 			filter_created_to: filterCreatedTo || '',
 			filter_subscription: filterSubscription,
+			filter_assignment: filterAssignment,
 			search: filterName || '',
 		};
 	}
+
+	/**
+	 * Apply a reusable filter definition through the existing Contacts controls.
+	 *
+	 * @param {Object} filters Saved filter definition.
+	 * @return {jQuery.jqXHR} Contacts request.
+	 */
+	function applyFilterPayload( filters ) {
+		const payload          = filters && 'object' === typeof filters ? filters : {};
+		const availableGroups  = ( S.allGroups || [] ).map( function ( group ) {
+			return String( group.id || '' );
+		} );
+		const availableTags    = availableTagIds();
+		const availableUsers   = ( S.assignmentTargets.users || [] ).map( function ( user ) {
+			return 'user:' + String( user.id || '' );
+		} );
+		const availableTeams   = ( S.assignmentTargets.teams || S.assignmentTargets.roles || [] ).map( function ( role ) {
+			return 'role:' + String( role.key || '' );
+		} );
+		const availableTargets = [ 'unassigned' ].concat( availableUsers, availableTeams );
+		const requestedGroup   = toStr( payload.filter_group ).trim();
+		const requestedTarget  = toStr( payload.filter_assignment ).trim();
+		const requestedStatus  = toStr( payload.filter_subscription ).trim();
+
+		filterGroup        = availableGroups.indexOf( requestedGroup ) !== -1 ? requestedGroup : '';
+		filterTags         = ( Array.isArray( payload.filter_tags ) ? payload.filter_tags : [] )
+			.map( String )
+			.filter( function ( tagId ) {
+				return availableTags.indexOf( tagId ) !== -1;
+			} );
+		filterCountry      = toStr( payload.filter_country ).replace( /\D/g, '' ).slice( 0, 8 );
+		filterName         = toStr( payload.search ).trim();
+		filterCreatedBy    = toStr( payload.filter_created_by ).trim();
+		filterCreatedFrom  = toStr( payload.filter_created_from ).trim();
+		filterCreatedTo    = toStr( payload.filter_created_to ).trim();
+		filterSubscription = ( '1' === requestedStatus || '0' === requestedStatus ) ? requestedStatus : '';
+		filterAssignment   = availableTargets.indexOf( requestedTarget ) !== -1 ? requestedTarget : '';
+
+		updateFiltersUI();
+		$( '#nxtcc-filter-group' ).val( filterGroup );
+		$( '#nxtcc-filter-country' ).val( filterCountry );
+		$( '#nxtcc-filter-name' ).val( filterName );
+		$( '#nxtcc-filter-created-by' ).val( filterCreatedBy );
+		$( '#nxtcc-filter-created-from' ).val( filterCreatedFrom );
+		$( '#nxtcc-filter-created-to' ).val( filterCreatedTo );
+		$( '#nxtcc-filter-subscription' ).val( filterSubscription );
+		renderAssignmentSelect( '#nxtcc-filter-assignment', filterAssignment, true );
+		renderTagFilter();
+
+		return loadAll( true );
+	}
+
+	R.actions.getCurrentFilters = currentFilterPayload;
+	R.actions.applyFilters       = applyFilterPayload;
 
 	// -----------------------------
 	// Paging / loading.
@@ -270,6 +336,16 @@ jQuery( function ( $ ) {
 		return $.post( ajaxurl, payload );
 	}
 
+	function apiTagsList() {
+		const payload = {
+			action: 'nxtcc_tags_options',
+			nonce: tagsNonce,
+			instance_id: instanceId,
+		};
+
+		return $.post( ajaxurl, payload );
+	}
+
 	function apiCountryCodes() {
 		const payload = {
 			action: 'nxtcc_contacts_country_codes',
@@ -288,6 +364,14 @@ jQuery( function ( $ ) {
 		};
 
 		return $.post( ajaxurl, payload );
+	}
+
+	function apiAssignmentTargets() {
+		return $.post( ajaxurl, {
+			action: 'nxtcc_assignment_targets',
+			nonce: nonce,
+			instance_id: instanceId,
+		} );
 	}
 
 	// -----------------------------
@@ -448,7 +532,159 @@ jQuery( function ( $ ) {
 			} );
 		}
 
+		renderTagFilter();
+
 		updateCreatedByFilter();
+		renderAssignmentSelect( '#nxtcc-filter-assignment', filterAssignment, true );
+	}
+
+	/**
+	 * Render assignment targets into one select.
+	 *
+	 * @param {string} selector Select selector.
+	 * @param {string} selected Selected compact target.
+	 * @param {boolean} filterMode Whether this is the list filter.
+	 * @return {void}
+	 */
+	function renderAssignmentSelect( selector, selected, filterMode ) {
+		const selectEl = $( selector ).get( 0 );
+		if ( ! selectEl ) {
+			return;
+		}
+
+		safeEmpty( selectEl );
+		safeAppend( selectEl, el( 'option', { value: '' }, filterMode ? 'All Assignments' : 'Unassigned' ) );
+		if ( filterMode ) {
+			safeAppend( selectEl, el( 'option', { value: 'unassigned' }, 'Unassigned' ) );
+		}
+
+		const targets = S.assignmentTargets || { users: [], roles: [], teams: [] };
+		const users   = targets.users || [];
+		const teams   = targets.teams || targets.roles || [];
+
+		if ( users.length ) {
+			const usersGroup = el( 'optgroup', { label: 'Users' } );
+			users.forEach( function ( user ) {
+				safeAppend( usersGroup, el( 'option', { value: 'user:' + String( user.id ) }, String( user.label || user.email || user.id ) ) );
+			} );
+			safeAppend( selectEl, usersGroup );
+		}
+
+		if ( teams.length ) {
+			const teamsGroup = el( 'optgroup', { label: 'Teams' } );
+			teams.forEach( function ( role ) {
+				safeAppend( teamsGroup, el( 'option', { value: 'role:' + String( role.key ) }, String( role.label || role.key ) ) );
+			} );
+			safeAppend( selectEl, teamsGroup );
+		}
+
+		$( selectEl ).val( selected || '' );
+	}
+
+	R.actions.renderAssignmentSelect = renderAssignmentSelect;
+
+	/**
+	 * Return the currently available tag IDs.
+	 *
+	 * @return {Array<string>} Tag IDs.
+	 */
+	function availableTagIds() {
+		return ( S.allTags || [] ).map( function ( tag ) {
+			return String( tag.id || '' );
+		} ).filter( Boolean );
+	}
+
+	/**
+	 * Read a localized Contacts UI string.
+	 *
+	 * @param {string} key String key.
+	 * @param {string} fallback Fallback string.
+	 * @return {string} UI string.
+	 */
+	function uiString( key, fallback ) {
+		return strings && strings[ key ] ? String( strings[ key ] ) : fallback;
+	}
+
+	/**
+	 * Update the tag filter button and Select All state.
+	 *
+	 * @return {void}
+	 */
+	function syncTagFilterControls() {
+		const availableIds = availableTagIds();
+		const selectedIds  = filterTags.filter( function ( id ) {
+			return availableIds.indexOf( String( id ) ) !== -1;
+		} );
+		const selectAll    = document.getElementById( 'nxtcc-filter-tags-select-all' );
+		const toggle       = document.getElementById( 'nxtcc-filter-tags-toggle' );
+
+		filterTags = selectedIds;
+
+		if ( selectAll ) {
+			selectAll.checked       = availableIds.length > 0 && selectedIds.length === availableIds.length;
+			selectAll.indeterminate = selectedIds.length > 0 && selectedIds.length < availableIds.length;
+			selectAll.disabled      = 0 === availableIds.length;
+		}
+
+		if ( ! toggle ) {
+			return;
+		}
+
+		if ( ! selectedIds.length ) {
+			toggle.textContent = uiString( 'all_tags', 'All Tags' );
+		} else if ( selectedIds.length === availableIds.length ) {
+			toggle.textContent = uiString( 'all_tags_selected', 'All Tags selected' );
+		} else if ( 1 === selectedIds.length ) {
+			const selectedTag = ( S.allTags || [] ).find( function ( tag ) {
+				return String( tag.id || '' ) === selectedIds[0];
+			} );
+			toggle.textContent = selectedTag
+				? toStr( selectedTag.tag_name )
+				: uiString( 'tag_selected', '%d Tag selected' ).replace( '%d', '1' );
+		} else {
+			toggle.textContent = uiString( 'tags_selected', '%d Tags selected' ).replace( '%d', String( selectedIds.length ) );
+		}
+	}
+
+	/**
+	 * Render the tag checkbox dropdown.
+	 *
+	 * @return {void}
+	 */
+	function renderTagFilter() {
+		const options = document.getElementById( 'nxtcc-filter-tags-options' );
+		if ( ! options ) {
+			return;
+		}
+
+		safeEmpty( options );
+
+		if ( ! ( S.allTags || [] ).length ) {
+			safeAppend( options, el( 'div', { class: 'nxtcc-tag-filter-empty' }, uiString( 'no_tags_available', 'No tags available' ) ) );
+			syncTagFilterControls();
+			return;
+		}
+
+		( S.allTags || [] ).forEach( function ( tag ) {
+			const id       = String( tag.id || '' );
+			const label    = el( 'label', { class: 'nxtcc-tag-filter-option' } );
+			const checkbox = el( 'input', {
+				type: 'checkbox',
+				class: 'nxtcc-filter-tag-option',
+				value: id,
+			} );
+			const dot      = el( 'span', { class: 'nxtcc-tag-filter-dot', 'aria-hidden': 'true' } );
+
+			checkbox.checked = filterTags.indexOf( id ) !== -1;
+			dot.style.setProperty( '--nxtcc-filter-tag-color', toStr( tag.color ) || '#2271b1' );
+
+			safeAppend( label, checkbox );
+			safeAppend( label, dot );
+			safeAppend( label, el( 'span', {}, toStr( tag.tag_name ) ) );
+			safeAppend( options, label );
+		} );
+
+		syncTagFilterControls();
 	}
 
 	R.actions.updateCountryAutocomplete = updateCountryAutocomplete;
@@ -511,6 +747,19 @@ jQuery( function ( $ ) {
 		return [];
 	}
 
+	function normalizeTags( c, tagMap ) {
+		if ( Array.isArray( c.tags ) ) {
+			return c.tags;
+		}
+
+		const idStr = String( c.id || '' );
+		if ( tagMap && Array.isArray( tagMap[ idStr ] ) ) {
+			return tagMap[ idStr ];
+		}
+
+		return [];
+	}
+
 	function normalizeContactsResponse( resp ) {
 		let rows = [];
 
@@ -531,6 +780,8 @@ jQuery( function ( $ ) {
 		const groupMap   = resp && resp.data && resp.data.group_map ? resp.data.group_map : {};
 		const groupNames =
 			resp && resp.data && resp.data.group_names ? resp.data.group_names : [];
+		const tagMap        = resp && resp.data && resp.data.tag_map ? resp.data.tag_map : {};
+		const assignmentMap = resp && resp.data && resp.data.assignment_map ? resp.data.assignment_map : {};
 
 		const normalized = rows.map( function ( c ) {
 			const cc = $.extend( {}, c );
@@ -577,6 +828,8 @@ jQuery( function ( $ ) {
 
 			cc.custom_fields = normalizeCustomFields( cc.custom_fields );
 			cc.groups        = normalizeGroups( cc, groupMap );
+			cc.tags          = normalizeTags( cc, tagMap );
+			cc.assignment    = assignmentMap[ String( cc.id ) ] || assignmentMap[ cc.id ] || null;
 
 			return cc;
 		} );
@@ -813,6 +1066,57 @@ jQuery( function ( $ ) {
 
 	R.actions.fetchGroups = fetchGroups;
 
+	function fetchTags() {
+		return apiTagsList()
+			.done( function ( resp ) {
+				if ( resp && resp.success && resp.data && Array.isArray( resp.data.tags ) ) {
+					S.allTags = resp.data.tags.map( function ( tag ) {
+						return {
+							id: Number( tag.id ),
+							tag_name: toStr( tag.tag_name ),
+							tag_slug: toStr( tag.tag_slug ),
+							color: toStr( tag.color ) || '#2271b1',
+						};
+					} );
+
+					updateFiltersUI();
+
+					const importSel = $( '#nxtcc-import-default-tags' ).get( 0 );
+					if ( importSel ) {
+						safeEmpty( importSel );
+						S.allTags.forEach( function ( tag ) {
+							safeAppend( importSel, el( 'option', { value: String( tag.id ) }, tag.tag_name ) );
+						} );
+						enableMultiSelectToggle( $( importSel ) );
+					}
+
+					if ( S.allContacts && S.allContacts.length && R.table && 'function' === typeof R.table.renderTable ) {
+						R.table.renderTable( S.allContacts );
+					}
+				}
+			} )
+			.fail( function () {
+				// eslint-disable-next-line no-console.
+				console.warn( '[NXTCC] fetchTags failed.' );
+			} );
+	}
+
+	R.actions.fetchTags = fetchTags;
+
+	function fetchAssignmentTargets() {
+		return apiAssignmentTargets()
+			.done( function ( resp ) {
+				if ( resp && resp.success && resp.data && resp.data.targets ) {
+					S.assignmentTargets = resp.data.targets;
+					renderAssignmentSelect( '#nxtcc-filter-assignment', filterAssignment, true );
+					renderAssignmentSelect( '#nxtcc-contact-assignment', '', false );
+					renderAssignmentSelect( '#nxtcc-bulk-assignment-select', '', false );
+				}
+			} );
+	}
+
+	R.actions.fetchAssignmentTargets = fetchAssignmentTargets;
+
 	function fetchCountryCodes() {
 		return apiCountryCodes()
 			.done( function ( resp ) {
@@ -880,15 +1184,89 @@ jQuery( function ( $ ) {
 	}
 
 	loadAll( true );
-	fetchGroups();
-	fetchCountryCodes();
-	fetchCreators();
+	R.referenceDataReady = $.when(
+		fetchGroups(),
+		fetchTags(),
+		fetchCountryCodes(),
+		fetchCreators(),
+		fetchAssignmentTargets()
+	).then(
+		function () {
+			return true;
+		},
+		function () {
+			return false;
+		}
+	);
 
 	// -----------------------------
 	// Filter events.
 	// -----------------------------
 	$( document ).on( 'change', '#nxtcc-filter-group', function () {
 		filterGroup = $( this ).val() || '';
+		loadAll( true );
+	} );
+
+	$( document ).on( 'click', '#nxtcc-filter-tags-toggle', function ( event ) {
+		event.stopPropagation();
+
+		const panel  = document.getElementById( 'nxtcc-filter-tags-panel' );
+		const isOpen = panel ? ! panel.hidden : false;
+
+		if ( panel ) {
+			panel.hidden = isOpen;
+			this.setAttribute( 'aria-expanded', isOpen ? 'false' : 'true' );
+		}
+	} );
+
+	$( document ).on( 'click', '#nxtcc-filter-tags-panel', function ( event ) {
+		event.stopPropagation();
+	} );
+
+	$( document ).on( 'click', function () {
+		const panel  = document.getElementById( 'nxtcc-filter-tags-panel' );
+		const toggle = document.getElementById( 'nxtcc-filter-tags-toggle' );
+
+		if ( panel ) {
+			panel.hidden = true;
+		}
+		if ( toggle ) {
+			toggle.setAttribute( 'aria-expanded', 'false' );
+		}
+	} );
+
+	$( document ).on( 'keydown', function ( event ) {
+		if ( 'Escape' !== event.key ) {
+			return;
+		}
+
+		const panel  = document.getElementById( 'nxtcc-filter-tags-panel' );
+		const toggle = document.getElementById( 'nxtcc-filter-tags-toggle' );
+
+		if ( panel && ! panel.hidden ) {
+			panel.hidden = true;
+		} else {
+			return;
+		}
+
+		if ( toggle ) {
+			toggle.setAttribute( 'aria-expanded', 'false' );
+			toggle.focus();
+		}
+	} );
+
+	$( document ).on( 'change', '.nxtcc-filter-tag-option', function () {
+		filterTags = $( '.nxtcc-filter-tag-option:checked' ).map( function () {
+			return String( this.value || '' );
+		} ).get().filter( Boolean );
+		syncTagFilterControls();
+		loadAll( true );
+	} );
+
+	$( document ).on( 'change', '#nxtcc-filter-tags-select-all', function () {
+		$( '.nxtcc-filter-tag-option' ).prop( 'checked', this.checked );
+		filterTags = this.checked ? availableTagIds() : [];
+		syncTagFilterControls();
 		loadAll( true );
 	} );
 
@@ -927,6 +1305,11 @@ jQuery( function ( $ ) {
 	$( document ).on( 'change', '#nxtcc-filter-subscription', function () {
 		const v            = $( this ).val();
 		filterSubscription = ( '1' === v || '0' === v ) ? v : '';
+		loadAll( true );
+	} );
+
+	$( document ).on( 'change', '#nxtcc-filter-assignment', function () {
+		filterAssignment = toStr( $( this ).val() ).trim();
 		loadAll( true );
 	} );
 
@@ -1080,6 +1463,69 @@ jQuery( function ( $ ) {
 	} );
 
 	// -----------------------------
+	// Bulk tags modal.
+	// -----------------------------
+	$widget.on( 'click', '#nxtcc-bulk-edit-tags', function () {
+		const ids = $widget
+			.find( '.nxtcc-contact-select:checked' )
+			.map( function () {
+				return $( this ).data( 'id' );
+			} )
+			.get();
+		const selEl = $( '#nxtcc-bulk-tag-select' ).get( 0 );
+
+		if ( ! ids.length || ! selEl ) {
+			return;
+		}
+
+		safeEmpty( selEl );
+		( S.allTags || [] ).forEach( function ( tag ) {
+			safeAppend( selEl, el( 'option', { value: String( tag.id ) }, toStr( tag.tag_name ) ) );
+		} );
+		$( selEl ).val( [] );
+		enableMultiSelectToggle( $( selEl ) );
+		$( '#nxtcc-bulk-tag-operation' ).val( 'add' );
+		$( '#nxtcc-bulk-tag-modal' ).fadeIn( 120 ).data( 'contactIds', ids );
+	} );
+
+	$( document ).on(
+		'click',
+		'#nxtcc-bulk-tag-cancel, #nxtcc-bulk-tag-close, #nxtcc-bulk-tag-modal .nxtcc-modal-overlay',
+		function () {
+			$( '#nxtcc-bulk-tag-modal' ).fadeOut( 120 );
+		}
+	);
+
+	$( document ).on( 'click', '#nxtcc-bulk-tag-apply', function () {
+		const tagIds     = $( '#nxtcc-bulk-tag-select' ).val() || [];
+		const contactIds = $( '#nxtcc-bulk-tag-modal' ).data( 'contactIds' ) || [];
+
+		if ( ! contactIds.length || ! tagIds.length ) {
+			alert( 'Choose at least one tag.' );
+			return;
+		}
+
+		$.post( ajaxurl, {
+			action: 'nxtcc_contacts_bulk_update_tags',
+			nonce: tagsNonce,
+			instance_id: instanceId,
+			contact_ids: contactIds,
+			tag_ids: tagIds,
+			operation: String( $( '#nxtcc-bulk-tag-operation' ).val() || 'add' ),
+		}, function ( resp ) {
+			if ( resp && resp.success ) {
+				$( '#nxtcc-bulk-tag-modal' ).fadeOut( 120 );
+				loadAll( true );
+				return;
+			}
+
+			alert( resp && resp.data && resp.data.message ? String( resp.data.message ) : 'Failed to update tags.' );
+		} ).fail( function () {
+			alert( 'Network error. Please try again.' );
+		} );
+	} );
+
+	// -----------------------------
 	// Bulk subscription modal.
 	// -----------------------------
 	$widget.on( 'click', '#nxtcc-bulk-edit-subscription', function () {
@@ -1139,6 +1585,54 @@ jQuery( function ( $ ) {
 					? String( resp.data.message )
 					: 'Failed to update subscription for selected contacts.';
 			alert( msg );
+		} ).fail( function () {
+			alert( 'Network error. Please try again.' );
+		} );
+	} );
+
+	// -----------------------------
+	// Bulk assignment modal.
+	// -----------------------------
+	$widget.on( 'click', '#nxtcc-bulk-edit-assignment', function () {
+		const ids = $widget.find( '.nxtcc-contact-select:checked' ).map( function () {
+			return $( this ).data( 'id' );
+		} ).get();
+
+		if ( ! ids.length ) {
+			return;
+		}
+
+		renderAssignmentSelect( '#nxtcc-bulk-assignment-select', '', false );
+		$( '#nxtcc-bulk-assignment-modal' ).data( 'contactIds', ids ).fadeIn( 120 );
+	} );
+
+	$( document ).on(
+		'click',
+		'#nxtcc-bulk-assignment-cancel, #nxtcc-bulk-assignment-close, #nxtcc-bulk-assignment-modal .nxtcc-modal-overlay',
+		function () {
+			$( '#nxtcc-bulk-assignment-modal' ).fadeOut( 120 );
+		}
+	);
+
+	$( document ).on( 'click', '#nxtcc-bulk-assignment-apply', function () {
+		const ids = $( '#nxtcc-bulk-assignment-modal' ).data( 'contactIds' ) || [];
+		if ( ! ids.length ) {
+			return;
+		}
+
+		$.post( ajaxurl, {
+			action: 'nxtcc_contacts_bulk_update_assignment',
+			nonce: nonce,
+			instance_id: instanceId,
+			contact_ids: ids,
+			assignment_target: String( $( '#nxtcc-bulk-assignment-select' ).val() || '' ),
+		}, function ( resp ) {
+			if ( resp && resp.success ) {
+				$( '#nxtcc-bulk-assignment-modal' ).fadeOut( 120 );
+				loadAll( true );
+				return;
+			}
+			alert( resp && resp.data && resp.data.message ? String( resp.data.message ) : 'Failed to update assignments.' );
 		} ).fail( function () {
 			alert( 'Network error. Please try again.' );
 		} );

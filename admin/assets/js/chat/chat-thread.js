@@ -33,6 +33,7 @@ jQuery( function ( $ ) {
 		const $chatList   = ctx.$chatList;
 		const $chatThread = ctx.$chatThread;
 		const $chatHeader = ctx.$chatHeader;
+		const $profileBtn = $chatHeader.find( '.nxtcc-chat-profile-btn' );
 
 		// Shared state/API containers across chat modules.
 		ctx.state      = ctx.state || {};
@@ -44,6 +45,19 @@ jQuery( function ( $ ) {
 		ctx.state.lastMessageId        = null;
 		ctx.state.oldestMessageId      = null;
 		ctx.state.loadingOlderMessages = false;
+
+		function syncProfileButton( contactId ) {
+			const id = parseInt( contactId, 10 ) || 0;
+
+			$profileBtn.prop( 'disabled', id <= 0 );
+			if ( id > 0 ) {
+				$profileBtn.attr( 'data-contact-id', String( id ) );
+			} else {
+				$profileBtn.removeAttr( 'data-contact-id' );
+			}
+		}
+
+		syncProfileButton( ctx.state.chatContactId );
 
 		// Polling state.
 		let pollTimer         = null;
@@ -580,6 +594,9 @@ jQuery( function ( $ ) {
 					if ( resp && resp.success && resp.data && resp.data.messages ) {
 						patchChatThread( resp.data.messages );
 						setComposerEnabledFromResp( resp );
+						if ( ctx.api.tickets && ctx.api.tickets.renderConversation && resp.data.conversation ) {
+							ctx.api.tickets.renderConversation( resp.data.conversation );
+						}
 
 						markCurrentChatRead();
 
@@ -790,6 +807,19 @@ jQuery( function ( $ ) {
 
 			$chatHeader.find( '.nxtcc-chat-contact-name' ).text( nameText );
 			$chatHeader.find( '.nxtcc-chat-contact-number' ).text( fullPhone );
+			syncProfileButton( selectedId );
+			if ( ctx.api.inbox && ctx.api.inbox.syncAssignment ) {
+				let assignmentTarget = '';
+				if ( activeChat.assignment && 'user' === U.toStr( activeChat.assignment.target_type ) ) {
+					assignmentTarget = 'user:' + U.toStr( activeChat.assignment.assigned_user_id );
+				} else if ( activeChat.assignment && 'role' === U.toStr( activeChat.assignment.target_type ) ) {
+					assignmentTarget = 'role:' + U.toStr( activeChat.assignment.assigned_role );
+				}
+				ctx.api.inbox.syncAssignment( assignmentTarget );
+			}
+			if ( ctx.api.tickets && ctx.api.tickets.renderConversation && activeChat.conversation && ! ctx.$widget.hasClass( 'is-ticket-open' ) ) {
+				ctx.api.tickets.renderConversation( activeChat.conversation );
+			}
 
 			const nextKey =
 				String( selectedId ) +
@@ -963,12 +993,19 @@ jQuery( function ( $ ) {
 
 			ctx.state.chatContactId = contactId;
 			activeInboxKey          = '';
+			syncProfileButton( contactId );
 
 			const name  = $row.find( '.nxtcc-chat-head-name' ).text();
 			const phone = U.toStr( $row.attr( 'data-phone' ) || $row.data( 'phone' ) || '' );
 
 			$chatHeader.find( '.nxtcc-chat-contact-name' ).text( name );
 			$chatHeader.find( '.nxtcc-chat-contact-number' ).text( phone );
+			if ( ctx.api.inbox && ctx.api.inbox.syncAssignment ) {
+				ctx.api.inbox.syncAssignment( U.toStr( $row.attr( 'data-assignment-target' ) || '' ) );
+			}
+			if ( ctx.api.tickets && ctx.api.tickets.load ) {
+				ctx.api.tickets.load( contactId );
+			}
 
 			if ( ctx.api.actions && ctx.api.actions.enterChatView ) {
 				ctx.api.actions.enterChatView( $row );

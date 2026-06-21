@@ -263,12 +263,17 @@ function nxtcc_ajax_list_forward_targets(): void {
 	}
 
 	// IMPORTANT: repo method must scope by phone_number_id.
-	$rows = $repo->list_forward_targets( $user_mailid, $phone_number_id, $q, $per, $off );
+	$rows           = $repo->list_forward_targets( $user_mailid, $phone_number_id, $q, $per, $off );
+	$allowed_ids    = nxtcc_chat_filter_contact_ids_by_conversation_access( wp_list_pluck( $rows, 'contact_id' ), true );
+	$allowed_lookup = array_fill_keys( $allowed_ids, true );
 
 	$out = array();
 
 	foreach ( $rows as $row ) {
 		if ( ! is_object( $row ) ) {
+			continue;
+		}
+		if ( ! isset( $allowed_lookup[ absint( $row->contact_id ?? 0 ) ] ) ) {
 			continue;
 		}
 
@@ -340,9 +345,21 @@ function nxtcc_ajax_forward_messages(): void {
 		wp_send_json_error( array( 'message' => 'Repository unavailable.' ), 500 );
 	}
 
-	$rows = $repo->get_messages_for_forwarding( $message_ids, $user_mailid );
+	$rows          = $repo->get_messages_for_forwarding( $message_ids, $user_mailid );
+	$tenant        = NXTCC_Access_Control::get_current_tenant_context();
+	$contact_ids   = nxtcc_chat_filter_contact_ids_by_conversation_access( $contact_ids, true );
+	$source_ids    = nxtcc_chat_filter_contact_ids_by_conversation_access( wp_list_pluck( $rows, 'contact_id' ) );
+	$source_lookup = array_fill_keys( $source_ids, true );
+	$rows          = array_values(
+		array_filter(
+			$rows,
+			static function ( $row ) use ( $source_lookup ): bool {
+				return isset( $source_lookup[ absint( $row->contact_id ?? 0 ) ] );
+			}
+		)
+	);
 
-	if ( empty( $rows ) ) {
+	if ( empty( $rows ) || empty( $contact_ids ) ) {
 		wp_send_json_error( array( 'message' => 'Selected messages not found.' ), 404 );
 	}
 

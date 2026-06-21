@@ -67,6 +67,28 @@ final class NXTCC_Access_Control {
 			'view_groups_desc'         => 'Open the groups screen and view tenant groups.',
 			'manage_groups'            => 'Manage Groups',
 			'manage_groups_desc'       => 'Create, edit, and delete tenant groups.',
+			'view_tags'                => 'View Tags',
+			'view_tags_desc'           => 'Open the tags screen and view tenant contact tags.',
+			'manage_tags'              => 'Manage Tags',
+			'manage_tags_desc'         => 'Create, edit, merge, and delete tenant contact tags.',
+			'view_assignments'         => 'View Assignments',
+			'view_assignments_desc'    => 'View contact and chat ownership assignments.',
+			'manage_assignments'       => 'Manage Assignments',
+			'manage_assignments_desc'  => 'Assign tenant contacts and chats to team members or teams.',
+			'view_crm_activity'        => 'View CRM Activity',
+			'view_crm_activity_desc'   => 'View the tenant contact activity timeline and internal CRM history.',
+			'manage_crm_tasks'         => 'Manage CRM Tasks',
+			'manage_crm_tasks_desc'    => 'Create, assign, complete, and cancel tenant follow-up tasks.',
+			'manage_lifecycle'         => 'Manage Lifecycle Stages',
+			'manage_lifecycle_desc'    => 'Change contact lifecycle stages and manage tenant stage definitions.',
+			'view_deals'               => 'View Deals',
+			'view_deals_desc'          => 'View tenant sales pipelines, deals, values, and linked contacts.',
+			'manage_deals'             => 'Manage Deals',
+			'manage_deals_desc'        => 'Create, edit, assign, and close tenant deals.',
+			'manage_pipelines'         => 'Manage Sales Pipelines',
+			'manage_pipelines_desc'    => 'Create and edit tenant sales pipelines and stages.',
+			'merge_contacts'           => 'Merge Contacts',
+			'merge_contacts_desc'      => 'Merge confirmed duplicate tenant contacts while preserving CRM history.',
 			'view_history'             => 'View History',
 			'view_history_desc'        => 'View tenant message history.',
 			'authentication'           => 'Authentication',
@@ -75,16 +97,12 @@ final class NXTCC_Access_Control {
 			'connection_settings_desc' => 'Manage tenant connection credentials and diagnostics.',
 			'team_access'              => 'Team Access',
 			'team_access_desc'         => 'Manage tenant staff access and capabilities.',
-			'viewer'                   => 'Viewer',
-			'viewer_desc'              => 'Can review tenant activity, contacts, groups, and history without editing records.',
-			'support_agent'            => 'Support Agent',
-			'support_agent_desc'       => 'Can work in the inbox and keep contact records up to date while handling tenant conversations.',
-			'operator'                 => 'Operator',
-			'operator_desc'            => 'Can manage day-to-day tenant operations across contacts, groups, inbox activity, and authentication.',
 			'section_core'             => 'Core',
 			'section_messaging'        => 'Messaging',
 			'section_contacts'         => 'Contacts',
 			'section_groups'           => 'Groups',
+			'section_tags'             => 'Tags',
+			'section_sales'            => 'Sales CRM',
 			'section_authentication'   => 'Authentication',
 			'section_marketing'        => 'Pro Marketing',
 			'section_automation'       => 'Pro Automation',
@@ -101,42 +119,66 @@ final class NXTCC_Access_Control {
 
 		if ( null === $translated ) {
 			$translated = array(
-				'dashboard'                => __( 'Dashboard', 'nxt-cloud-chat' ),
-				'dashboard_desc'           => __( 'View tenant dashboard and connection overview.', 'nxt-cloud-chat' ),
-				'chat_window'              => __( 'Chat Window', 'nxt-cloud-chat' ),
-				'chat_window_desc'         => __( 'Access the tenant chat inbox and send replies.', 'nxt-cloud-chat' ),
-				'view_contacts'            => __( 'View Contacts', 'nxt-cloud-chat' ),
-				'view_contacts_desc'       => __( 'Open the contacts screen and view tenant contacts.', 'nxt-cloud-chat' ),
-				'manage_contacts'          => __( 'Manage Contacts', 'nxt-cloud-chat' ),
-				'manage_contacts_desc'     => __( 'Create, edit, import, export, and delete tenant contacts.', 'nxt-cloud-chat' ),
-				'view_groups'              => __( 'View Groups', 'nxt-cloud-chat' ),
-				'view_groups_desc'         => __( 'Open the groups screen and view tenant groups.', 'nxt-cloud-chat' ),
-				'manage_groups'            => __( 'Manage Groups', 'nxt-cloud-chat' ),
-				'manage_groups_desc'       => __( 'Create, edit, and delete tenant groups.', 'nxt-cloud-chat' ),
-				'view_history'             => __( 'View History', 'nxt-cloud-chat' ),
-				'view_history_desc'        => __( 'View tenant message history.', 'nxt-cloud-chat' ),
-				'authentication'           => __( 'Authentication', 'nxt-cloud-chat' ),
-				'authentication_desc'      => __( 'Manage OTP/login settings for the tenant.', 'nxt-cloud-chat' ),
-				'connection_settings'      => __( 'Connection Settings', 'nxt-cloud-chat' ),
-				'connection_settings_desc' => __( 'Manage tenant connection credentials and diagnostics.', 'nxt-cloud-chat' ),
-				'team_access'              => __( 'Team Access', 'nxt-cloud-chat' ),
-				'team_access_desc'         => __( 'Manage tenant staff access and capabilities.', 'nxt-cloud-chat' ),
-				'viewer'                   => __( 'Viewer', 'nxt-cloud-chat' ),
-				'viewer_desc'              => __( 'Can review tenant activity, contacts, groups, and history without editing records.', 'nxt-cloud-chat' ),
-				'support_agent'            => __( 'Support Agent', 'nxt-cloud-chat' ),
-				'support_agent_desc'       => __( 'Can work in the inbox and keep contact records up to date while handling tenant conversations.', 'nxt-cloud-chat' ),
-				'operator'                 => __( 'Operator', 'nxt-cloud-chat' ),
-				'operator_desc'            => __( 'Can manage day-to-day tenant operations across contacts, groups, inbox activity, and authentication.', 'nxt-cloud-chat' ),
-				'section_core'             => __( 'Core', 'nxt-cloud-chat' ),
-				'section_messaging'        => __( 'Messaging', 'nxt-cloud-chat' ),
-				'section_contacts'         => __( 'Contacts', 'nxt-cloud-chat' ),
-				'section_groups'           => __( 'Groups', 'nxt-cloud-chat' ),
-				'section_authentication'   => __( 'Authentication', 'nxt-cloud-chat' ),
-				'section_marketing'        => __( 'Pro Marketing', 'nxt-cloud-chat' ),
-				'section_automation'       => __( 'Pro Automation', 'nxt-cloud-chat' ),
-				'section_owner'            => __( 'Owner Only', 'nxt-cloud-chat' ),
-				'section_general'          => __( 'General', 'nxt-cloud-chat' ),
-				'team_role'                => __( 'NXT Cloud Chat Team', 'nxt-cloud-chat' ),
+				'dashboard'                   => __( 'Dashboard', 'nxt-cloud-chat' ),
+				'dashboard_desc'              => __( 'View tenant dashboard and connection overview.', 'nxt-cloud-chat' ),
+				'chat_window'                 => __( 'Chat Window', 'nxt-cloud-chat' ),
+				'chat_window_desc'            => __( 'Access the tenant chat inbox and send replies.', 'nxt-cloud-chat' ),
+				'view_contacts'               => __( 'View Contacts', 'nxt-cloud-chat' ),
+				'view_contacts_desc'          => __( 'Open the contacts screen and view tenant contacts.', 'nxt-cloud-chat' ),
+				'manage_contacts'             => __( 'Manage Contacts', 'nxt-cloud-chat' ),
+				'manage_contacts_desc'        => __( 'Create, edit, import, export, and delete tenant contacts.', 'nxt-cloud-chat' ),
+				'view_groups'                 => __( 'View Groups', 'nxt-cloud-chat' ),
+				'view_groups_desc'            => __( 'Open the groups screen and view tenant groups.', 'nxt-cloud-chat' ),
+				'manage_groups'               => __( 'Manage Groups', 'nxt-cloud-chat' ),
+				'manage_groups_desc'          => __( 'Create, edit, and delete tenant groups.', 'nxt-cloud-chat' ),
+				'view_tags'                   => __( 'View Tags', 'nxt-cloud-chat' ),
+				'view_tags_desc'              => __( 'Open the tags screen and view tenant contact tags.', 'nxt-cloud-chat' ),
+				'manage_tags'                 => __( 'Manage Tags', 'nxt-cloud-chat' ),
+				'manage_tags_desc'            => __( 'Create, edit, merge, and delete tenant contact tags.', 'nxt-cloud-chat' ),
+				'view_assignments'            => __( 'View Assignments', 'nxt-cloud-chat' ),
+				'view_assignments_desc'       => __( 'View contact and chat ownership assignments.', 'nxt-cloud-chat' ),
+				'manage_assignments'          => __( 'Manage Assignments', 'nxt-cloud-chat' ),
+				'manage_assignments_desc'     => __( 'Assign tenant contacts and chats to team members or teams.', 'nxt-cloud-chat' ),
+				'reassign_conversations'      => __( 'Reassign Conversations', 'nxt-cloud-chat' ),
+				'reassign_conversations_desc' => __( 'Hand off conversations to eligible team members or queues.', 'nxt-cloud-chat' ),
+				'resolve_conversations'       => __( 'Resolve Conversations', 'nxt-cloud-chat' ),
+				'resolve_conversations_desc'  => __( 'Change conversation status, priority, subject, and category.', 'nxt-cloud-chat' ),
+				'manage_crm_notes'            => __( 'Manage Internal Notes', 'nxt-cloud-chat' ),
+				'manage_crm_notes_desc'       => __( 'Add internal notes to tenant conversations.', 'nxt-cloud-chat' ),
+				'view_crm_activity'           => __( 'View CRM Activity', 'nxt-cloud-chat' ),
+				'view_crm_activity_desc'      => __( 'View the tenant contact activity timeline and internal CRM history.', 'nxt-cloud-chat' ),
+				'manage_crm_tasks'            => __( 'Manage CRM Tasks', 'nxt-cloud-chat' ),
+				'manage_crm_tasks_desc'       => __( 'Create, assign, complete, and cancel tenant follow-up tasks.', 'nxt-cloud-chat' ),
+				'manage_lifecycle'            => __( 'Manage Lifecycle Stages', 'nxt-cloud-chat' ),
+				'manage_lifecycle_desc'       => __( 'Change contact lifecycle stages and manage tenant stage definitions.', 'nxt-cloud-chat' ),
+				'view_deals'                  => __( 'View Deals', 'nxt-cloud-chat' ),
+				'view_deals_desc'             => __( 'View tenant sales pipelines, deals, values, and linked contacts.', 'nxt-cloud-chat' ),
+				'manage_deals'                => __( 'Manage Deals', 'nxt-cloud-chat' ),
+				'manage_deals_desc'           => __( 'Create, edit, assign, and close tenant deals.', 'nxt-cloud-chat' ),
+				'manage_pipelines'            => __( 'Manage Sales Pipelines', 'nxt-cloud-chat' ),
+				'manage_pipelines_desc'       => __( 'Create and edit tenant sales pipelines and stages.', 'nxt-cloud-chat' ),
+				'merge_contacts'              => __( 'Merge Contacts', 'nxt-cloud-chat' ),
+				'merge_contacts_desc'         => __( 'Merge confirmed duplicate tenant contacts while preserving CRM history.', 'nxt-cloud-chat' ),
+				'view_history'                => __( 'View History', 'nxt-cloud-chat' ),
+				'view_history_desc'           => __( 'View tenant message history.', 'nxt-cloud-chat' ),
+				'authentication'              => __( 'Authentication', 'nxt-cloud-chat' ),
+				'authentication_desc'         => __( 'Manage OTP/login settings for the tenant.', 'nxt-cloud-chat' ),
+				'connection_settings'         => __( 'Connection Settings', 'nxt-cloud-chat' ),
+				'connection_settings_desc'    => __( 'Manage tenant connection credentials and diagnostics.', 'nxt-cloud-chat' ),
+				'team_access'                 => __( 'Team Access', 'nxt-cloud-chat' ),
+				'team_access_desc'            => __( 'Manage tenant staff access and capabilities.', 'nxt-cloud-chat' ),
+				'section_core'                => __( 'Core', 'nxt-cloud-chat' ),
+				'section_messaging'           => __( 'Messaging', 'nxt-cloud-chat' ),
+				'section_contacts'            => __( 'Contacts', 'nxt-cloud-chat' ),
+				'section_groups'              => __( 'Groups', 'nxt-cloud-chat' ),
+				'section_tags'                => __( 'Tags', 'nxt-cloud-chat' ),
+				'section_sales'               => __( 'Sales CRM', 'nxt-cloud-chat' ),
+				'section_authentication'      => __( 'Authentication', 'nxt-cloud-chat' ),
+				'section_marketing'           => __( 'Pro Marketing', 'nxt-cloud-chat' ),
+				'section_automation'          => __( 'Pro Automation', 'nxt-cloud-chat' ),
+				'section_owner'               => __( 'Owner Only', 'nxt-cloud-chat' ),
+				'section_general'             => __( 'General', 'nxt-cloud-chat' ),
+				'team_role'                   => __( 'NXT Cloud Chat Team', 'nxt-cloud-chat' ),
 			);
 		}
 
@@ -150,62 +192,147 @@ final class NXTCC_Access_Control {
 	 */
 	private static function default_capabilities(): array {
 		return array(
-			'nxtcc_access_dashboard'      => array(
+			'nxtcc_access_dashboard'        => array(
 				'label'       => self::text( 'dashboard' ),
 				'description' => self::text( 'dashboard_desc' ),
 				'group'       => 'free',
 				'section'     => 'core',
 			),
-			'nxtcc_access_chat'           => array(
+			'nxtcc_access_chat'             => array(
 				'label'       => self::text( 'chat_window' ),
 				'description' => self::text( 'chat_window_desc' ),
 				'group'       => 'free',
 				'section'     => 'messaging',
 			),
-			'nxtcc_view_contacts'         => array(
+			'nxtcc_view_contacts'           => array(
 				'label'       => self::text( 'view_contacts' ),
 				'description' => self::text( 'view_contacts_desc' ),
 				'group'       => 'free',
 				'section'     => 'contacts',
 			),
-			'nxtcc_manage_contacts'       => array(
+			'nxtcc_manage_contacts'         => array(
 				'label'       => self::text( 'manage_contacts' ),
 				'description' => self::text( 'manage_contacts_desc' ),
 				'group'       => 'free',
 				'section'     => 'contacts',
 			),
-			'nxtcc_view_groups'           => array(
+			'nxtcc_view_groups'             => array(
 				'label'       => self::text( 'view_groups' ),
 				'description' => self::text( 'view_groups_desc' ),
 				'group'       => 'free',
 				'section'     => 'groups',
 			),
-			'nxtcc_manage_groups'         => array(
+			'nxtcc_manage_groups'           => array(
 				'label'       => self::text( 'manage_groups' ),
 				'description' => self::text( 'manage_groups_desc' ),
 				'group'       => 'free',
 				'section'     => 'groups',
 			),
-			'nxtcc_view_history'          => array(
+			'nxtcc_view_tags'               => array(
+				'label'       => self::text( 'view_tags' ),
+				'description' => self::text( 'view_tags_desc' ),
+				'group'       => 'free',
+				'section'     => 'tags',
+			),
+			'nxtcc_manage_tags'             => array(
+				'label'       => self::text( 'manage_tags' ),
+				'description' => self::text( 'manage_tags_desc' ),
+				'group'       => 'free',
+				'section'     => 'tags',
+			),
+			'nxtcc_view_assignments'        => array(
+				'label'       => self::text( 'view_assignments' ),
+				'description' => self::text( 'view_assignments_desc' ),
+				'group'       => 'free',
+				'section'     => 'contacts',
+			),
+			'nxtcc_manage_assignments'      => array(
+				'label'       => self::text( 'manage_assignments' ),
+				'description' => self::text( 'manage_assignments_desc' ),
+				'group'       => 'free',
+				'section'     => 'contacts',
+			),
+			'nxtcc_reassign_conversations'  => array(
+				'label'       => self::text( 'reassign_conversations' ),
+				'description' => self::text( 'reassign_conversations_desc' ),
+				'group'       => 'free',
+				'section'     => 'messaging',
+			),
+			'nxtcc_resolve_conversations'   => array(
+				'label'       => self::text( 'resolve_conversations' ),
+				'description' => self::text( 'resolve_conversations_desc' ),
+				'group'       => 'free',
+				'section'     => 'messaging',
+			),
+			'nxtcc_manage_crm_notes'        => array(
+				'label'       => self::text( 'manage_crm_notes' ),
+				'description' => self::text( 'manage_crm_notes_desc' ),
+				'group'       => 'free',
+				'section'     => 'messaging',
+			),
+			'nxtcc_view_crm_activity'       => array(
+				'label'       => self::text( 'view_crm_activity' ),
+				'description' => self::text( 'view_crm_activity_desc' ),
+				'group'       => 'free',
+				'section'     => 'contacts',
+			),
+			'nxtcc_manage_crm_tasks'        => array(
+				'label'       => self::text( 'manage_crm_tasks' ),
+				'description' => self::text( 'manage_crm_tasks_desc' ),
+				'group'       => 'free',
+				'section'     => 'contacts',
+			),
+			'nxtcc_manage_lifecycle_stages' => array(
+				'label'       => self::text( 'manage_lifecycle' ),
+				'description' => self::text( 'manage_lifecycle_desc' ),
+				'group'       => 'free',
+				'section'     => 'contacts',
+			),
+			'nxtcc_view_deals'              => array(
+				'label'       => self::text( 'view_deals' ),
+				'description' => self::text( 'view_deals_desc' ),
+				'group'       => 'free',
+				'section'     => 'sales',
+			),
+			'nxtcc_manage_deals'            => array(
+				'label'       => self::text( 'manage_deals' ),
+				'description' => self::text( 'manage_deals_desc' ),
+				'group'       => 'free',
+				'section'     => 'sales',
+			),
+			'nxtcc_manage_pipelines'        => array(
+				'label'       => self::text( 'manage_pipelines' ),
+				'description' => self::text( 'manage_pipelines_desc' ),
+				'group'       => 'free',
+				'section'     => 'sales',
+			),
+			'nxtcc_merge_contacts'          => array(
+				'label'       => self::text( 'merge_contacts' ),
+				'description' => self::text( 'merge_contacts_desc' ),
+				'group'       => 'free',
+				'section'     => 'contacts',
+				'owner_only'  => true,
+			),
+			'nxtcc_view_history'            => array(
 				'label'       => self::text( 'view_history' ),
 				'description' => self::text( 'view_history_desc' ),
 				'group'       => 'free',
 				'section'     => 'messaging',
 			),
-			'nxtcc_manage_authentication' => array(
+			'nxtcc_manage_authentication'   => array(
 				'label'       => self::text( 'authentication' ),
 				'description' => self::text( 'authentication_desc' ),
 				'group'       => 'free',
 				'section'     => 'authentication',
 			),
-			'nxtcc_manage_settings'       => array(
+			'nxtcc_manage_settings'         => array(
 				'label'       => self::text( 'connection_settings' ),
 				'description' => self::text( 'connection_settings_desc' ),
 				'group'       => 'free',
 				'section'     => 'owner',
 				'owner_only'  => true,
 			),
-			'nxtcc_manage_team_access'    => array(
+			'nxtcc_manage_team_access'      => array(
 				'label'       => self::text( 'team_access' ),
 				'description' => self::text( 'team_access_desc' ),
 				'group'       => 'free',
@@ -216,49 +343,12 @@ final class NXTCC_Access_Control {
 	}
 
 	/**
-	 * Default role presets for tenant staff.
+	 * Default access teams for tenant staff.
 	 *
 	 * @return array<string,array<string,mixed>>
 	 */
 	private static function default_role_presets(): array {
-		return array(
-			'viewer'        => array(
-				'label'        => self::text( 'viewer' ),
-				'description'  => self::text( 'viewer_desc' ),
-				'capabilities' => array(
-					'nxtcc_access_dashboard',
-					'nxtcc_view_contacts',
-					'nxtcc_view_groups',
-					'nxtcc_view_history',
-				),
-			),
-			'support_agent' => array(
-				'label'        => self::text( 'support_agent' ),
-				'description'  => self::text( 'support_agent_desc' ),
-				'capabilities' => array(
-					'nxtcc_access_dashboard',
-					'nxtcc_access_chat',
-					'nxtcc_view_contacts',
-					'nxtcc_manage_contacts',
-					'nxtcc_view_groups',
-					'nxtcc_view_history',
-				),
-			),
-			'operator'      => array(
-				'label'        => self::text( 'operator' ),
-				'description'  => self::text( 'operator_desc' ),
-				'capabilities' => array(
-					'nxtcc_access_dashboard',
-					'nxtcc_access_chat',
-					'nxtcc_view_contacts',
-					'nxtcc_manage_contacts',
-					'nxtcc_view_groups',
-					'nxtcc_manage_groups',
-					'nxtcc_view_history',
-					'nxtcc_manage_authentication',
-				),
-			),
-		);
+		return array();
 	}
 
 	/**
@@ -273,6 +363,8 @@ final class NXTCC_Access_Control {
 			'messaging'      => self::text( 'section_messaging' ),
 			'contacts'       => self::text( 'section_contacts' ),
 			'groups'         => self::text( 'section_groups' ),
+			'tags'           => self::text( 'section_tags' ),
+			'sales'          => self::text( 'section_sales' ),
 			'authentication' => self::text( 'section_authentication' ),
 			'marketing'      => self::text( 'section_marketing' ),
 			'automation'     => self::text( 'section_automation' ),
@@ -595,6 +687,10 @@ final class NXTCC_Access_Control {
 			$catalog = self::default_role_presets();
 		}
 
+		if ( class_exists( 'NXTCC_Access_Teams' ) ) {
+			$catalog = NXTCC_Access_Teams::merge_with_defaults( self::get_primary_tenant_context(), $catalog );
+		}
+
 		$normalized = array();
 
 		foreach ( $catalog as $role_key => $role_meta ) {
@@ -606,15 +702,25 @@ final class NXTCC_Access_Control {
 			$capabilities = isset( $role_meta['capabilities'] ) && is_array( $role_meta['capabilities'] )
 				? self::sanitize_selected_capabilities( $role_meta['capabilities'] )
 				: array();
+			$data_scope   = class_exists( 'NXTCC_Access_Teams' ) ? NXTCC_Access_Teams::sanitize_data_scope( (string) ( $role_meta['data_scope'] ?? 'all' ) ) : 'all';
 
 			if ( empty( $capabilities ) ) {
 				continue;
 			}
 
 			$normalized[ $role_key ] = array(
-				'label'        => isset( $role_meta['label'] ) ? sanitize_text_field( (string) $role_meta['label'] ) : $role_key,
-				'description'  => isset( $role_meta['description'] ) ? sanitize_text_field( (string) $role_meta['description'] ) : '',
-				'capabilities' => $capabilities,
+				'label'               => isset( $role_meta['label'] ) ? sanitize_text_field( (string) $role_meta['label'] ) : $role_key,
+				'description'         => isset( $role_meta['description'] ) ? sanitize_text_field( (string) $role_meta['description'] ) : '',
+				'action_level'        => class_exists( 'NXTCC_Access_Teams' ) ? NXTCC_Access_Teams::sanitize_action_level( (string) ( $role_meta['action_level'] ?? 'manage' ) ) : 'manage',
+				'data_scope'          => $data_scope,
+				'capability_scopes'   => class_exists( 'NXTCC_Access_Teams' ) ? NXTCC_Access_Teams::sanitize_capability_scopes(
+					isset( $role_meta['capability_scopes'] ) && is_array( $role_meta['capability_scopes'] ) ? $role_meta['capability_scopes'] : array(),
+					$capabilities,
+					$data_scope
+				) : array(),
+				'assignment_eligible' => ! empty( $role_meta['assignment_eligible'] ),
+				'is_protected'        => ! empty( $role_meta['is_protected'] ),
+				'capabilities'        => $capabilities,
 			);
 		}
 
@@ -688,10 +794,11 @@ final class NXTCC_Access_Control {
 			'messaging'      => 20,
 			'contacts'       => 30,
 			'groups'         => 40,
-			'authentication' => 50,
-			'marketing'      => 60,
-			'automation'     => 70,
-			'owner'          => 80,
+			'tags'           => 50,
+			'authentication' => 60,
+			'marketing'      => 70,
+			'automation'     => 80,
+			'owner'          => 90,
 		);
 
 		foreach ( $capabilities as $capability => $meta ) {
@@ -859,6 +966,9 @@ final class NXTCC_Access_Control {
 			$previous !== $tenant
 		) {
 			NXTCC_Tenant_Access_DAO::replace_tenant_context( $previous, $tenant );
+			if ( class_exists( 'NXTCC_Access_Teams' ) ) {
+				NXTCC_Access_Teams::replace_tenant_context( $previous, $tenant );
+			}
 		}
 
 		self::set_primary_tenant_context( $tenant );
@@ -1016,6 +1126,10 @@ final class NXTCC_Access_Control {
 
 		if ( self::ACCESS_SETTINGS_CAP === $capability ) {
 			return in_array( 'nxtcc_manage_settings', $row['capabilities'], true ) || in_array( 'nxtcc_manage_team_access', $row['capabilities'], true );
+		}
+
+		if ( 'view_only' === (string) ( $row['action_level'] ?? 'manage' ) && 0 === strpos( $capability, 'nxtcc_manage_' ) ) {
+			return false;
 		}
 
 		return in_array( $capability, $row['capabilities'], true );

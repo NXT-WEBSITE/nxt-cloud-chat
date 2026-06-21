@@ -82,6 +82,31 @@ if ( ! function_exists( 'nxtcc_log_api_response' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nxtcc_meta_graph_version' ) ) {
+	/**
+	 * Wrapper for resolving the Meta Graph API version.
+	 *
+	 * @param string $version Optional requested version.
+	 * @return string Graph API version.
+	 */
+	function nxtcc_meta_graph_version( string $version = '' ): string {
+		return NXTCC_Helpers::meta_graph_version( $version );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_meta_graph_url' ) ) {
+	/**
+	 * Wrapper for building Meta Graph API URLs.
+	 *
+	 * @param string $path    URL path after the version.
+	 * @param string $version Optional requested version.
+	 * @return string Meta Graph API URL.
+	 */
+	function nxtcc_meta_graph_url( string $path = '', string $version = '' ): string {
+		return NXTCC_Helpers::meta_graph_url( $path, $version );
+	}
+}
+
 if ( ! function_exists( 'nxtcc_get_tenant_api_credentials' ) ) {
 	/**
 	 * Wrapper for fetching tenant credentials.

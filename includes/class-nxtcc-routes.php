@@ -564,7 +564,7 @@ class NXTCC_Routes {
 		}
 
 		$meta = self::safe_remote_get(
-			'https://graph.facebook.com/v19.0/' . rawurlencode( $mid ),
+			nxtcc_meta_graph_url( rawurlencode( $mid ) ),
 			array(
 				'headers' => array(
 					'Authorization' => 'Bearer ' . $token,

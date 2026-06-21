@@ -103,6 +103,29 @@ final class NXTCC_Tenant_Access_DAO {
 	}
 
 	/**
+	 * Normalize per-capability data scopes.
+	 *
+	 * @param array  $scopes Raw scope map.
+	 * @param array  $capabilities Capability keys.
+	 * @param string $fallback Default data scope.
+	 * @return array<string,string>
+	 */
+	private static function normalize_capability_scopes( array $scopes, array $capabilities, string $fallback ): array {
+		if ( class_exists( 'NXTCC_Access_Teams' ) ) {
+			return NXTCC_Access_Teams::sanitize_capability_scopes( $scopes, $capabilities, $fallback );
+		}
+
+		$clean        = array();
+		$capabilities = self::normalize_capabilities( $capabilities );
+
+		foreach ( $capabilities as $capability ) {
+			$clean[ $capability ] = 'all';
+		}
+
+		return $clean;
+	}
+
+	/**
 	 * Cache key for one user + tenant lookup.
 	 *
 	 * @param int   $user_id User ID.
@@ -137,6 +160,12 @@ final class NXTCC_Tenant_Access_DAO {
 			$capabilities = self::normalize_capabilities( $decoded );
 		}
 
+		$scope_map  = json_decode( (string) ( $row['capability_scopes_json'] ?? '' ), true );
+		$data_scope = class_exists( 'NXTCC_Access_Teams' ) ? NXTCC_Access_Teams::sanitize_data_scope( (string) ( $row['data_scope'] ?? 'all' ) ) : 'all';
+		if ( ! empty( $row['is_owner'] ) ) {
+			$data_scope = 'all';
+		}
+
 		return array(
 			'id'                  => (int) ( $row['id'] ?? 0 ),
 			'wp_user_id'          => (int) ( $row['wp_user_id'] ?? 0 ),
@@ -145,6 +174,10 @@ final class NXTCC_Tenant_Access_DAO {
 			'phone_number_id'     => sanitize_text_field( (string) ( $row['phone_number_id'] ?? '' ) ),
 			'role_key'            => sanitize_key( (string) ( $row['role_key'] ?? 'custom' ) ),
 			'capabilities'        => $capabilities,
+			'action_level'        => class_exists( 'NXTCC_Access_Teams' ) ? NXTCC_Access_Teams::sanitize_action_level( (string) ( $row['action_level'] ?? 'manage' ) ) : 'manage',
+			'data_scope'          => $data_scope,
+			'capability_scopes'   => self::normalize_capability_scopes( is_array( $scope_map ) ? $scope_map : array(), $capabilities, $data_scope ),
+			'assignment_eligible' => ! isset( $row['assignment_eligible'] ) || ! empty( $row['assignment_eligible'] ),
 			'is_owner'            => ! empty( $row['is_owner'] ),
 			'granted_by'          => (int) ( $row['granted_by'] ?? 0 ),
 			'updated_by'          => (int) ( $row['updated_by'] ?? 0 ),
@@ -301,9 +334,24 @@ final class NXTCC_Tenant_Access_DAO {
 	 * @param int    $granted_by   Acting user ID.
 	 * @param bool   $is_owner     Whether this row is the tenant owner.
 	 * @param string $role_key     Role/preset key.
+	 * @param string $action_level Action level.
+	 * @param string $data_scope Data scope.
+	 * @param bool   $assignment_eligible Whether the member is eligible for assignment.
+	 * @param array  $capability_scopes Per-capability data scopes.
 	 * @return bool
 	 */
-	public static function upsert_access( int $user_id, array $tenant, array $capabilities, int $granted_by = 0, bool $is_owner = false, string $role_key = 'custom' ): bool {
+	public static function upsert_access(
+		int $user_id,
+		array $tenant,
+		array $capabilities,
+		int $granted_by = 0,
+		bool $is_owner = false,
+		string $role_key = 'custom',
+		string $action_level = 'manage',
+		string $data_scope = 'all',
+		bool $assignment_eligible = true,
+		array $capability_scopes = array()
+	): bool {
 		self::ensure_booted();
 
 		$tenant = self::normalize_tenant( $tenant );
@@ -311,15 +359,21 @@ final class NXTCC_Tenant_Access_DAO {
 			return false;
 		}
 
-		$capabilities = self::normalize_capabilities( $capabilities );
-		$now_utc      = current_time( 'mysql', 1 );
-		$data         = array(
-			'role_key'          => '' !== sanitize_key( $role_key ) ? sanitize_key( $role_key ) : 'custom',
-			'capabilities_json' => wp_json_encode( array_values( $capabilities ) ),
-			'is_owner'          => $is_owner ? 1 : 0,
-			'granted_by'        => $granted_by > 0 ? $granted_by : null,
-			'updated_by'        => $granted_by > 0 ? $granted_by : null,
-			'updated_at'        => $now_utc,
+		$capabilities      = self::normalize_capabilities( $capabilities );
+		$data_scope        = $is_owner || ! class_exists( 'NXTCC_Access_Teams' ) ? 'all' : NXTCC_Access_Teams::sanitize_data_scope( $data_scope );
+		$capability_scopes = self::normalize_capability_scopes( $capability_scopes, $capabilities, $data_scope );
+		$now_utc           = current_time( 'mysql', 1 );
+		$data              = array(
+			'role_key'               => '' !== sanitize_key( $role_key ) ? sanitize_key( $role_key ) : 'custom',
+			'capabilities_json'      => wp_json_encode( array_values( $capabilities ) ),
+			'capability_scopes_json' => wp_json_encode( $capability_scopes ),
+			'action_level'           => $is_owner || ! class_exists( 'NXTCC_Access_Teams' ) ? 'manage' : NXTCC_Access_Teams::sanitize_action_level( $action_level ),
+			'data_scope'             => $data_scope,
+			'assignment_eligible'    => $is_owner || $assignment_eligible ? 1 : 0,
+			'is_owner'               => $is_owner ? 1 : 0,
+			'granted_by'             => $granted_by > 0 ? $granted_by : null,
+			'updated_by'             => $granted_by > 0 ? $granted_by : null,
+			'updated_at'             => $now_utc,
 		);
 
 		$existing = self::get_user_access( $user_id, $tenant );
@@ -382,7 +436,7 @@ final class NXTCC_Tenant_Access_DAO {
 			)
 		);
 
-		$ok = self::upsert_access( $user_id, $tenant, $capabilities, $user_id, true, 'owner' );
+		$ok = self::upsert_access( $user_id, $tenant, $capabilities, $user_id, true, 'owner', 'manage', 'all', true );
 
 		$user_ids = array( $user_id );
 		foreach ( $rows as $row ) {
@@ -434,6 +488,69 @@ final class NXTCC_Tenant_Access_DAO {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Apply an edited access team to every member using it.
+	 *
+	 * @param array  $tenant Tenant tuple.
+	 * @param string $role_key Access team key.
+	 * @param array  $capabilities Capabilities.
+	 * @param string $action_level Action level.
+	 * @param string $data_scope Data scope.
+	 * @param bool   $assignment_eligible Whether members may receive assignments.
+	 * @param int    $actor_id Acting user ID.
+	 * @param array  $capability_scopes Per-capability data scopes.
+	 * @return bool
+	 */
+	public static function update_team_members(
+		array $tenant,
+		string $role_key,
+		array $capabilities,
+		string $action_level,
+		string $data_scope,
+		bool $assignment_eligible,
+		int $actor_id = 0,
+		array $capability_scopes = array()
+	): bool {
+		self::ensure_booted();
+
+		$tenant   = self::normalize_tenant( $tenant );
+		$role_key = sanitize_key( $role_key );
+		if ( '' === $role_key || '' === $tenant['user_mailid'] || '' === $tenant['business_account_id'] || '' === $tenant['phone_number_id'] ) {
+			return false;
+		}
+
+		$rows              = self::get_tenant_access_rows( $tenant );
+		$capabilities      = self::normalize_capabilities( $capabilities );
+		$data_scope        = NXTCC_Access_Teams::sanitize_data_scope( $data_scope );
+		$capability_scopes = self::normalize_capability_scopes( $capability_scopes, $capabilities, $data_scope );
+		$data              = array(
+			'capabilities_json'      => wp_json_encode( $capabilities ),
+			'capability_scopes_json' => wp_json_encode( $capability_scopes ),
+			'action_level'           => NXTCC_Access_Teams::sanitize_action_level( $action_level ),
+			'data_scope'             => $data_scope,
+			'assignment_eligible'    => $assignment_eligible ? 1 : 0,
+			'updated_by'             => $actor_id > 0 ? $actor_id : null,
+			'updated_at'             => current_time( 'mysql', 1 ),
+		);
+		$ok                = false !== NXTCC_DB_AdminSettings::update(
+			self::$table,
+			$data,
+			array(
+				'user_mailid'         => $tenant['user_mailid'],
+				'business_account_id' => $tenant['business_account_id'],
+				'phone_number_id'     => $tenant['phone_number_id'],
+				'role_key'            => $role_key,
+				'is_owner'            => 0,
+			)
+		);
+
+		if ( $ok ) {
+			self::flush_cache( $tenant, wp_list_pluck( $rows, 'wp_user_id' ) );
+		}
+
+		return $ok;
 	}
 
 	/**

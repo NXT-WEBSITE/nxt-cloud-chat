@@ -467,7 +467,7 @@ final class NXTCC_Contacts_Handler_Repo {
 	 *
 	 * Expected keys in $args (as used by your calling code):
 	 * baid, pnid, country, name_like, created_by, subscription, created_from,
-	 * created_to, search_like, group_id.
+	 * created_to, search_like, group_id, tag_ids, tag_match.
 	 *
 	 * @param array<string, mixed> $args Query arguments.
 	 * @return int
@@ -476,9 +476,11 @@ final class NXTCC_Contacts_Handler_Repo {
 		$baid = (string) $args['baid'];
 		$pnid = (string) $args['pnid'];
 
-		$db              = $this->db();
-		$table_contacts  = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
-		$table_group_map = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		$db                = $this->db();
+		$table_contacts    = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
+		$table_group_map   = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		$table_tag_map     = $this->quote_table( $this->table( 'nxtcc_tag_contact_map' ) );
+		$table_assignments = $this->quote_table( $this->table( 'nxtcc_contact_assignments' ) );
 		// phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.user_meta__wpdb__users -- Contacts actor filters join the WordPress users table for admin-only actor labels.
 		$table_users = $this->quote_table( $db->users );
 
@@ -521,12 +523,61 @@ final class NXTCC_Contacts_Handler_Repo {
 			$params[] = (string) $args['search_like'];
 		}
 
+		$tag_ids   = isset( $args['tag_ids'] ) && is_array( $args['tag_ids'] ) ? array_values( array_unique( array_filter( array_map( 'absint', $args['tag_ids'] ) ) ) ) : array();
+		$tag_match = isset( $args['tag_match'] ) ? sanitize_key( (string) $args['tag_match'] ) : 'any';
+		if ( ! empty( $tag_ids ) ) {
+			$tag_placeholders = $this->int_placeholders( $tag_ids );
+			$tag_scope        = "tm.contact_id = c.id AND tm.user_mailid = c.user_mailid AND tm.business_account_id = c.business_account_id AND tm.phone_number_id = c.phone_number_id AND tm.tag_id IN ({$tag_placeholders})";
+
+			if ( 'none' === $tag_match ) {
+				$where[] = "NOT EXISTS (SELECT 1 FROM {tag_map} tm WHERE {$tag_scope})";
+			} elseif ( 'all' === $tag_match ) {
+				$where[]   = "(SELECT COUNT(DISTINCT tm.tag_id) FROM {tag_map} tm WHERE {$tag_scope}) = %d";
+				$tag_ids[] = count( $tag_ids );
+			} else {
+				$where[] = "EXISTS (SELECT 1 FROM {tag_map} tm WHERE {$tag_scope})";
+			}
+
+			$params = array_merge( $params, $tag_ids );
+		}
+
+		$assignment_target = isset( $args['assignment_target'] ) ? sanitize_text_field( (string) $args['assignment_target'] ) : '';
+		if ( 'unassigned' === $assignment_target ) {
+			$where[] = 'NOT EXISTS (SELECT 1 FROM {assignments} ca WHERE ca.contact_id = c.id AND ca.user_mailid = c.user_mailid AND ca.business_account_id = c.business_account_id AND ca.phone_number_id = c.phone_number_id)';
+		} elseif ( 0 === strpos( $assignment_target, 'user:' ) ) {
+			$where[]  = 'EXISTS (SELECT 1 FROM {assignments} ca WHERE ca.contact_id = c.id AND ca.user_mailid = c.user_mailid AND ca.business_account_id = c.business_account_id AND ca.phone_number_id = c.phone_number_id AND ca.target_type = %s AND ca.assigned_user_id = %d)';
+			$params[] = 'user';
+			$params[] = absint( substr( $assignment_target, 5 ) );
+		} elseif ( 0 === strpos( $assignment_target, 'role:' ) ) {
+			$where[]  = 'EXISTS (SELECT 1 FROM {assignments} ca WHERE ca.contact_id = c.id AND ca.user_mailid = c.user_mailid AND ca.business_account_id = c.business_account_id AND ca.phone_number_id = c.phone_number_id AND ca.target_type = %s AND ca.assigned_role = %s)';
+			$params[] = 'role';
+			$params[] = sanitize_key( substr( $assignment_target, 5 ) );
+		}
+
+		$access_policy = isset( $args['access_policy'] ) && is_array( $args['access_policy'] ) ? $args['access_policy'] : array();
+		$data_scope    = sanitize_key( (string) ( $access_policy['data_scope'] ?? 'all' ) );
+		$access_user   = absint( $access_policy['user_id'] ?? 0 );
+		$access_role   = sanitize_key( (string) ( $access_policy['role_key'] ?? '' ) );
+		if ( 'assigned' === $data_scope ) {
+			$where[]  = 'EXISTS (SELECT 1 FROM {assignments} scope_assignment WHERE scope_assignment.contact_id = c.id AND scope_assignment.user_mailid = c.user_mailid AND scope_assignment.business_account_id = c.business_account_id AND scope_assignment.phone_number_id = c.phone_number_id AND scope_assignment.target_type = %s AND scope_assignment.assigned_user_id = %d)';
+			$params[] = 'user';
+			$params[] = $access_user;
+		} elseif ( 'team' === $data_scope ) {
+			$where[]  = '(NOT EXISTS (SELECT 1 FROM {assignments} scope_assignment WHERE scope_assignment.contact_id = c.id AND scope_assignment.user_mailid = c.user_mailid AND scope_assignment.business_account_id = c.business_account_id AND scope_assignment.phone_number_id = c.phone_number_id) OR EXISTS (SELECT 1 FROM {assignments} scope_assignment WHERE scope_assignment.contact_id = c.id AND scope_assignment.user_mailid = c.user_mailid AND scope_assignment.business_account_id = c.business_account_id AND scope_assignment.phone_number_id = c.phone_number_id AND ((scope_assignment.target_type = %s AND scope_assignment.assigned_user_id = %d) OR (scope_assignment.target_type = %s AND scope_assignment.assigned_role = %s))))';
+			$params[] = 'user';
+			$params[] = $access_user;
+			$params[] = 'role';
+			$params[] = $access_role;
+		}
+
 		$sql        = 'SELECT COUNT(*) FROM {contacts} c LEFT JOIN {users} creator ON creator.ID = c.created_by';
 		$query_args = array();
 		$table_map  = array(
-			'contacts'  => $table_contacts,
-			'group_map' => $table_group_map,
-			'users'     => $table_users,
+			'contacts'    => $table_contacts,
+			'group_map'   => $table_group_map,
+			'tag_map'     => $table_tag_map,
+			'assignments' => $table_assignments,
+			'users'       => $table_users,
 		);
 
 		if ( ! empty( $args['group_id'] ) ) {
@@ -554,9 +605,11 @@ final class NXTCC_Contacts_Handler_Repo {
 		$baid = (string) $args['baid'];
 		$pnid = (string) $args['pnid'];
 
-		$db              = $this->db();
-		$table_contacts  = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
-		$table_group_map = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		$db                = $this->db();
+		$table_contacts    = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
+		$table_group_map   = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		$table_tag_map     = $this->quote_table( $this->table( 'nxtcc_tag_contact_map' ) );
+		$table_assignments = $this->quote_table( $this->table( 'nxtcc_contact_assignments' ) );
 		// phpcs:ignore WordPressVIPMinimum.Variables.RestrictedVariables.user_meta__wpdb__users -- Contacts actor filters join the WordPress users table for admin-only actor labels.
 		$table_users = $this->quote_table( $db->users );
 
@@ -599,12 +652,61 @@ final class NXTCC_Contacts_Handler_Repo {
 			$params[] = (string) $args['search_like'];
 		}
 
+		$tag_ids   = isset( $args['tag_ids'] ) && is_array( $args['tag_ids'] ) ? array_values( array_unique( array_filter( array_map( 'absint', $args['tag_ids'] ) ) ) ) : array();
+		$tag_match = isset( $args['tag_match'] ) ? sanitize_key( (string) $args['tag_match'] ) : 'any';
+		if ( ! empty( $tag_ids ) ) {
+			$tag_placeholders = $this->int_placeholders( $tag_ids );
+			$tag_scope        = "tm.contact_id = c.id AND tm.user_mailid = c.user_mailid AND tm.business_account_id = c.business_account_id AND tm.phone_number_id = c.phone_number_id AND tm.tag_id IN ({$tag_placeholders})";
+
+			if ( 'none' === $tag_match ) {
+				$where[] = "NOT EXISTS (SELECT 1 FROM {tag_map} tm WHERE {$tag_scope})";
+			} elseif ( 'all' === $tag_match ) {
+				$where[]   = "(SELECT COUNT(DISTINCT tm.tag_id) FROM {tag_map} tm WHERE {$tag_scope}) = %d";
+				$tag_ids[] = count( $tag_ids );
+			} else {
+				$where[] = "EXISTS (SELECT 1 FROM {tag_map} tm WHERE {$tag_scope})";
+			}
+
+			$params = array_merge( $params, $tag_ids );
+		}
+
+		$assignment_target = isset( $args['assignment_target'] ) ? sanitize_text_field( (string) $args['assignment_target'] ) : '';
+		if ( 'unassigned' === $assignment_target ) {
+			$where[] = 'NOT EXISTS (SELECT 1 FROM {assignments} ca WHERE ca.contact_id = c.id AND ca.user_mailid = c.user_mailid AND ca.business_account_id = c.business_account_id AND ca.phone_number_id = c.phone_number_id)';
+		} elseif ( 0 === strpos( $assignment_target, 'user:' ) ) {
+			$where[]  = 'EXISTS (SELECT 1 FROM {assignments} ca WHERE ca.contact_id = c.id AND ca.user_mailid = c.user_mailid AND ca.business_account_id = c.business_account_id AND ca.phone_number_id = c.phone_number_id AND ca.target_type = %s AND ca.assigned_user_id = %d)';
+			$params[] = 'user';
+			$params[] = absint( substr( $assignment_target, 5 ) );
+		} elseif ( 0 === strpos( $assignment_target, 'role:' ) ) {
+			$where[]  = 'EXISTS (SELECT 1 FROM {assignments} ca WHERE ca.contact_id = c.id AND ca.user_mailid = c.user_mailid AND ca.business_account_id = c.business_account_id AND ca.phone_number_id = c.phone_number_id AND ca.target_type = %s AND ca.assigned_role = %s)';
+			$params[] = 'role';
+			$params[] = sanitize_key( substr( $assignment_target, 5 ) );
+		}
+
+		$access_policy = isset( $args['access_policy'] ) && is_array( $args['access_policy'] ) ? $args['access_policy'] : array();
+		$data_scope    = sanitize_key( (string) ( $access_policy['data_scope'] ?? 'all' ) );
+		$access_user   = absint( $access_policy['user_id'] ?? 0 );
+		$access_role   = sanitize_key( (string) ( $access_policy['role_key'] ?? '' ) );
+		if ( 'assigned' === $data_scope ) {
+			$where[]  = 'EXISTS (SELECT 1 FROM {assignments} scope_assignment WHERE scope_assignment.contact_id = c.id AND scope_assignment.user_mailid = c.user_mailid AND scope_assignment.business_account_id = c.business_account_id AND scope_assignment.phone_number_id = c.phone_number_id AND scope_assignment.target_type = %s AND scope_assignment.assigned_user_id = %d)';
+			$params[] = 'user';
+			$params[] = $access_user;
+		} elseif ( 'team' === $data_scope ) {
+			$where[]  = '(NOT EXISTS (SELECT 1 FROM {assignments} scope_assignment WHERE scope_assignment.contact_id = c.id AND scope_assignment.user_mailid = c.user_mailid AND scope_assignment.business_account_id = c.business_account_id AND scope_assignment.phone_number_id = c.phone_number_id) OR EXISTS (SELECT 1 FROM {assignments} scope_assignment WHERE scope_assignment.contact_id = c.id AND scope_assignment.user_mailid = c.user_mailid AND scope_assignment.business_account_id = c.business_account_id AND scope_assignment.phone_number_id = c.phone_number_id AND ((scope_assignment.target_type = %s AND scope_assignment.assigned_user_id = %d) OR (scope_assignment.target_type = %s AND scope_assignment.assigned_role = %s))))';
+			$params[] = 'user';
+			$params[] = $access_user;
+			$params[] = 'role';
+			$params[] = $access_role;
+		}
+
 		$sql        = 'SELECT c.*, creator.user_login AS created_by_login, creator.display_name AS created_by_name, creator.user_email AS created_by_email, updater.user_login AS updated_by_login, updater.display_name AS updated_by_name, updater.user_email AS updated_by_email FROM {contacts} c LEFT JOIN {users} creator ON creator.ID = c.created_by LEFT JOIN {users} updater ON updater.ID = c.updated_by';
 		$query_args = array();
 		$table_map  = array(
-			'contacts'  => $table_contacts,
-			'group_map' => $table_group_map,
-			'users'     => $table_users,
+			'contacts'    => $table_contacts,
+			'group_map'   => $table_group_map,
+			'tag_map'     => $table_tag_map,
+			'assignments' => $table_assignments,
+			'users'       => $table_users,
 		);
 
 		if ( ! empty( $args['group_id'] ) ) {
@@ -1079,6 +1181,28 @@ final class NXTCC_Contacts_Handler_Repo {
 		$table_contacts = $this->table( 'nxtcc_contacts' );
 		$table_map      = $this->table( 'nxtcc_group_contact_map' );
 
+		if ( class_exists( 'NXTCC_Tags' ) ) {
+			NXTCC_Tags::instance()->delete_contact_mappings( array( $id ) );
+		}
+		if ( class_exists( 'NXTCC_Contact_Assignments' ) ) {
+			NXTCC_Contact_Assignments::instance()->delete_contact_data( array( $id ) );
+		}
+		if ( class_exists( 'NXTCC_Conversations' ) ) {
+			NXTCC_Conversations::instance()->delete_contact_data( array( $id ) );
+		}
+		if ( class_exists( 'NXTCC_CRM_Activities' ) ) {
+			NXTCC_CRM_Activities::instance()->delete_contact_data( array( $id ) );
+		}
+		if ( class_exists( 'NXTCC_CRM_Lifecycle_Stages' ) ) {
+			NXTCC_CRM_Lifecycle_Stages::instance()->delete_contact_data( array( $id ) );
+		}
+		if ( class_exists( 'NXTCC_CRM_Tasks' ) ) {
+			NXTCC_CRM_Tasks::instance()->delete_contact_data( array( $id ) );
+		}
+		if ( class_exists( 'NXTCC_CRM_Deals' ) ) {
+			NXTCC_CRM_Deals::instance()->delete_contact_data( array( $id ) );
+		}
+
 		$db->delete( $table_map, array( 'contact_id' => $id ), array( '%d' ) );
 
 		$db->delete(
@@ -1147,10 +1271,33 @@ final class NXTCC_Contacts_Handler_Repo {
 			return;
 		}
 
-		$db               = $this->db();
-		$table_contacts   = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
-		$table_map        = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
-		$placeholders     = $this->int_placeholders( $ids );
+		$db             = $this->db();
+		$table_contacts = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
+		$table_map      = $this->quote_table( $this->table( 'nxtcc_group_contact_map' ) );
+		$placeholders   = $this->int_placeholders( $ids );
+
+		if ( class_exists( 'NXTCC_Tags' ) ) {
+			NXTCC_Tags::instance()->delete_contact_mappings( $ids );
+		}
+		if ( class_exists( 'NXTCC_Contact_Assignments' ) ) {
+			NXTCC_Contact_Assignments::instance()->delete_contact_data( $ids );
+		}
+		if ( class_exists( 'NXTCC_Conversations' ) ) {
+			NXTCC_Conversations::instance()->delete_contact_data( $ids );
+		}
+		if ( class_exists( 'NXTCC_CRM_Activities' ) ) {
+			NXTCC_CRM_Activities::instance()->delete_contact_data( $ids );
+		}
+		if ( class_exists( 'NXTCC_CRM_Lifecycle_Stages' ) ) {
+			NXTCC_CRM_Lifecycle_Stages::instance()->delete_contact_data( $ids );
+		}
+		if ( class_exists( 'NXTCC_CRM_Tasks' ) ) {
+			NXTCC_CRM_Tasks::instance()->delete_contact_data( $ids );
+		}
+		if ( class_exists( 'NXTCC_CRM_Deals' ) ) {
+			NXTCC_CRM_Deals::instance()->delete_contact_data( $ids );
+		}
+
 		$query_delete_map = $this->prepare_with_table_tokens(
 			"DELETE FROM {group_map} WHERE contact_id IN ({$placeholders})",
 			array(

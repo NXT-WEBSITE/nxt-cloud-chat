@@ -175,7 +175,14 @@ function nxtcc_ajax_media_proxy(): void {
 		nxtcc_chat_proxy_die( 403, 'Forbidden' );
 	}
 
-	$repo  = nxtcc_chat_repo();
+	$repo       = nxtcc_chat_repo();
+	$contact_id = $repo->get_contact_id_for_media_id( $media_id, $user_mailid, $phone_number_id );
+	$tenant     = NXTCC_Access_Control::get_current_tenant_context();
+	$ticket     = NXTCC_Conversations::instance()->get_or_create_for_contact( $contact_id, $tenant );
+	if ( $contact_id <= 0 || ! is_array( $ticket ) || ! NXTCC_CRM_Access_Policy::user_can_view_conversation( absint( $ticket['id'] ), $tenant ) ) {
+		nxtcc_chat_proxy_die( 403, 'Forbidden' );
+	}
+
 	$creds = $repo->get_user_settings_access_token( $user_mailid, $phone_number_id );
 
 	if ( ! is_array( $creds ) || empty( $creds['access_token'] ) ) {
@@ -185,7 +192,7 @@ function nxtcc_ajax_media_proxy(): void {
 	$token = (string) $creds['access_token'];
 
 	// 1) Fetch media metadata from Graph.
-	$meta_url  = 'https://graph.facebook.com/v19.0/' . rawurlencode( $media_id );
+	$meta_url  = nxtcc_meta_graph_url( rawurlencode( $media_id ) );
 	$meta_resp = nxtcc_chat_remote_get(
 		$meta_url,
 		array(

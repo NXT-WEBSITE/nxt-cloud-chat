@@ -28,4 +28,5 @@ if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
 	require_once __DIR__ . '/chat/ajax-forward.php';
 	require_once __DIR__ . '/chat/ajax-bulk.php';
 	require_once __DIR__ . '/chat/ajax-media-proxy.php';
+	require_once __DIR__ . '/chat/ajax-conversations.php';
 }

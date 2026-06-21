@@ -33,8 +33,47 @@ jQuery( function ( $ ) {
 	}
 	window[ bootKey ] = true;
 
+	const widgets = [];
+	let resizeFrame = 0;
+
+	/**
+	 * Limit a widget to the visible page height below its current top edge.
+	 *
+	 * @param {Element} widget Chat widget root.
+	 * @return {void}
+	 */
+	function fitWidgetToPage( widget ) {
+		if ( ! widget || ! widget.style || widget.classList.contains( 'nxtcc-fullscreen' ) ) {
+			return;
+		}
+
+		const rect      = widget.getBoundingClientRect();
+		const bottomGap = 10;
+		const available = Math.max( 0, Math.floor( window.innerHeight - Math.max( 0, rect.top ) - bottomGap ) );
+
+		widget.style.setProperty( '--nxtcc-chat-page-height', available + 'px' );
+	}
+
+	/**
+	 * Refresh every initialized widget on the next animation frame.
+	 *
+	 * @return {void}
+	 */
+	function scheduleWidgetFit() {
+		if ( resizeFrame ) {
+			window.cancelAnimationFrame( resizeFrame );
+		}
+
+		resizeFrame = window.requestAnimationFrame( function () {
+			resizeFrame = 0;
+			widgets.forEach( fitWidgetToPage );
+		} );
+	}
+
 	$( '.nxtcc-whatsapp-widget' ).each( function () {
 		const $widget = $( this );
+		widgets.push( this );
+		fitWidgetToPage( this );
 
 		const nonceInput = $widget.find( '.nxtcc-inbox-nonce' );
 		const nonceVal   = nonceInput.length ? String( nonceInput.val() || '' ) : '';
@@ -76,8 +115,18 @@ jQuery( function ( $ ) {
 		if ( Chat.thread && typeof Chat.thread.start === 'function' ) {
 			Chat.thread.start( ctx );
 		}
+		if ( Chat.tickets && typeof Chat.tickets.start === 'function' ) {
+			Chat.tickets.start( ctx );
+		}
 		if ( Chat.actions && typeof Chat.actions.start === 'function' ) {
 			Chat.actions.start( ctx );
 		}
 	} );
+
+	window.addEventListener( 'load', scheduleWidgetFit );
+	window.addEventListener( 'resize', scheduleWidgetFit );
+	if ( window.visualViewport ) {
+		window.visualViewport.addEventListener( 'resize', scheduleWidgetFit );
+	}
+	scheduleWidgetFit();
 } );

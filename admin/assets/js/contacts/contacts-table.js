@@ -28,6 +28,7 @@ jQuery( function ( $ ) {
 	const storageScopeKey              = R.storageScopeKey;
 	const formatCreatedAtUTCToSiteAMPM = R.time.formatCreatedAtUTCToSiteAMPM;
 	const S                            = R.state;
+	const canBulkSelect                = ! $widget.hasClass( 'is-view-only' );
 
 	/**
 	 * Current columns definition for the contacts table.
@@ -37,11 +38,13 @@ jQuery( function ( $ ) {
 	 * @type {Array<Object>}
 	 */
 	let columns = [
-		{ key: 'checkbox', label: '', visible: true },
+		{ key: 'checkbox', label: '', visible: canBulkSelect },
 		{ key: 'name', label: 'Name', visible: true, sortable: false },
 		{ key: 'country_code', label: 'Country Code', visible: true, sortable: false },
 		{ key: 'phone_number', label: 'Phone Number', visible: true, sortable: false },
 		{ key: 'groups', label: 'Groups', visible: true, sortable: false },
+		{ key: 'tags', label: 'Tags', visible: true, sortable: false },
+		{ key: 'assignment', label: 'Assigned To', visible: true, sortable: false },
 		{ key: 'subscribed', label: 'Subscription', visible: true, sortable: false },
 		{ key: 'created_at', label: 'Created At', visible: true, sortable: false },
 		{ key: 'updated_at', label: 'Updated At', visible: false, sortable: false },
@@ -182,6 +185,10 @@ jQuery( function ( $ ) {
 		const saved = getSavedColMap();
 
 		return ( columnsArr || [] ).map( ( c ) => {
+			if ( c.key === 'checkbox' ) {
+				return { ...c, visible: canBulkSelect };
+			}
+
 			const has = Object.prototype.hasOwnProperty.call( saved, c.key );
 			const vis = has ? saved[ c.key ] : c.visible !== false;
 
@@ -372,11 +379,13 @@ jQuery( function ( $ ) {
 	 */
 	function rebuildColumnsWithCustomFields( contacts ) {
 		const before = [
-			{ key: 'checkbox', label: '', visible: true },
+			{ key: 'checkbox', label: '', visible: canBulkSelect },
 			{ key: 'name', label: 'Name', visible: true, sortable: false },
 			{ key: 'country_code', label: 'Country Code', visible: true, sortable: false },
 			{ key: 'phone_number', label: 'Phone Number', visible: true, sortable: false },
 			{ key: 'groups', label: 'Groups', visible: true, sortable: false },
+			{ key: 'tags', label: 'Tags', visible: true, sortable: false },
+			{ key: 'assignment', label: 'Assigned To', visible: true, sortable: false },
 			{ key: 'subscribed', label: 'Subscription', visible: true, sortable: false },
 		];
 
@@ -522,6 +531,10 @@ jQuery( function ( $ ) {
 			}
 
 			if ( col.key === 'checkbox' ) {
+				if ( ! canBulkSelect ) {
+					return;
+				}
+
 				const th    = el( 'th' );
 				const input = el( 'input', { type: 'checkbox', id: 'nxtcc-contacts-select-all' } );
 
@@ -547,6 +560,10 @@ jQuery( function ( $ ) {
 
 		if ( selectAll ) {
 			selectAll.checked = false;
+		}
+
+		if ( ! canBulkSelect ) {
+			$widget.find( '.nxtcc-contact-select' ).prop( 'checked', false );
 		}
 
 		if ( R.actions && typeof R.actions.updateBulkToolbar === 'function' ) {
@@ -579,6 +596,30 @@ jQuery( function ( $ ) {
 				chip.setAttribute( 'title', name );
 			}
 
+			wrap.appendChild( chip );
+		} );
+
+		return wrap;
+	}
+
+	/**
+	 * Build the tag chips node for a row.
+	 *
+	 * @param {Object} row Contact row.
+	 * @return {HTMLElement} Chips wrapper.
+	 */
+	function buildTagChips( row ) {
+		const wrap = el( 'div', { className: 'nxtcc-contact-group-chips' } );
+
+		( row.tags || [] ).forEach( ( tag ) => {
+			const name = tag && tag.tag_name ? String( tag.tag_name ) : '';
+			if ( ! name ) {
+				return;
+			}
+
+			const chip = el( 'span', { className: 'nxtcc-tag-chip', text: name } );
+			chip.style.setProperty( '--nxtcc-tag-color', String( tag.color || '#2271b1' ) );
+			chip.setAttribute( 'title', name );
 			wrap.appendChild( chip );
 		} );
 
@@ -630,6 +671,10 @@ jQuery( function ( $ ) {
 				}
 
 				if ( col.key === 'checkbox' ) {
+					if ( ! canBulkSelect ) {
+						return;
+					}
+
 					const td    = el( 'td' );
 					const input = el( 'input', { type: 'checkbox' } );
 
@@ -644,6 +689,24 @@ jQuery( function ( $ ) {
 				if ( col.key === 'groups' ) {
 					const td = el( 'td' );
 					td.appendChild( buildGroupsChips( row, verifiedGroupIds ) );
+					tr.appendChild( td );
+					return;
+				}
+
+				if ( col.key === 'tags' ) {
+					const td = el( 'td' );
+					td.appendChild( buildTagChips( row ) );
+					tr.appendChild( td );
+					return;
+				}
+
+				if ( col.key === 'assignment' ) {
+					const td         = el( 'td' );
+					const assignment = row.assignment && 'object' === typeof row.assignment ? row.assignment : null;
+					const badge      = el( 'span', { text: assignment && assignment.label ? String( assignment.label ) : 'Unassigned' } );
+
+					badge.className = assignment ? 'nxtcc-chip nxtcc-chip-assigned' : 'nxtcc-chip nxtcc-chip-muted';
+					td.appendChild( badge );
 					tr.appendChild( td );
 					return;
 				}
@@ -729,6 +792,10 @@ jQuery( function ( $ ) {
 					td.className = 'actions-col';
 					const wrap   = el( 'div', { className: 'nxtcc-contact-row-actions' } );
 
+					const profile     = el( 'button', { type: 'button', text: 'Profile' } );
+					profile.className = 'nxtcc-btn-sm nxtcc-btn-outline nxtcc-contact-profile-trigger';
+					profile.setAttribute( 'data-contact-id', String( row.id ) );
+
 					const edit     = el( 'button', { type: 'button', text: 'Edit' } );
 					edit.className = 'nxtcc-btn-sm nxtcc-btn-green nxtcc-edit-contact';
 					edit.setAttribute( 'data-id', String( row.id ) );
@@ -747,6 +814,7 @@ jQuery( function ( $ ) {
 						del.title = 'Contacts assigned to verified groups cannot be deleted';
 					}
 
+					wrap.appendChild( profile );
 					wrap.appendChild( edit );
 					wrap.appendChild( del );
 					td.appendChild( wrap );
@@ -774,6 +842,10 @@ jQuery( function ( $ ) {
 	// -------------------------------------------------------------------------
 
 	$widget.on( 'change', '#nxtcc-contacts-select-all', function () {
+		if ( ! canBulkSelect ) {
+			return;
+		}
+
 		const checked = $( this ).is( ':checked' );
 
 		$widget.find( '.nxtcc-contact-select' ).prop( 'checked', checked );
@@ -784,6 +856,10 @@ jQuery( function ( $ ) {
 	} );
 
 	$widget.on( 'change', '.nxtcc-contact-select', function () {
+		if ( ! canBulkSelect ) {
+			return;
+		}
+
 		const total   = $widget.find( '.nxtcc-contact-select' ).length;
 		const checked = $widget.find( '.nxtcc-contact-select:checked' ).length;
 

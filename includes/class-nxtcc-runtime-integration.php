@@ -575,12 +575,13 @@ final class NXTCC_Runtime_Integration {
 			$contact = self::read_contact_by_id( $contact_id, $user_mailid, $business_account_id, $phone_number_id );
 
 			$result = array(
-				'success'       => true,
-				'contact_id'    => $contact_id,
-				'created'       => false,
-				'updated'       => true,
-				'is_subscribed' => is_array( $contact ) && ! empty( $contact['is_subscribed'] ) ? 1 : 0,
-				'contact'       => is_array( $contact ) ? $contact : array(),
+				'success'             => true,
+				'contact_id'          => $contact_id,
+				'created'             => false,
+				'updated'             => true,
+				'is_subscribed'       => is_array( $contact ) && ! empty( $contact['is_subscribed'] ) ? 1 : 0,
+				'previous_subscribed' => ! empty( $existing['is_subscribed'] ) ? 1 : 0,
+				'contact'             => is_array( $contact ) ? $contact : array(),
 			);
 
 			do_action( 'nxtcc_contact_upserted_for_integration', $result, $args );

@@ -257,6 +257,10 @@ jQuery( function ( $ ) {
 		const createdFrom  = toTrimmedString( $( '#nxtcc-filter-created-from' ).val() || '' );
 		const createdTo    = toTrimmedString( $( '#nxtcc-filter-created-to' ).val() || '' );
 		const subscription = toTrimmedString( $( '#nxtcc-filter-subscription' ).val() || '' ); // '' | '1' | '0'.
+		const tagIds       = $( '.nxtcc-filter-tag-option:checked' ).map( function () {
+			return String( this.value || '' );
+		} ).get().filter( Boolean );
+		const tagMatch     = 'any';
 		const search       = toTrimmedString( $( '#nxtcc-filter-name' ).val() || '' );
 
 		return {
@@ -266,6 +270,8 @@ jQuery( function ( $ ) {
 			createdFrom: createdFrom,
 			createdTo: createdTo,
 			subscription: subscription,
+			tagIds: tagIds,
+			tagMatch: tagMatch,
 			search: search,
 		};
 	}
@@ -284,6 +290,8 @@ jQuery( function ( $ ) {
 			created_from: f.createdFrom,
 			created_to: f.createdTo,
 			subscription: sub,
+			tag_ids: f.tagIds,
+			tag_match: f.tagMatch,
 			search: f.search,
 
 			// Legacy keys (harmless).
@@ -293,6 +301,8 @@ jQuery( function ( $ ) {
 			filter_created_from: f.createdFrom,
 			filter_created_to: f.createdTo,
 			filter_subscription: sub,
+			filter_tags: f.tagIds,
+			filter_tag_match: f.tagMatch,
 		};
 	}
 
@@ -437,6 +447,7 @@ jQuery( function ( $ ) {
 					: [];
 
 		const groupMap   = resp && resp.data && resp.data.group_map ? resp.data.group_map : {};
+		const tagMap     = resp && resp.data && resp.data.tag_map ? resp.data.tag_map : {};
 		const total      = Number( resp && resp.data ? resp.data.total || 0 : 0 );
 		const pageNum    = Number( resp && resp.data ? resp.data.page || 1 : 1 );
 		const perPageNum = Number( resp && resp.data ? resp.data.per_page || 100 : 100 );
@@ -460,6 +471,7 @@ jQuery( function ( $ ) {
 				}
 			}
 
+			row.tags = Array.isArray( tagMap[ idStr ] ) ? tagMap[ idStr ] : [];
 			row.custom_fields = normalizeCustomFields( row.custom_fields );
 			return row;
 		} );
@@ -523,6 +535,13 @@ jQuery( function ( $ ) {
 				if ( 'groups' === key ) {
 					return ( row.groups || [] )
 						.map( ( gid ) => getGroupName( gid ) )
+						.join( '|' );
+				}
+
+				if ( 'tags' === key ) {
+					return ( row.tags || [] )
+						.map( ( tag ) => String( tag && tag.tag_name ? tag.tag_name : '' ) )
+						.filter( Boolean )
 						.join( '|' );
 				}
 
@@ -634,6 +653,9 @@ jQuery( function ( $ ) {
 		if ( f.groupId ) {
 			parts.push( 'Group: ' + getGroupName( f.groupId ) );
 		}
+		if ( f.tagIds.length ) {
+			parts.push( 'Tags (' + f.tagMatch + '): ' + f.tagIds.join( ', ' ) );
+		}
 		if ( '' !== f.subscription ) {
 			parts.push(
 				'Subscription: ' + ( '1' === f.subscription ? 'Subscribed' : 'Unsubscribed' )
@@ -699,6 +721,7 @@ jQuery( function ( $ ) {
 		hasHeader: true,
 		delimiter: 'auto',
 		defaultGroupIds: [],
+		defaultTagIds: [],
 		defaultSubscribed: true,
 		mapping: [],
 		stats: null,
@@ -759,6 +782,8 @@ jQuery( function ( $ ) {
 
 		importState.token          = '';
 		importState.mapping        = [];
+		importState.defaultGroupIds = [];
+		importState.defaultTagIds   = [];
 		importState.stats          = null;
 		importState.totalRows      = 0;
 		importState.mode           = 'skip';
@@ -785,6 +810,18 @@ jQuery( function ( $ ) {
 			} );
 
 			enableMultiSelectToggle( $( gsel ) );
+		}
+
+		const tsel = document.getElementById( 'nxtcc-import-default-tags' );
+		if ( tsel ) {
+			emptyNode( tsel );
+			( S.allTags || [] ).forEach( function ( tag ) {
+				const opt       = document.createElement( 'option' );
+				opt.value       = String( tag.id );
+				opt.textContent = String( tag.tag_name || tag.id );
+				tsel.appendChild( opt );
+			} );
+			enableMultiSelectToggle( $( tsel ) );
 		}
 	}
 
@@ -822,6 +859,7 @@ jQuery( function ( $ ) {
 		importState.hasHeader         = $( '#nxtcc-import-has-header' ).is( ':checked' );
 		importState.delimiter         = $( '#nxtcc-import-delimiter' ).val() || 'auto';
 		importState.defaultGroupIds   = $( '#nxtcc-import-default-groups' ).val() || [];
+		importState.defaultTagIds     = $( '#nxtcc-import-default-tags' ).val() || [];
 		importState.defaultSubscribed = $( '#nxtcc-import-default-subscribed' ).is( ':checked' );
 
 		const form = new FormData();
@@ -898,6 +936,7 @@ jQuery( function ( $ ) {
 			{ val: 'name', text: 'Name (required)' },
 			{ val: 'country_code', text: 'Country Code (required)' },
 			{ val: 'phone_number', text: 'Phone Number (required)' },
+			{ val: 'tags', text: 'Tags (separate with | or comma)' },
 		]
 			.concat(
 				existingCustomLabels.map( ( lbl ) => ( { val: 'custom:' + lbl, text: 'Custom: ' + lbl } ) )
@@ -970,6 +1009,11 @@ jQuery( function ( $ ) {
 
 				if ( /phone|mobile|whatsapp/.test( name ) ) {
 					$( this ).val( 'phone_number' );
+					return;
+				}
+
+				if ( /^tags?$/.test( name ) ) {
+					$( this ).val( 'tags' );
 				}
 			} );
 
@@ -1033,6 +1077,7 @@ jQuery( function ( $ ) {
 
 		importState.mapping           = mapping;
 		importState.defaultGroupIds   = $( '#nxtcc-import-default-groups' ).val() || [];
+		importState.defaultTagIds     = $( '#nxtcc-import-default-tags' ).val() || [];
 		importState.defaultSubscribed = $( '#nxtcc-import-default-subscribed' ).is( ':checked' );
 
 		const payload = {
@@ -1042,6 +1087,7 @@ jQuery( function ( $ ) {
 			token: importState.token,
 			mapping: JSON.stringify( mapping ),
 			default_groups: JSON.stringify( importState.defaultGroupIds ),
+			default_tags: JSON.stringify( importState.defaultTagIds ),
 			default_subscribed: importState.defaultSubscribed ? '1' : '0',
 		};
 

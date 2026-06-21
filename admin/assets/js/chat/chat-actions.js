@@ -103,6 +103,49 @@ jQuery( function ( $ ) {
 		let mediaFrame = null;
 
 		/**
+		 * Grow the composer up to ten visible text lines.
+		 *
+		 * @return {void}
+		 */
+		function resizeComposer() {
+			const textarea = $textarea.get( 0 );
+			if ( ! textarea ) {
+				return;
+			}
+
+			const thread       = $chatThread.get( 0 );
+			const keepAtBottom = thread ? isNearBottom( thread, 24 ) : false;
+			const style        = window.getComputedStyle( textarea );
+			const lineHeight   = parseFloat( style.lineHeight ) || 24;
+			const verticalBox  =
+				( parseFloat( style.paddingTop ) || 0 ) +
+				( parseFloat( style.paddingBottom ) || 0 ) +
+				( parseFloat( style.borderTopWidth ) || 0 ) +
+				( parseFloat( style.borderBottomWidth ) || 0 );
+			const minimum      = Math.ceil( lineHeight + verticalBox );
+			const maximum      = Math.ceil( ( lineHeight * 10 ) + verticalBox );
+
+			textarea.style.height = 'auto';
+			textarea.style.height = Math.min( maximum, Math.max( minimum, textarea.scrollHeight ) ) + 'px';
+			textarea.style.overflowY = textarea.scrollHeight > maximum ? 'auto' : 'hidden';
+
+			if ( keepAtBottom && thread ) {
+				thread.scrollTop = thread.scrollHeight;
+			}
+			updateScrollButton();
+		}
+
+		/**
+		 * Clear and collapse the composer.
+		 *
+		 * @return {void}
+		 */
+		function resetComposer() {
+			$textarea.val( '' );
+			resizeComposer();
+		}
+
+		/**
 		 * Lint-safe alert/confirm wrappers.
 		 *
 		 * We keep window.alert/confirm (simple admin UI), but avoid eslint no-alert errors
@@ -322,7 +365,7 @@ jQuery( function ( $ ) {
 					$sendBtn.prop( 'disabled', false );
 
 					if ( resp && resp.success ) {
-						$textarea.val( '' );
+						resetComposer();
 						if ( replyTo ) {
 							replyTo = null;
 							$replyStrip.hide();
@@ -447,7 +490,7 @@ jQuery( function ( $ ) {
 					$sendBtn.prop( 'disabled', false );
 
 					if ( resp && resp.success ) {
-						$textarea.val( '' );
+						resetComposer();
 						if ( replyTo ) {
 							replyTo = null;
 							$replyStrip.hide();
@@ -484,6 +527,8 @@ jQuery( function ( $ ) {
 				sendMessage();
 			}
 		} );
+		$textarea.off( 'input.nxtccResize' ).on( 'input.nxtccResize', resizeComposer );
+		resizeComposer();
 
 		$uploadBtn.off( 'click.nxtccUpload' ).on( 'click.nxtccUpload', function ( e ) {
 			e.preventDefault();
@@ -553,7 +598,7 @@ jQuery( function ( $ ) {
 					} );
 				}
 
-				$textarea.val( '' );
+				resetComposer();
 				$fileInput.val( '' );
 			} )();
 		} );
@@ -977,6 +1022,10 @@ jQuery( function ( $ ) {
 			$inboxPanel.removeClass( 'hide' );
 			$chatPanel.removeClass( 'active' );
 			ctx.state.chatContactId = null;
+			$chatPanel.find( '.nxtcc-chat-profile-btn' ).prop( 'disabled', true ).removeAttr( 'data-contact-id' );
+			if ( ctx.api.tickets && ctx.api.tickets.clear ) {
+				ctx.api.tickets.clear();
+			}
 			stopChatPolling();
 			$widget.find( '.nxtcc-chat-input-wrapper' ).hide();
 			exitSelection();
@@ -1084,6 +1133,7 @@ jQuery( function ( $ ) {
 				$inboxPanel.removeClass( 'hide' );
 				$chatPanel.addClass( 'active' );
 			}
+			resizeComposer();
 		}
 		$( window )
 			.off( 'resize.nxtccResp' + U.toStr( ctx.instanceId || '' ) )

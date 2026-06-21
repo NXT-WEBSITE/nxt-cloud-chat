@@ -24,6 +24,60 @@
 	box-sizing: border-box;
 }
 
+.nxtcc-team-access-teams-widget {
+	margin-top: 16px;
+}
+
+.nxtcc-team-access-team-list {
+	display: grid;
+	gap: 10px;
+}
+
+.nxtcc-team-access-team-create {
+	background: #fff;
+	border: 1px solid var(--nxtcc-team-border);
+	border-radius: 8px;
+	box-shadow: 0 10px 24px rgba(3, 28, 39, 0.08);
+}
+
+.nxtcc-team-access-team {
+	background: #fff;
+	border: 1px solid var(--nxtcc-team-border);
+	border-radius: 8px;
+}
+
+.nxtcc-team-access-team summary {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px;
+	cursor: pointer;
+}
+
+.nxtcc-team-access-team summary span {
+	color: var(--nxtcc-team-muted);
+	font-size: 12px;
+}
+
+.nxtcc-team-access-team-form {
+	border-top: 1px solid var(--nxtcc-team-border-soft);
+	padding: 14px;
+}
+
+.nxtcc-team-access-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 10px 0;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.nxtcc-team-access-table {
+	min-width: 1120px;
+}
+
 .nxtcc-team-access-summary {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -39,8 +93,7 @@
 	min-width: 0;
 }
 
-.nxtcc-team-access-summary-label,
-.nxtcc-team-access-side-label {
+.nxtcc-team-access-summary-label {
 	display: block;
 	font-size: 11px;
 	font-weight: 600;
@@ -50,8 +103,7 @@
 	margin-bottom: 6px;
 }
 
-.nxtcc-team-access-summary-value,
-.nxtcc-team-access-side-title {
+.nxtcc-team-access-summary-value {
 	display: block;
 	font-size: 14px;
 	line-height: 1.4;
@@ -111,7 +163,9 @@
 }
 
 .nxtcc-team-access-filter-input {
+	height: 36px;
 	min-width: 180px;
+	padding: 7px 10px;
 }
 
 .nxtcc-team-access-filter-search {
@@ -174,6 +228,20 @@
 	background: #f2f7f6;
 	border-color: #cad6d4;
 	box-shadow: 0 4px 12px rgba(3, 28, 39, 0.1);
+}
+
+.nxtcc-team-access-widget .nxtcc-button-danger,
+.nxtcc-team-access-modal .nxtcc-button-danger {
+	background: #d63638;
+	border-color: #b32d2e;
+	color: #fff;
+}
+
+.nxtcc-team-access-widget .nxtcc-button-danger:hover,
+.nxtcc-team-access-modal .nxtcc-button-danger:hover {
+	background: #b32d2e;
+	border-color: #8a2424;
+	box-shadow: 0 6px 16px rgba(214, 54, 56, 0.22);
 }
 
 .nxtcc-team-access-widget .nxtcc-size-sm,
@@ -307,8 +375,7 @@
 	gap: 8px;
 }
 
-.nxtcc-team-access-permissions,
-.nxtcc-team-access-side-chips {
+.nxtcc-team-access-permissions {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
@@ -372,23 +439,24 @@ body.nxtcc-team-access-modal-open {
 }
 
 .nxtcc-team-access-modal-inner {
-	width: min(1160px, 96vw);
+	width: min(980px, 96vw);
 	height: min(88vh, 920px);
 	background: var(--nxtcc-team-card);
 	border: 1px solid var(--nxtcc-team-border);
 	border-radius: 12px;
 	box-shadow: var(--nxtcc-team-shadow);
-	display: grid;
-	grid-template-columns: minmax(560px, 1fr) minmax(280px, 360px);
 	overflow: hidden;
 	position: relative;
 }
 
 .nxtcc-team-access-modal-form {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	box-sizing: border-box;
 	padding: 20px 24px 18px;
 	background: var(--nxtcc-team-bg);
-	border-right: 1px solid var(--nxtcc-team-border);
-	overflow: auto;
+	overflow: hidden;
 }
 
 .nxtcc-team-access-modal-close {
@@ -408,8 +476,31 @@ body.nxtcc-team-access-modal-open {
 }
 
 .nxtcc-team-access-modal-form .nxtcc-heading-title {
+	flex: 0 0 auto;
 	margin: 0 36px 16px 0;
 	font-size: 18px;
+}
+
+#nxtcc-team-access-form {
+	min-height: 0;
+	overflow-y: auto;
+	padding-right: 6px;
+	scrollbar-width: thin;
+	scrollbar-color: #aeb8bd #edf3f2;
+}
+
+#nxtcc-team-access-form::-webkit-scrollbar {
+	width: 6px;
+}
+
+#nxtcc-team-access-form::-webkit-scrollbar-track {
+	background: #edf3f2;
+	border-radius: 999px;
+}
+
+#nxtcc-team-access-form::-webkit-scrollbar-thumb {
+	background: #aeb8bd;
+	border-radius: 999px;
 }
 
 .nxtcc-team-access-field-group {
@@ -430,9 +521,7 @@ body.nxtcc-team-access-modal-open {
 
 .nxtcc-team-access-field-note,
 .nxtcc-team-access-user-preview span,
-.nxtcc-team-access-user-preview small,
-.nxtcc-team-access-side-copy,
-.nxtcc-team-access-owner-list span {
+.nxtcc-team-access-user-preview small {
 	font-size: 12px;
 	color: var(--nxtcc-team-muted);
 	line-height: 1.5;
@@ -462,54 +551,98 @@ body.nxtcc-team-access-modal-open {
 	opacity: 0.82;
 }
 
-.nxtcc-team-access-capability-table {
+.nxtcc-team-access-permission-matrix {
+	max-height: 380px;
+	overflow: auto;
+	border-radius: var(--nxtcc-team-radius);
+	scrollbar-width: thin;
+	scrollbar-color: #aeb8bd #edf3f2;
+}
+
+.nxtcc-team-access-permission-matrix::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+.nxtcc-team-access-permission-matrix::-webkit-scrollbar-track {
+	background: #edf3f2;
+	border-radius: 999px;
+}
+
+.nxtcc-team-access-permission-matrix::-webkit-scrollbar-thumb {
+	background: #aeb8bd;
+	border-radius: 999px;
+}
+
+.nxtcc-team-access-permission-table {
 	width: 100%;
+	min-width: 820px;
 	border-collapse: collapse;
 	table-layout: fixed;
 }
 
-.nxtcc-team-access-capability-table th,
-.nxtcc-team-access-capability-table td {
-	padding: 9px 10px;
+.nxtcc-team-access-permission-table th,
+.nxtcc-team-access-permission-table td {
+	padding: 7px 9px;
 	font-size: 12px;
 	line-height: 1.45;
 	text-align: left;
-	vertical-align: top;
+	vertical-align: middle;
 	border-bottom: 1px solid var(--nxtcc-team-border-soft);
 }
 
-.nxtcc-team-access-capability-table th {
+.nxtcc-team-access-permission-table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
 	background: #f0f6f5;
 	font-weight: 600;
 	color: var(--nxtcc-team-text);
 }
 
-.nxtcc-team-access-capability-table tr:last-child td {
+.nxtcc-team-access-permission-table tr:last-child td {
 	border-bottom: 0;
 }
 
-.nxtcc-team-access-capability-group-row td {
-	background: #f8fbfa;
-	font-weight: 700;
-	color: var(--nxtcc-team-accent);
-	border-top: 1px solid var(--nxtcc-team-border);
+.nxtcc-team-access-permission-table th:first-child,
+.nxtcc-team-access-permission-table td:first-child {
+	width: 170px;
 }
 
-.nxtcc-team-access-capability-check {
+.nxtcc-team-access-permission-table th:nth-child(4),
+.nxtcc-team-access-permission-table td:nth-child(4) {
+	width: 170px;
+}
+
+.nxtcc-team-access-check-col,
+.nxtcc-team-access-permission-check {
 	width: 72px;
+	text-align: center;
 }
 
-.nxtcc-team-access-capability-check input {
-	margin-top: 2px;
-}
-
-.nxtcc-team-access-capability-table strong {
+.nxtcc-team-access-permission-table strong {
 	display: block;
 	color: var(--nxtcc-team-text);
 }
 
-.nxtcc-team-access-capability-table input[disabled] {
+.nxtcc-team-access-permission-table td:first-child span {
+	display: block;
+	margin-top: 2px;
+	color: var(--nxtcc-team-muted);
+	font-size: 11px;
+}
+
+.nxtcc-team-access-permission-check input {
+	margin: 0;
+}
+
+.nxtcc-team-access-permission-table input[disabled],
+.nxtcc-team-access-permission-table select[disabled] {
 	cursor: not-allowed;
+}
+
+.nxtcc-team-access-empty-permission {
+	color: var(--nxtcc-team-muted);
 }
 
 .nxtcc-team-access-modal .nxtcc-button-wrapper {
@@ -520,55 +653,14 @@ body.nxtcc-team-access-modal-open {
 	z-index: 1;
 }
 
-.nxtcc-team-access-modal-side {
-	padding: 20px;
-	background: #fff;
-	overflow: auto;
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-}
-
-.nxtcc-team-access-side-card {
-	padding: 14px;
-	border: 1px solid var(--nxtcc-team-border);
-	border-radius: var(--nxtcc-team-radius);
-	background: #f8fbfa;
-}
-
-.nxtcc-team-access-owner-list {
-	margin: 0;
-	padding-left: 18px;
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-}
-
-.nxtcc-team-access-owner-list li {
-	margin: 0;
-}
-
-.nxtcc-team-access-owner-list strong {
-	display: block;
-	margin-bottom: 2px;
-	font-size: 12px;
-	color: var(--nxtcc-team-text);
-}
-
 @media (max-width: 1080px) {
-	.nxtcc-team-access-summary,
-	.nxtcc-team-access-modal-inner {
+	.nxtcc-team-access-summary {
 		grid-template-columns: 1fr;
 	}
 
 	.nxtcc-team-access-modal-inner {
 		height: auto;
 		max-height: 88vh;
-	}
-
-	.nxtcc-team-access-modal-form {
-		border-right: 0;
-		border-bottom: 1px solid var(--nxtcc-team-border);
 	}
 }
 

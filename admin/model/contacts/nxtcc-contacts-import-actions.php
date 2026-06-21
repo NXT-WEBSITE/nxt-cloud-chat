@@ -228,11 +228,12 @@ function nxtcc_contacts_count_csv_rows_from_bytes( string $raw, string $delimite
  */
 function nxtcc_contacts_import_sample_csv(): string {
 	$rows = array(
-		array( 'name', 'country_code', 'phone_number' ),
+		array( 'name', 'country_code', 'phone_number', 'tags' ),
 		array(
 			'John Doe',
 			'91',
 			'9876543210',
+			'Lead|Webinar',
 		),
 	);
 
@@ -304,17 +305,19 @@ function nxtcc_contacts_import_parse_mapping( string $json ): array {
  * - name
  * - country_code
  * - phone_number
+ * - tags
  * - custom:<Label>
  *
  * @param array $row     Parsed CSV row.
  * @param array $mapping Mapping array.
- * @return array{0:string,1:string,2:string,3:array<int,array<string,mixed>>} [name, country_code, phone_number, custom_fields_array]
+ * @return array{0:string,1:string,2:string,3:array<int,array<string,mixed>>,4:array<int,string>} [name, country_code, phone_number, custom_fields_array, tag_names]
  */
 function nxtcc_contacts_import_extract_fields_from_row( array $row, array $mapping ): array {
-	$name = '';
-	$cc   = '';
-	$pn   = '';
-	$cf   = array();
+	$name      = '';
+	$cc        = '';
+	$pn        = '';
+	$cf        = array();
+	$tag_names = array();
 
 	foreach ( $mapping as $m ) {
 		$idx    = (int) $m['csvIndex'];
@@ -329,6 +332,9 @@ function nxtcc_contacts_import_extract_fields_from_row( array $row, array $mappi
 			$cc = (string) preg_replace( '/\D/', '', $val );
 		} elseif ( 'phone_number' === $target ) {
 			$pn = (string) preg_replace( '/\D/', '', $val );
+		} elseif ( 'tags' === $target && '' !== $val ) {
+			$parsed_tags = preg_split( '/[|,]/', $val );
+			$tag_names   = array_merge( $tag_names, is_array( $parsed_tags ) ? $parsed_tags : array() );
 		} elseif ( 0 === strpos( $target, 'custom:' ) ) {
 			$key = trim( substr( $target, 7 ) );
 			if ( '' !== $key && '' !== $val ) {
@@ -341,7 +347,9 @@ function nxtcc_contacts_import_extract_fields_from_row( array $row, array $mappi
 		}
 	}
 
-	return array( $name, $cc, $pn, $cf );
+	$tag_names = array_values( array_unique( array_filter( array_map( 'sanitize_text_field', array_map( 'trim', $tag_names ) ) ) ) );
+
+	return array( $name, $cc, $pn, $cf, $tag_names );
 }
 
 /**
@@ -548,6 +556,11 @@ function nxtcc_ajax_contacts_import_validate(): void {
 		$default_groups_json = (string) sanitize_textarea_field( wp_unslash( $_POST['default_groups'] ) );
 	}
 
+	$default_tags_json = '[]';
+	if ( isset( $_POST['default_tags'] ) ) {
+		$default_tags_json = (string) sanitize_textarea_field( wp_unslash( $_POST['default_tags'] ) );
+	}
+
 	$default_subscribed = '1';
 	if ( isset( $_POST['default_subscribed'] ) ) {
 		$default_subscribed = (string) sanitize_text_field( wp_unslash( $_POST['default_subscribed'] ) );
@@ -579,9 +592,12 @@ function nxtcc_ajax_contacts_import_validate(): void {
 	$default_groups = json_decode( $default_groups_json, true );
 	$default_groups = is_array( $default_groups ) ? $default_groups : array();
 	$default_groups = array_values( array_filter( array_map( 'intval', $default_groups ) ) );
+	$default_tags   = json_decode( $default_tags_json, true );
+	$default_tags   = is_array( $default_tags ) ? array_values( array_filter( array_map( 'absint', $default_tags ) ) ) : array();
 
 	$meta['mapping']            = $mapping;
 	$meta['default_groups']     = $default_groups;
+	$meta['default_tags']       = $default_tags;
 	$meta['default_subscribed'] = ( '1' === $default_subscribed ) ? 1 : 0;
 
 	nxtcc_contacts_import_set_meta( $token, $meta );
@@ -736,6 +752,7 @@ function nxtcc_ajax_contacts_import_run(): void {
 	}
 
 	$default_groups     = ( isset( $meta['default_groups'] ) && is_array( $meta['default_groups'] ) ) ? $meta['default_groups'] : array();
+	$default_tags       = ( isset( $meta['default_tags'] ) && is_array( $meta['default_tags'] ) ) ? $meta['default_tags'] : array();
 	$default_subscribed = isset( $meta['default_subscribed'] ) ? (int) $meta['default_subscribed'] : 1;
 
 	$raw = nxtcc_fs_get( $path );
@@ -745,8 +762,10 @@ function nxtcc_ajax_contacts_import_run(): void {
 
 	$chunk_size = 200;
 
-	$repo = NXTCC_Contacts_Handler_Repo::instance();
-	$now  = current_time( 'mysql', 1 );
+	$repo   = NXTCC_Contacts_Handler_Repo::instance();
+	$now    = current_time( 'mysql', 1 );
+	$tenant = nxtcc_contacts_policy_tenant( $user_mailid, $baid, $pnid );
+	$policy = NXTCC_CRM_Access_Policy::get_policy( 0, $tenant, 'nxtcc_manage_contacts' );
 
 	$logs     = array();
 	$inserted = 0;
@@ -804,7 +823,7 @@ function nxtcc_ajax_contacts_import_run(): void {
 		++$data_i;
 		++$processed;
 
-		list( $name, $cc, $pn, $incoming_cf ) = nxtcc_contacts_import_extract_fields_from_row( $row, $mapping );
+		list( $name, $cc, $pn, $incoming_cf, $row_tags ) = nxtcc_contacts_import_extract_fields_from_row( $row, $mapping );
 
 		if ( '' === $name || '' === $cc || '' === $pn ) {
 			++$skipped;
@@ -825,6 +844,14 @@ function nxtcc_ajax_contacts_import_run(): void {
 				++$skipped;
 				continue;
 			}
+			if ( ! NXTCC_CRM_Access_Policy::user_can_manage_contact( (int) $dup->id, $tenant ) ) {
+				++$skipped;
+				$meta['errors'][] = array(
+					'row'   => $data_i + ( $has_header ? 1 : 0 ),
+					'error' => 'Matching contact is outside the current assigned record scope.',
+				);
+				continue;
+			}
 
 			$merged_json = nxtcc_merge_custom_fields( $dup->custom_fields, $incoming_cf );
 			$group_ids   = array_values(
@@ -839,6 +866,18 @@ function nxtcc_ajax_contacts_import_run(): void {
 
 			$repo->upsert_contact_custom_fields( (int) $dup->id, $name, $merged_json, $default_subscribed );
 			$repo->replace_contact_groups( (int) $dup->id, $group_ids );
+			nxtcc_update_contact_tags(
+				array(
+					'contact_id'          => (int) $dup->id,
+					'tag_ids'             => $default_tags,
+					'tags'                => $row_tags,
+					'operation'           => 'add',
+					'source'              => 'import',
+					'user_mailid'         => $user_mailid,
+					'business_account_id' => $baid,
+					'phone_number_id'     => $pnid,
+				)
+			);
 			$repo->update_contact_basic(
 				(int) $dup->id,
 				array(
@@ -848,6 +887,41 @@ function nxtcc_ajax_contacts_import_run(): void {
 					'updated_at'          => $now,
 				)
 			);
+
+			if ( function_exists( 'nxtcc_record_crm_activity' ) ) {
+				nxtcc_record_crm_activity(
+					array(
+						'contact_id'          => (int) $dup->id,
+						'user_mailid'         => $user_mailid,
+						'business_account_id' => $baid,
+						'phone_number_id'     => $pnid,
+						'activity_type'       => 'contact_updated',
+						'source'              => 'import',
+						'actor_id'            => get_current_user_id(),
+						'metadata'            => array(
+							'changed_fields' => array( 'name', 'custom_fields', 'groups', 'is_subscribed' ),
+						),
+					)
+				);
+
+				if ( (int) ( $dup->is_subscribed ?? 0 ) !== (int) $default_subscribed ) {
+					nxtcc_record_crm_activity(
+						array(
+							'contact_id'          => (int) $dup->id,
+							'user_mailid'         => $user_mailid,
+							'business_account_id' => $baid,
+							'phone_number_id'     => $pnid,
+							'activity_type'       => 'subscription_status_changed',
+							'source'              => 'import',
+							'actor_id'            => get_current_user_id(),
+							'metadata'            => array(
+								'previous_status' => ! empty( $dup->is_subscribed ) ? 'subscribed' : 'unsubscribed',
+								'status'          => ! empty( $default_subscribed ) ? 'subscribed' : 'unsubscribed',
+							),
+						)
+					);
+				}
+			}
 
 			++$updated;
 			continue;
@@ -882,6 +956,34 @@ function nxtcc_ajax_contacts_import_run(): void {
 		}
 
 		$repo->map_groups_for_new_contact( (int) $new_id, $group_ids );
+		nxtcc_update_contact_tags(
+			array(
+				'contact_id'          => (int) $new_id,
+				'tag_ids'             => $default_tags,
+				'tags'                => $row_tags,
+				'operation'           => 'add',
+				'source'              => 'import',
+				'user_mailid'         => $user_mailid,
+				'business_account_id' => $baid,
+				'phone_number_id'     => $pnid,
+			)
+		);
+		if ( 'all' !== (string) ( $policy['data_scope'] ?? 'all' ) ) {
+			nxtcc_assignments_save_target( (int) $new_id, 'user:' . (string) get_current_user_id(), $tenant, 'import' );
+		}
+		if ( function_exists( 'nxtcc_record_crm_activity' ) ) {
+			nxtcc_record_crm_activity(
+				array(
+					'contact_id'          => (int) $new_id,
+					'user_mailid'         => $user_mailid,
+					'business_account_id' => $baid,
+					'phone_number_id'     => $pnid,
+					'activity_type'       => 'contact_created',
+					'source'              => 'import',
+					'actor_id'            => get_current_user_id(),
+				)
+			);
+		}
 		++$inserted;
 	}
 

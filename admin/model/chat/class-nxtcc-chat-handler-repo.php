@@ -990,7 +990,7 @@ final class NXTCC_Chat_Handler_Repo {
 		}
 
 		$query = $this->prepare_with_table_tokens(
-			'SELECT id, is_favorite
+			'SELECT id, contact_id, is_favorite
 			 FROM {history}
 			 WHERE id = %d
 			   AND user_mailid = %s
@@ -1008,6 +1008,71 @@ final class NXTCC_Chat_Handler_Repo {
 		$this->runtime_set( $cache_key, $row );
 
 		return $row;
+	}
+
+	/**
+	 * Resolve contact IDs for tenant-scoped message IDs.
+	 *
+	 * @param array  $ids Message IDs.
+	 * @param string $user_mailid Tenant owner email.
+	 * @param string $phone_number_id Phone number ID.
+	 * @return array<int,int>
+	 */
+	public function get_message_contact_ids( array $ids, string $user_mailid, string $phone_number_id ): array {
+		$ids = array_values( array_unique( array_filter( array_map( 'absint', $ids ) ) ) );
+		if ( empty( $ids ) ) {
+			return array();
+		}
+
+		$t_h          = $this->quote_table( $this->table( 'nxtcc_message_history' ) );
+		$placeholders = $this->in_placeholders( count( $ids ), '%d' );
+		$query        = $this->prepare_with_table_tokens(
+			"SELECT DISTINCT contact_id
+			 FROM {history}
+			 WHERE user_mailid = %s
+			   AND phone_number_id = %s
+			   AND id IN ({$placeholders})",
+			array( 'history' => $t_h ),
+			array_merge( array( $user_mailid, $phone_number_id ), $ids )
+		);
+
+		if ( '' === $query ) {
+			return array();
+		}
+
+		return array_values( array_unique( array_filter( array_map( 'absint', $this->db()->get_col( $query ) ) ) ) );
+	}
+
+	/**
+	 * Resolve a contact owning one tenant-scoped Graph media ID.
+	 *
+	 * @param string $media_id Graph media ID.
+	 * @param string $user_mailid Tenant owner email.
+	 * @param string $phone_number_id Phone number ID.
+	 * @return int
+	 */
+	public function get_contact_id_for_media_id( string $media_id, string $user_mailid, string $phone_number_id ): int {
+		$media_id = sanitize_text_field( $media_id );
+		if ( '' === $media_id ) {
+			return 0;
+		}
+
+		$t_h   = $this->quote_table( $this->table( 'nxtcc_message_history' ) );
+		$like  = '%' . $this->db()->esc_like( $media_id ) . '%';
+		$query = $this->prepare_with_table_tokens(
+			'SELECT contact_id
+			 FROM {history}
+			 WHERE user_mailid = %s
+			   AND phone_number_id = %s
+			   AND deleted_at IS NULL
+			   AND (message_content LIKE %s OR response_json LIKE %s)
+			 ORDER BY id DESC
+			 LIMIT 1',
+			array( 'history' => $t_h ),
+			array( $user_mailid, $phone_number_id, $like, $like )
+		);
+
+		return '' !== $query ? absint( $this->db()->get_var( $query ) ) : 0;
 	}
 
 	/**
@@ -1350,7 +1415,7 @@ final class NXTCC_Chat_Handler_Repo {
 
 		$args  = array_merge( array( $user_mailid ), $ids );
 		$query = $this->prepare_with_table_tokens(
-			"SELECT id, message_content
+			"SELECT id, contact_id, message_content
 			FROM {history}
 			WHERE user_mailid = %s
 			  AND id IN ({$placeholders})",

@@ -25,6 +25,8 @@ function nxtcc_register_admin_menu(): void {
 	$chat_cap      = 'nxtcc_access_chat';
 	$contacts_cap  = 'nxtcc_view_contacts';
 	$groups_cap    = 'nxtcc_view_groups';
+	$tags_cap      = 'nxtcc_view_tags';
+	$deals_cap     = 'nxtcc_view_deals';
 	$history_cap   = 'nxtcc_view_history';
 	$auth_cap      = 'nxtcc_manage_authentication';
 
@@ -50,6 +52,16 @@ function nxtcc_register_admin_menu(): void {
 		$dashboard_cap,
 		$parent_slug,
 		'nxtcc_render_dashboard_page'
+	);
+
+	// Sales deals and pipelines.
+	add_submenu_page(
+		$parent_slug,
+		__( 'Deals', 'nxt-cloud-chat' ),
+		__( 'Deals', 'nxt-cloud-chat' ),
+		$deals_cap,
+		'nxtcc-deals',
+		'nxtcc_render_deals_page'
 	);
 
 	// Chat Window page (received messages UI).
@@ -84,6 +96,16 @@ function nxtcc_register_admin_menu(): void {
 		'nxtcc_render_groups_page'
 	);
 
+	// Contact tags management.
+	add_submenu_page(
+		$parent_slug,
+		__( 'Tags', 'nxt-cloud-chat' ),
+		__( 'Tags', 'nxt-cloud-chat' ),
+		$tags_cap,
+		'nxtcc-tags',
+		'nxtcc_render_tags_page'
+	);
+
 	// Pro feature placeholders. The Pro add-on replaces these when licensed.
 	add_submenu_page(
 		$parent_slug,
@@ -109,6 +131,15 @@ function nxtcc_register_admin_menu(): void {
 		nxtcc_menu_pro_badge_label( __( 'Abandoned Cart', 'nxt-cloud-chat' ) ),
 		$capability,
 		'nxtcc-abandoned-carts',
+		'nxtcc_render_upgrade_page'
+	);
+
+	add_submenu_page(
+		$parent_slug,
+		__( 'Segments', 'nxt-cloud-chat' ),
+		nxtcc_menu_pro_badge_label( __( 'Segments', 'nxt-cloud-chat' ) ),
+		$capability,
+		'nxtcc-segments',
 		'nxtcc_render_upgrade_page'
 	);
 
@@ -211,6 +242,24 @@ function nxtcc_render_contacts_page(): void {
  */
 function nxtcc_render_groups_page(): void {
 	require_once NXTCC_PLUGIN_DIR . 'admin/pages/groups-view.php';
+}
+
+/**
+ * Render the Tags admin page.
+ *
+ * @return void
+ */
+function nxtcc_render_tags_page(): void {
+	require_once NXTCC_PLUGIN_DIR . 'admin/pages/tags-view.php';
+}
+
+/**
+ * Render the Deals admin page.
+ *
+ * @return void
+ */
+function nxtcc_render_deals_page(): void {
+	require_once NXTCC_PLUGIN_DIR . 'admin/pages/deals-view.php';
 }
 
 /**

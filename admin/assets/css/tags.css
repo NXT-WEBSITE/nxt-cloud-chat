@@ -1,0 +1,74 @@
+.nxtcc-tags-screen {
+	--nxtcc-contacts-accent: #0b6a62;
+	--nxtcc-contacts-accent-dark: #0a5a53;
+	--nxtcc-contacts-border: #dcdcde;
+	--nxtcc-contacts-text: #1d2327;
+}
+
+.nxtcc-tags-note-badge {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 7px;
+	border: 1px solid #b8c5f2;
+	border-radius: 4px;
+	background: #edf1ff;
+	color: #2449a8;
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1.4;
+}
+
+.nxtcc-tag-chip {
+	display: inline-flex;
+	align-items: center;
+	max-width: 220px;
+	padding: 3px 8px;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	background: #f6f7f7;
+	color: #1d2327;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.nxtcc-tag-chip::before {
+	width: 7px;
+	height: 7px;
+	margin-right: 6px;
+	border-radius: 50%;
+	background: var(--nxtcc-tag-color, #2271b1);
+	content: "";
+	flex: 0 0 auto;
+}
+
+.nxtcc-tags-description {
+	max-width: 360px;
+	color: #50575e;
+	overflow-wrap: anywhere;
+}
+
+.nxtcc-tags-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+	padding: 12px 0 0;
+}
+
+#nxtcc-tags-page-label {
+	min-width: 80px;
+	color: #50575e;
+	font-size: 12px;
+	text-align: center;
+}
+
+#nxtcc-tag-color {
+	width: 64px;
+	min-height: 38px;
+	padding: 3px;
+}
+
+#nxtcc-tag-description {
+	resize: vertical;
+}

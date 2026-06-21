@@ -149,6 +149,19 @@ final class NXTCC_Data_Cleanup {
 			'cleanup_callback' => array( __CLASS__, 'cleanup_message_activity' ),
 		);
 
+		$targets['crm_activity'] = array(
+			'label'            => did_action( 'init' ) ? __( 'CRM activity', 'nxt-cloud-chat' ) : 'CRM activity',
+			'description'      => did_action( 'init' ) ? __( 'Contact timeline entries, assignment changes, tag changes, and other CRM audit records.', 'nxt-cloud-chat' ) : 'Contact timeline entries, assignment changes, tag changes, and other CRM audit records.',
+			'default_enabled'  => 0,
+			'default_days'     => 730,
+			'min_days'         => 30,
+			'max_days'         => 3650,
+			'order'            => 20,
+			'manual_only'      => false,
+			'preview_callback' => array( __CLASS__, 'preview_crm_activity' ),
+			'cleanup_callback' => array( __CLASS__, 'cleanup_crm_activity' ),
+		);
+
 		return $targets;
 	}
 
@@ -1339,6 +1352,63 @@ final class NXTCC_Data_Cleanup {
 			'deleted'   => $deleted,
 			'remaining' => $remaining,
 			'message'   => $message,
+		);
+	}
+
+	/**
+	 * Preview old CRM activity.
+	 *
+	 * @param array<string,mixed> $settings Cleanup settings.
+	 * @param array<string,mixed> $target Target config.
+	 * @param array<string,mixed> $context Run context.
+	 * @return array<string,mixed>
+	 */
+	public static function preview_crm_activity( array $settings, array $target, array $context ): array {
+		$table                              = self::table_name( 'nxtcc_crm_activities' );
+		$days                               = self::target_days( $settings, 'crm_activity', (int) $target['default_days'] );
+		$cutoff                             = self::mysql_cutoff_from_days( $days );
+		list( $tenant_where, $tenant_args ) = self::cleanup_tenant_sql( $context );
+
+		return array(
+			'count'   => self::count_rows( $table, $tenant_where . ' AND created_at < %s', array_merge( $tenant_args, array( $cutoff ) ) ),
+			'message' => '',
+		);
+	}
+
+	/**
+	 * Clean up old CRM activity in bounded batches.
+	 *
+	 * @param array<string,mixed> $settings Cleanup settings.
+	 * @param array<string,mixed> $target Target config.
+	 * @param array<string,mixed> $context Run context.
+	 * @return array<string,mixed>
+	 */
+	public static function cleanup_crm_activity( array $settings, array $target, array $context ): array {
+		$table                              = self::table_name( 'nxtcc_crm_activities' );
+		$cutoff                             = self::mysql_cutoff_for_target( $settings, 'crm_activity', (int) $target['default_days'], $context );
+		$batch_limit                        = isset( $context['batch_limit'] ) ? max( 1, (int) $context['batch_limit'] ) : self::AUTO_BATCH_LIMIT;
+		$max_batches                        = isset( $context['max_batches'] ) ? max( 1, (int) $context['max_batches'] ) : self::AUTO_MAX_BATCHES;
+		list( $tenant_where, $tenant_args ) = self::cleanup_tenant_sql( $context );
+		$args                               = array_merge( $tenant_args, array( $cutoff ) );
+		$where                              = $tenant_where . ' AND created_at < %s';
+		$deleted                            = 0;
+
+		for ( $batch = 0; $batch < $max_batches; $batch++ ) {
+			$ids = self::select_ids( $table, $where, $args, $batch_limit, 'id ASC' );
+			if ( empty( $ids ) ) {
+				break;
+			}
+
+			$deleted += self::delete_rows_by_id( $table, $ids );
+			if ( count( $ids ) < $batch_limit ) {
+				break;
+			}
+		}
+
+		return array(
+			'deleted'   => $deleted,
+			'remaining' => self::count_rows( $table, $where, $args ),
+			'message'   => '',
 		);
 	}
 

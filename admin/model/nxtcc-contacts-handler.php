@@ -13,6 +13,9 @@ require_once __DIR__ . '/contacts/nxtcc-contacts-filesystem.php';
 require_once __DIR__ . '/contacts/nxtcc-contacts-helpers.php';
 
 require_once __DIR__ . '/contacts/nxtcc-contacts-actions.php';
+require_once __DIR__ . '/contacts/nxtcc-contact-profile-actions.php';
+require_once __DIR__ . '/contacts/nxtcc-contact-assignment-actions.php';
+require_once __DIR__ . '/contacts/nxtcc-contact-saved-view-actions.php';
 require_once __DIR__ . '/contacts/nxtcc-contacts-groups-actions.php';
 require_once __DIR__ . '/contacts/nxtcc-contacts-import-actions.php';
 require_once __DIR__ . '/contacts/nxtcc-contacts-export-actions.php';

@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name:       NXT Cloud Chat - Business Inbox, Login & Contact Management
+ * Plugin Name:       NXT Cloud Chat - CRM, Inbox & OTP Login
  * Plugin URI:        https://nxtcloudchat.com/
- * Description:       Integrates WhatsApp Cloud API with WordPress to enable real-time messaging, automated notifications, customer communication, contact management, and secure WhatsApp-based user authentication and login.
- * Version:           1.0.9
+ * Description:       WhatsApp CRM for WordPress with real-time messaging, customer communication, contact management, sales pipelines, team management, automated notifications, and WhatsApp OTP login.
+ * Version:           1.1.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,14 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.0.9' );
+	define( 'NXTCC_VERSION', '1.1.0' );
+}
+
+/**
+ * Default Meta Graph API version.
+ */
+if ( ! defined( 'NXTCC_META_GRAPH_VERSION' ) ) {
+	define( 'NXTCC_META_GRAPH_VERSION', 'v25.0' );
 }
 
 /**
@@ -248,8 +255,22 @@ require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-db-adminsettings.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-actor-audit.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-settings-dao.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-tenant-access-dao.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-access-teams.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-access-control.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-data-cleanup.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-activities.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-lifecycle-stages.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-tasks.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-saved-views.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-deal-item-providers.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-deals.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-contact-merger.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-tags.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-contact-assignments.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-contact-query.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-access-policy.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-conversations.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-analytics.php';
 
 require_once NXTCC_PLUGIN_DIR . '/includes/pages-dao/class-nxtcc-pages-dao.php';
 
@@ -271,6 +292,8 @@ require_once NXTCC_PLUGIN_DIR . 'admin/pages/admin-menu.php';
 
 require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-contacts-handler.php';
 require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-groups-handler.php';
+require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-tags-handler.php';
+require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-deals-handler.php';
 require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-chat-handler.php';
 require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-history-handler.php';
 
@@ -292,6 +315,15 @@ require_once NXTCC_PLUGIN_DIR . 'blocks/register-whatsapp-login-block.php';
 
 if ( class_exists( 'NXTCC_Data_Cleanup' ) ) {
 	NXTCC_Data_Cleanup::init();
+}
+
+if ( class_exists( 'NXTCC_CRM_Activities' ) ) {
+	NXTCC_CRM_Activities::init();
+}
+
+if ( class_exists( 'NXTCC_Conversations' ) ) {
+	add_action( 'nxtcc_inbound_message_persisted', array( 'NXTCC_Conversations', 'capture_inbound' ), 20 );
+	add_action( 'nxtcc_contact_assignment_updated', array( 'NXTCC_Conversations', 'sync_contact_assignment' ), 20, 6 );
 }
 
 
@@ -336,6 +368,7 @@ function nxtcc_admin_upgrade_app_page_slugs(): array {
 		'nxtcc-templates',
 		'nxtcc-broadcast',
 		'nxtcc-abandoned-carts',
+		'nxtcc-segments',
 		'nxtcc-workflows',
 		'nxtcc-workflow-runs',
 	);
@@ -375,11 +408,14 @@ function nxtcc_admin_should_enqueue_upgrade_app_assets( string $page, string $ho
  * @return void
  */
 function nxtcc_admin_global_assets( string $hook ): void {
+	$admin_menu_css_path = NXTCC_PLUGIN_DIR . 'admin/assets/css/admin-menu.css';
+	$admin_menu_css_ver  = file_exists( $admin_menu_css_path ) ? (string) filemtime( $admin_menu_css_path ) : NXTCC_VERSION;
+
 	wp_enqueue_style(
 		'nxtcc-admin-menu',
 		NXTCC_PLUGIN_URL . 'admin/assets/css/admin-menu.css',
 		array(),
-		NXTCC_VERSION
+		$admin_menu_css_ver
 	);
 
 	$page_raw = filter_input( INPUT_GET, 'page', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
@@ -455,6 +491,8 @@ function nxtcc_support_badge_context( string $hook = '' ): ?array {
 		'nxtcc-chat-window',
 		'nxtcc-contacts',
 		'nxtcc-groups',
+		'nxtcc-tags',
+		'nxtcc-deals',
 		'nxtcc-history',
 		'nxtcc-authentication',
 		'nxtcc-settings',
@@ -462,6 +500,7 @@ function nxtcc_support_badge_context( string $hook = '' ): ?array {
 		'nxtcc-templates',
 		'nxtcc-broadcast',
 		'nxtcc-abandoned-carts',
+		'nxtcc-segments',
 		'nxtcc-workflows',
 		'nxtcc-workflow-runs',
 		'nxtcc-license',
@@ -482,6 +521,7 @@ function nxtcc_support_badge_context( string $hook = '' ): ?array {
 		'nxtcc-templates',
 		'nxtcc-broadcast',
 		'nxtcc-abandoned-carts',
+		'nxtcc-segments',
 		'nxtcc-workflows',
 		'nxtcc-workflow-runs',
 		'nxtcc-license',
@@ -560,6 +600,91 @@ function nxtcc_render_support_badge(): void {
 add_action( 'admin_footer', 'nxtcc_render_support_badge' );
 
 /**
+ * Enqueue the shared read-only contact profile UI.
+ *
+ * @return void
+ */
+function nxtcc_enqueue_contact_profile_assets(): void {
+	$css_path = NXTCC_PLUGIN_DIR . 'admin/assets/css/contact-profile.css';
+	$js_path  = NXTCC_PLUGIN_DIR . 'admin/assets/js/contact-profile.js';
+	$css_ver  = file_exists( $css_path ) ? (string) filemtime( $css_path ) : NXTCC_VERSION;
+	$js_ver   = file_exists( $js_path ) ? (string) filemtime( $js_path ) : NXTCC_VERSION;
+
+	wp_enqueue_style(
+		'nxtcc-contact-profile',
+		NXTCC_PLUGIN_URL . 'admin/assets/css/contact-profile.css',
+		array(),
+		$css_ver
+	);
+
+	wp_enqueue_script(
+		'nxtcc-contact-profile',
+		NXTCC_PLUGIN_URL . 'admin/assets/js/contact-profile.js',
+		array( 'jquery' ),
+		$js_ver,
+		true
+	);
+
+	wp_localize_script(
+		'nxtcc-contact-profile',
+		'NXTCC_ContactProfile',
+		array(
+			'ajaxurl' => admin_url( 'admin-ajax.php' ),
+			'nonce'   => wp_create_nonce( 'nxtcc_contact_profile' ),
+			'strings' => array(
+				'loading'              => __( 'Loading contact profile...', 'nxt-cloud-chat' ),
+				'load_error'           => __( 'The contact profile could not be loaded.', 'nxt-cloud-chat' ),
+				'empty'                => __( 'Not available', 'nxt-cloud-chat' ),
+				'none'                 => __( 'None', 'nxt-cloud-chat' ),
+				'unassigned'           => __( 'Unassigned', 'nxt-cloud-chat' ),
+				'subscribed'           => __( 'Subscribed', 'nxt-cloud-chat' ),
+				'unsubscribed'         => __( 'Unsubscribed', 'nxt-cloud-chat' ),
+				'verified'             => __( 'Verified contact', 'nxt-cloud-chat' ),
+				'not_verified'         => __( 'Standard contact', 'nxt-cloud-chat' ),
+				'linked'               => __( 'Linked', 'nxt-cloud-chat' ),
+				'not_linked'           => __( 'Not linked', 'nxt-cloud-chat' ),
+				'no_activity'          => __( 'No history found.', 'nxt-cloud-chat' ),
+				'no_older_activity'    => __( 'No older history found.', 'nxt-cloud-chat' ),
+				'timeline_end'         => __( 'End of history.', 'nxt-cloud-chat' ),
+				'activity_unavailable' => __( 'CRM activity access is not available for your role.', 'nxt-cloud-chat' ),
+				'system'               => __( 'System', 'nxt-cloud-chat' ),
+				'no_stage'             => __( 'No lifecycle stage', 'nxt-cloud-chat' ),
+				'no_tasks'             => __( 'No follow-up tasks yet.', 'nxt-cloud-chat' ),
+				'no_deals'             => __( 'No linked deals yet.', 'nxt-cloud-chat' ),
+				'complete'             => __( 'Complete', 'nxt-cloud-chat' ),
+				'reopen'               => __( 'Reopen', 'nxt-cloud-chat' ),
+				'merge'                => __( 'Merge', 'nxt-cloud-chat' ),
+				'merge_confirm'        => __( 'Merge this duplicate into the open contact? This cannot be undone.', 'nxt-cloud-chat' ),
+				'action_error'         => __( 'The CRM action could not be completed.', 'nxt-cloud-chat' ),
+			),
+		)
+	);
+}
+
+/**
+ * Render the shared contact profile modal once on an admin page.
+ *
+ * Compatible admin modules may call this after enqueuing the profile assets.
+ *
+ * @return void
+ */
+function nxtcc_render_contact_profile_modal(): void {
+	static $rendered = false;
+
+	if ( $rendered ) {
+		return;
+	}
+
+	$view = NXTCC_PLUGIN_DIR . 'admin/pages/contact-profile-modal.php';
+	if ( ! file_exists( $view ) ) {
+		return;
+	}
+
+	$rendered = true;
+	require $view;
+}
+
+/**
  * Contacts screen assets.
  */
 add_action(
@@ -569,10 +694,19 @@ add_action(
 			return;
 		}
 
+		nxtcc_enqueue_contact_profile_assets();
+
 		wp_enqueue_style(
 			'nxtcc-contacts',
 			NXTCC_PLUGIN_URL . 'admin/assets/css/contacts.css',
 			array(),
+			NXTCC_VERSION
+		);
+
+		wp_enqueue_style(
+			'nxtcc-contact-tags',
+			NXTCC_PLUGIN_URL . 'admin/assets/css/tags.css',
+			array( 'nxtcc-contacts' ),
 			NXTCC_VERSION
 		);
 
@@ -597,7 +731,26 @@ add_action(
 				'site_tz'            => $tz,
 				'site_tz_offset_min' => (int) ( $gmt_offset * 60 ),
 				'nonce'              => wp_create_nonce( 'nxtcc_contacts_nonce' ),
+				'tags_nonce'         => wp_create_nonce( 'nxtcc_tags' ),
 				'current_user'       => wp_get_current_user()->user_email,
+				'strings'            => array(
+					'all_tags'                  => __( 'All Tags', 'nxt-cloud-chat' ),
+					'all_tags_selected'         => __( 'All Tags selected', 'nxt-cloud-chat' ),
+					/* translators: %d: Number of selected contact tags. */
+					'tag_selected'              => __( '%d Tag selected', 'nxt-cloud-chat' ),
+					/* translators: %d: Number of selected contact tags. */
+					'tags_selected'             => __( '%d Tags selected', 'nxt-cloud-chat' ),
+					'no_tags_available'         => __( 'No tags available', 'nxt-cloud-chat' ),
+					'saved_view_default_suffix' => __( ' (Default)', 'nxt-cloud-chat' ),
+					'saved_view_create_title'   => __( 'Save Contact View', 'nxt-cloud-chat' ),
+					'saved_view_update_title'   => __( 'Update Contact View', 'nxt-cloud-chat' ),
+					'saved_view_create_action'  => __( 'Save View', 'nxt-cloud-chat' ),
+					'saved_view_update_action'  => __( 'Update View', 'nxt-cloud-chat' ),
+					'saved_view_save_error'     => __( 'Unable to save the contact view.', 'nxt-cloud-chat' ),
+					'saved_view_delete_error'   => __( 'Unable to delete the contact view.', 'nxt-cloud-chat' ),
+					/* translators: %s: Saved contact view name. */
+					'saved_view_delete_confirm' => __( 'Delete "%s"?', 'nxt-cloud-chat' ),
+				),
 			)
 		);
 
@@ -618,9 +771,17 @@ add_action(
 		);
 
 		wp_enqueue_script(
+			'nxtcc-contacts-saved-views',
+			NXTCC_PLUGIN_URL . 'admin/assets/js/contacts/contacts-saved-views.js',
+			array( 'jquery', 'nxtcc-contacts-runtime', 'nxtcc-contacts-actions' ),
+			NXTCC_VERSION,
+			true
+		);
+
+		wp_enqueue_script(
 			'nxtcc-contacts-modal',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/contacts/contacts-modal.js',
-			array( 'jquery', 'nxtcc-contacts-runtime', 'nxtcc-contacts-table', 'nxtcc-contacts-actions' ),
+			array( 'jquery', 'nxtcc-contacts-runtime', 'nxtcc-contacts-table', 'nxtcc-contacts-actions', 'nxtcc-contacts-saved-views' ),
 			NXTCC_VERSION,
 			true
 		);
@@ -672,6 +833,110 @@ function nxtcc_enqueue_groups_assets( string $hook ): void {
 	);
 }
 add_action( 'admin_enqueue_scripts', 'nxtcc_enqueue_groups_assets' );
+
+/**
+ * Tags screen assets.
+ *
+ * @param string $hook Current admin page hook suffix.
+ * @return void
+ */
+function nxtcc_enqueue_tags_assets( string $hook ): void {
+	if ( 'nxt-cloud-chat_page_nxtcc-tags' !== $hook ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'nxtcc-groups',
+		NXTCC_PLUGIN_URL . 'admin/assets/css/groups.css',
+		array(),
+		NXTCC_VERSION
+	);
+
+	wp_enqueue_style(
+		'nxtcc-contacts',
+		NXTCC_PLUGIN_URL . 'admin/assets/css/contacts.css',
+		array(),
+		NXTCC_VERSION
+	);
+
+	wp_enqueue_style(
+		'nxtcc-tags',
+		NXTCC_PLUGIN_URL . 'admin/assets/css/tags.css',
+		array( 'nxtcc-groups', 'nxtcc-contacts' ),
+		NXTCC_VERSION
+	);
+
+	wp_enqueue_script(
+		'nxtcc-tags',
+		NXTCC_PLUGIN_URL . 'admin/assets/js/tags.js',
+		array( 'jquery', 'wp-i18n' ),
+		NXTCC_VERSION,
+		true
+	);
+
+	wp_localize_script(
+		'nxtcc-tags',
+		'NXTCC_TagsData',
+		array(
+			'ajaxurl' => admin_url( 'admin-ajax.php' ),
+			'nonce'   => wp_create_nonce( 'nxtcc_tags' ),
+		)
+	);
+}
+add_action( 'admin_enqueue_scripts', 'nxtcc_enqueue_tags_assets' );
+
+/**
+ * Deals screen assets.
+ *
+ * @param string $hook Current admin page hook suffix.
+ * @return void
+ */
+function nxtcc_enqueue_deals_assets( string $hook ): void {
+	if ( 'nxt-cloud-chat_page_nxtcc-deals' !== $hook ) {
+		return;
+	}
+
+	wp_enqueue_style(
+		'nxtcc-groups',
+		NXTCC_PLUGIN_URL . 'admin/assets/css/groups.css',
+		array(),
+		NXTCC_VERSION
+	);
+	wp_enqueue_style(
+		'nxtcc-contacts',
+		NXTCC_PLUGIN_URL . 'admin/assets/css/contacts.css',
+		array(),
+		NXTCC_VERSION
+	);
+	wp_enqueue_style(
+		'nxtcc-tags',
+		NXTCC_PLUGIN_URL . 'admin/assets/css/tags.css',
+		array( 'nxtcc-groups', 'nxtcc-contacts' ),
+		NXTCC_VERSION
+	);
+	wp_enqueue_style(
+		'nxtcc-deals',
+		NXTCC_PLUGIN_URL . 'admin/assets/css/deals.css',
+		array( 'nxtcc-groups', 'nxtcc-contacts', 'nxtcc-tags' ),
+		NXTCC_VERSION
+	);
+	wp_enqueue_script(
+		'nxtcc-deals',
+		NXTCC_PLUGIN_URL . 'admin/assets/js/deals.js',
+		array( 'jquery' ),
+		NXTCC_VERSION,
+		true
+	);
+	wp_localize_script(
+		'nxtcc-deals',
+		'NXTCC_DealsData',
+		array(
+			'ajaxurl' => admin_url( 'admin-ajax.php' ),
+			'nonce'   => wp_create_nonce( 'nxtcc_deals' ),
+		)
+	);
+}
+add_action( 'admin_enqueue_scripts', 'nxtcc_enqueue_deals_assets' );
 
 
 /**
@@ -851,6 +1116,8 @@ add_action(
 			return;
 		}
 
+		nxtcc_enqueue_contact_profile_assets();
+
 		wp_enqueue_style(
 			'nxtcc-chat-css',
 			NXTCC_PLUGIN_URL . 'admin/assets/css/received-messages.css',
@@ -909,7 +1176,16 @@ add_action(
 			true
 		);
 
-		// 5) Boot LAST (depends on everything).
+		// 5) Ticket sidebar.
+		wp_enqueue_script(
+			'nxtcc-chat-tickets',
+			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-tickets.js',
+			array( 'jquery', 'nxtcc-chat-runtime' ),
+			NXTCC_VERSION,
+			true
+		);
+
+		// 6) Boot LAST (depends on everything).
 		wp_enqueue_script(
 			'nxtcc-chat-boot',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-boot.js',
@@ -919,6 +1195,7 @@ add_action(
 				'nxtcc-chat-actions',
 				'nxtcc-chat-inbox',
 				'nxtcc-chat-thread',
+				'nxtcc-chat-tickets',
 			),
 			NXTCC_VERSION,
 			true

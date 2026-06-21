@@ -107,6 +107,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   KEY idx_contacts_created_at (created_at),
   KEY idx_contacts_name (name(191)),
   KEY idx_contacts_multi_tenant (user_mailid(191), business_account_id(191), phone_number_id(191)),
+  KEY idx_contacts_tenant_created (user_mailid(100), business_account_id(100), phone_number_id(100), created_at),
   KEY idx_contacts_is_subscribed (is_subscribed),
   KEY idx_contacts_unsubscribed_at (unsubscribed_at)
 ) {$nxtcc_charset_collate};",
@@ -158,6 +159,457 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   KEY idx_group_id (group_id),
   KEY idx_contact_id (contact_id),
   KEY idx_gcm_multi_tenant (user_mailid(191), business_account_id(191), phone_number_id(191))
+) {$nxtcc_charset_collate};",
+
+			/*
+			------------------------------ Tags ------------------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_tags (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  tag_name VARCHAR(191) NOT NULL,
+  tag_slug VARCHAR(100) NOT NULL,
+  color VARCHAR(7) NOT NULL DEFAULT '#2271b1',
+  description VARCHAR(500) NULL,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_tenant_tag_slug (user_mailid(100), business_account_id(100), phone_number_id(100), tag_slug),
+  KEY idx_tags_tenant_name (user_mailid(100), business_account_id(100), phone_number_id(100), tag_name),
+  KEY idx_tags_created_by (created_by),
+  KEY idx_tags_updated_by (updated_by)
+) {$nxtcc_charset_collate};",
+
+			/*
+			----------------------- Tag -> Contact map ------------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_tag_contact_map (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  tag_id BIGINT(20) UNSIGNED NOT NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'manual',
+  assigned_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_contact_tag (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, tag_id),
+  KEY idx_tag_contact (tag_id, contact_id),
+  KEY idx_contact_tag (contact_id, tag_id),
+  KEY idx_tag_map_tenant (user_mailid(100), business_account_id(100), phone_number_id(100))
+) {$nxtcc_charset_collate};",
+
+			/*
+			---------------------- Contact assignments -----------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_contact_assignments (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  target_type VARCHAR(20) NOT NULL,
+  assigned_user_id BIGINT(20) UNSIGNED NULL,
+  assigned_role VARCHAR(50) NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'manual',
+  assigned_by BIGINT(20) UNSIGNED NULL,
+  assigned_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_contact_assignment (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id),
+  KEY idx_assignment_user (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_user_id),
+  KEY idx_assignment_role (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_role),
+  KEY idx_assignment_contact (contact_id)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_contact_assignment_history (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  previous_target_type VARCHAR(20) NULL,
+  previous_assigned_user_id BIGINT(20) UNSIGNED NULL,
+  previous_assigned_role VARCHAR(50) NULL,
+  new_target_type VARCHAR(20) NULL,
+  new_assigned_user_id BIGINT(20) UNSIGNED NULL,
+  new_assigned_role VARCHAR(50) NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'manual',
+  changed_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_assignment_history_contact (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, created_at),
+  KEY idx_assignment_history_user (new_assigned_user_id, created_at),
+  KEY idx_assignment_history_role (new_assigned_role, created_at)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_assignment_routing_state (
+  route_hash CHAR(64) NOT NULL,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  route_key VARCHAR(191) NOT NULL,
+  route_cursor BIGINT(20) UNSIGNED NOT NULL DEFAULT 0,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (route_hash),
+  KEY idx_assignment_route_tenant (user_mailid(100), business_account_id(100), phone_number_id(100), route_key(91)),
+  KEY idx_assignment_route_updated (updated_at)
+) {$nxtcc_charset_collate};",
+
+			/*
+			------------------------ CRM activity timeline --------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_activities (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  conversation_id BIGINT(20) UNSIGNED NULL,
+  task_id BIGINT(20) UNSIGNED NULL,
+  deal_id BIGINT(20) UNSIGNED NULL,
+  activity_type VARCHAR(60) NOT NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'system',
+  actor_user_id BIGINT(20) UNSIGNED NULL,
+  metadata_json LONGTEXT NULL,
+  note_content LONGTEXT NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_crm_activity_contact (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, id),
+  KEY idx_crm_activity_type (user_mailid(100), business_account_id(100), phone_number_id(100), activity_type, created_at),
+  KEY idx_crm_activity_conversation (conversation_id, id),
+  KEY idx_crm_activity_task (task_id, id),
+  KEY idx_crm_activity_deal (deal_id, id),
+  KEY idx_crm_activity_actor (actor_user_id, created_at),
+  KEY idx_crm_activity_created (created_at)
+) {$nxtcc_charset_collate};",
+
+			/*
+			---------------------- CRM lifecycle stages ----------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_lifecycle_stages (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  stage_name VARCHAR(120) NOT NULL,
+  stage_slug VARCHAR(80) NOT NULL,
+  color VARCHAR(7) NOT NULL DEFAULT '#2271b1',
+  sort_order INT(10) UNSIGNED NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_lifecycle_stage (user_mailid(100), business_account_id(100), phone_number_id(100), stage_slug),
+  KEY idx_lifecycle_stage_tenant (user_mailid(100), business_account_id(100), phone_number_id(100), is_active, sort_order)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_contact_lifecycle_stage (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  stage_id BIGINT(20) UNSIGNED NOT NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'manual',
+  changed_by BIGINT(20) UNSIGNED NULL,
+  changed_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_contact_lifecycle (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id),
+  KEY idx_contact_lifecycle_stage (user_mailid(100), business_account_id(100), phone_number_id(100), stage_id, contact_id),
+  KEY idx_contact_lifecycle_contact (contact_id)
+) {$nxtcc_charset_collate};",
+
+			/*
+			---------------------------- CRM tasks ---------------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_tasks (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  conversation_id BIGINT(20) UNSIGNED NULL,
+  title VARCHAR(191) NOT NULL,
+  description TEXT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'open',
+  priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+  due_at DATETIME NULL,
+  assigned_user_id BIGINT(20) UNSIGNED NULL,
+  assigned_role VARCHAR(50) NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'manual',
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  completed_by BIGINT(20) UNSIGNED NULL,
+  completed_at DATETIME NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_crm_task_contact (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, status, due_at),
+  KEY idx_crm_task_due (user_mailid(100), business_account_id(100), phone_number_id(100), status, due_at),
+  KEY idx_crm_task_user (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_user_id, status),
+  KEY idx_crm_task_role (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_role, status),
+  KEY idx_crm_task_conversation (conversation_id, status)
+) {$nxtcc_charset_collate};",
+
+			/*
+			---------------------- CRM saved contact views -------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_saved_views (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  owner_user_id BIGINT(20) UNSIGNED NOT NULL,
+  view_name VARCHAR(120) NOT NULL,
+  filters_json LONGTEXT NOT NULL,
+  is_default TINYINT(1) NOT NULL DEFAULT 0,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_crm_saved_view_name (user_mailid(100), business_account_id(100), phone_number_id(100), owner_user_id, view_name(80)),
+  KEY idx_crm_saved_view_owner (user_mailid(100), business_account_id(100), phone_number_id(100), owner_user_id, is_default),
+  KEY idx_crm_saved_view_updated (updated_at)
+) {$nxtcc_charset_collate};",
+
+			/*
+			----------------------- CRM sales pipelines ----------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_pipelines (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  pipeline_name VARCHAR(120) NOT NULL,
+  pipeline_slug VARCHAR(80) NOT NULL,
+  currency CHAR(3) NOT NULL DEFAULT 'USD',
+  is_default TINYINT(1) NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_crm_pipeline (user_mailid(100), business_account_id(100), phone_number_id(100), pipeline_slug),
+  KEY idx_crm_pipeline_tenant (user_mailid(100), business_account_id(100), phone_number_id(100), is_active, is_default)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_pipeline_stages (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  pipeline_id BIGINT(20) UNSIGNED NOT NULL,
+  stage_name VARCHAR(120) NOT NULL,
+  stage_slug VARCHAR(80) NOT NULL,
+  color VARCHAR(7) NOT NULL DEFAULT '#2271b1',
+  probability TINYINT(3) UNSIGNED NOT NULL DEFAULT 0,
+  sort_order INT(10) UNSIGNED NOT NULL DEFAULT 0,
+  stage_type VARCHAR(20) NOT NULL DEFAULT 'open',
+  reason_requirement VARCHAR(20) NOT NULL DEFAULT 'optional',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_crm_pipeline_stage (pipeline_id, stage_slug),
+  KEY idx_crm_pipeline_stage_tenant (user_mailid(100), business_account_id(100), phone_number_id(100), pipeline_id, is_active, sort_order),
+  KEY idx_crm_pipeline_stage_type (pipeline_id, stage_type)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_deals (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  pipeline_id BIGINT(20) UNSIGNED NOT NULL,
+  stage_id BIGINT(20) UNSIGNED NOT NULL,
+  title VARCHAR(191) NOT NULL,
+  description TEXT NULL,
+  deal_value DECIMAL(20,6) NOT NULL DEFAULT 0,
+  value_mode VARCHAR(20) NOT NULL DEFAULT 'manual',
+  currency CHAR(3) NOT NULL DEFAULT 'USD',
+  status VARCHAR(20) NOT NULL DEFAULT 'open',
+  expected_close_at DATETIME NULL,
+  closed_at DATETIME NULL,
+  stage_reason VARCHAR(500) NULL,
+  assigned_user_id BIGINT(20) UNSIGNED NULL,
+  assigned_role VARCHAR(50) NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'manual',
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_crm_deal_tenant_status (user_mailid(100), business_account_id(100), phone_number_id(100), status, updated_at),
+  KEY idx_crm_deal_tenant_updated (user_mailid(100), business_account_id(100), phone_number_id(100), updated_at),
+  KEY idx_crm_deal_pipeline_stage (user_mailid(100), business_account_id(100), phone_number_id(100), pipeline_id, stage_id, status),
+  KEY idx_crm_deal_user (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_user_id, status),
+  KEY idx_crm_deal_role (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_role, status),
+  KEY idx_crm_deal_expected_close (status, expected_close_at)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_deal_contacts (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  deal_id BIGINT(20) UNSIGNED NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  is_primary TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_crm_deal_contact (deal_id, contact_id),
+  KEY idx_crm_deal_contact_tenant (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, deal_id),
+  KEY idx_crm_deal_contact_primary (deal_id, is_primary)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_deal_products (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  deal_id BIGINT(20) UNSIGNED NOT NULL,
+  product_id BIGINT(20) UNSIGNED NULL,
+  source_key VARCHAR(50) NOT NULL DEFAULT 'manual',
+  source_item_id VARCHAR(191) NULL,
+  product_name VARCHAR(191) NOT NULL,
+  quantity_type VARCHAR(50) NOT NULL DEFAULT 'unit',
+  quantity_label VARCHAR(100) NULL,
+  quantity DECIMAL(20,6) NOT NULL DEFAULT 1,
+  unit_price DECIMAL(20,6) NOT NULL DEFAULT 0,
+  line_total DECIMAL(20,6) NOT NULL DEFAULT 0,
+  currency CHAR(3) NOT NULL DEFAULT 'USD',
+  source_metadata LONGTEXT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_crm_deal_product_tenant (user_mailid(100), business_account_id(100), phone_number_id(100), deal_id),
+  KEY idx_crm_deal_product (product_id, deal_id),
+  KEY idx_crm_deal_source_item (user_mailid(100), business_account_id(100), phone_number_id(100), source_key, source_item_id(100))
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_crm_deal_stage_history (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  deal_id BIGINT(20) UNSIGNED NOT NULL,
+  previous_pipeline_id BIGINT(20) UNSIGNED NULL,
+  previous_stage_id BIGINT(20) UNSIGNED NULL,
+  pipeline_id BIGINT(20) UNSIGNED NOT NULL,
+  stage_id BIGINT(20) UNSIGNED NOT NULL,
+  reason VARCHAR(500) NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'manual',
+  changed_by BIGINT(20) UNSIGNED NULL,
+  changed_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_crm_deal_stage_history (user_mailid(100), business_account_id(100), phone_number_id(100), deal_id, changed_at),
+  KEY idx_crm_deal_stage_transition (user_mailid(100), business_account_id(100), phone_number_id(100), pipeline_id, stage_id, changed_at),
+  KEY idx_crm_deal_previous_stage (user_mailid(100), business_account_id(100), phone_number_id(100), previous_pipeline_id, previous_stage_id, changed_at)
+) {$nxtcc_charset_collate};",
+
+			/*
+			---------------------- Conversation tickets ----------------------
+		*/
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_conversations (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  ticket_number VARCHAR(40) NOT NULL,
+  subject VARCHAR(191) NULL,
+  category VARCHAR(100) NULL,
+  channel VARCHAR(30) NOT NULL DEFAULT 'whatsapp',
+  status VARCHAR(20) NOT NULL DEFAULT 'unassigned',
+  priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+  assigned_user_id BIGINT(20) UNSIGNED NULL,
+  assigned_role VARCHAR(50) NULL,
+  assignment_source VARCHAR(30) NOT NULL DEFAULT 'system',
+  opened_at DATETIME NOT NULL,
+  first_response_at DATETIME NULL,
+  resolved_at DATETIME NULL,
+  closed_at DATETIME NULL,
+  snoozed_until DATETIME NULL,
+  first_response_due_at DATETIME NULL,
+  resolution_due_at DATETIME NULL,
+  last_inbound_at DATETIME NULL,
+  last_outbound_at DATETIME NULL,
+  last_message_at DATETIME NULL,
+  reopen_count INT(10) UNSIGNED NOT NULL DEFAULT 0,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_conversation_contact_channel (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, channel),
+  UNIQUE KEY uq_conversation_ticket (ticket_number),
+  KEY idx_conversation_tenant_status (user_mailid(100), business_account_id(100), phone_number_id(100), status, updated_at),
+  KEY idx_conversation_tenant_updated (user_mailid(100), business_account_id(100), phone_number_id(100), updated_at),
+  KEY idx_conversation_assigned_user (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_user_id, status),
+  KEY idx_conversation_assigned_role (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_role, status),
+  KEY idx_conversation_contact (contact_id),
+  KEY idx_conversation_priority (priority, status),
+  KEY idx_conversation_sla (first_response_due_at, resolution_due_at)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_conversation_assignment_history (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  conversation_id BIGINT(20) UNSIGNED NOT NULL,
+  previous_assigned_user_id BIGINT(20) UNSIGNED NULL,
+  previous_assigned_role VARCHAR(50) NULL,
+  new_assigned_user_id BIGINT(20) UNSIGNED NULL,
+  new_assigned_role VARCHAR(50) NULL,
+  handoff_type VARCHAR(30) NOT NULL DEFAULT 'assignment',
+  reason VARCHAR(191) NULL,
+  note_activity_id BIGINT(20) UNSIGNED NULL,
+  source VARCHAR(30) NOT NULL DEFAULT 'manual',
+  changed_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  KEY idx_conversation_assignment_history (conversation_id, id),
+  KEY idx_conversation_assignment_next_user (new_assigned_user_id, created_at),
+  KEY idx_conversation_assignment_next_role (new_assigned_role, created_at),
+  KEY idx_conversation_assignment_note (note_activity_id)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_conversation_watchers (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  conversation_id BIGINT(20) UNSIGNED NOT NULL,
+  wp_user_id BIGINT(20) UNSIGNED NOT NULL,
+  notification_preference VARCHAR(30) NOT NULL DEFAULT 'all',
+  added_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_conversation_watcher (conversation_id, wp_user_id),
+  KEY idx_conversation_watchers_tenant (user_mailid(100), business_account_id(100), phone_number_id(100), wp_user_id),
+  KEY idx_conversation_watchers_conversation (conversation_id)
 ) {$nxtcc_charset_collate};",
 
 			/* -------------------------- Message history ----------------------- */
@@ -249,6 +701,31 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 ) {$nxtcc_charset_collate};",
 
 			/* ------------------------ Tenant user access ---------------------- */
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_access_teams (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  team_key VARCHAR(50) NOT NULL,
+  label VARCHAR(120) NOT NULL,
+  description TEXT NULL,
+  action_level VARCHAR(20) NOT NULL DEFAULT 'manage',
+  data_scope VARCHAR(20) NOT NULL DEFAULT 'all',
+  capabilities_json LONGTEXT NULL,
+  capability_scopes_json LONGTEXT NULL,
+  assignment_eligible TINYINT(1) NOT NULL DEFAULT 1,
+  is_protected TINYINT(1) NOT NULL DEFAULT 0,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_access_team (user_mailid(100), business_account_id(100), phone_number_id(100), team_key),
+  KEY idx_access_team_tenant (user_mailid(100), business_account_id(100), phone_number_id(100)),
+  KEY idx_access_team_scope (data_scope, action_level),
+  KEY idx_access_team_updated (updated_at)
+) {$nxtcc_charset_collate};",
+
 			"CREATE TABLE {$nxtcc_prefix}nxtcc_tenant_user_access (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
   wp_user_id BIGINT(20) UNSIGNED NOT NULL,
@@ -257,6 +734,10 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   phone_number_id VARCHAR(255) NOT NULL,
   role_key VARCHAR(50) NOT NULL DEFAULT 'custom',
   capabilities_json LONGTEXT NULL,
+  capability_scopes_json LONGTEXT NULL,
+  action_level VARCHAR(20) NOT NULL DEFAULT 'manage',
+  data_scope VARCHAR(20) NOT NULL DEFAULT 'all',
+  assignment_eligible TINYINT(1) NOT NULL DEFAULT 1,
   is_owner TINYINT(1) NOT NULL DEFAULT 0,
   granted_by BIGINT(20) UNSIGNED NULL,
   updated_by BIGINT(20) UNSIGNED NULL,
@@ -266,6 +747,8 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   UNIQUE KEY uq_tenant_user (wp_user_id, user_mailid(191), business_account_id(191), phone_number_id(191)),
   KEY idx_access_wp_user (wp_user_id),
   KEY idx_access_owner (is_owner),
+  KEY idx_access_scope (data_scope, action_level),
+  KEY idx_access_assignment_eligible (assignment_eligible),
   KEY idx_access_updated_by (updated_by),
   KEY idx_access_tenant (user_mailid(191), business_account_id(191), phone_number_id(191))
 ) {$nxtcc_charset_collate};",

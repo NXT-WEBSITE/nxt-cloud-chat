@@ -204,6 +204,7 @@ function nxtcc_ajax_send_message(): void {
 	if ( 0 === $contact_id ) {
 		wp_send_json_error( array( 'message' => 'Missing contact id.' ), 400 );
 	}
+	nxtcc_chat_require_contact_access( $contact_id, true );
 
 	if ( '' === trim( (string) $message_content ) ) {
 		wp_send_json_error( array( 'message' => 'Empty message.' ), 400 );
@@ -243,6 +244,7 @@ function nxtcc_ajax_send_message(): void {
 	$result = nxtcc_send_message_immediately( $args );
 
 	if ( is_array( $result ) && ! empty( $result['success'] ) ) {
+		NXTCC_Conversations::instance()->touch_outbound( $contact_id, NXTCC_Access_Control::get_current_tenant_context() );
 		wp_send_json_success(
 			array(
 				'message' => 'Message sent.',
@@ -290,6 +292,7 @@ function nxtcc_ajax_send_media(): void {
 	if ( 0 === $contact_id ) {
 		wp_send_json_error( array( 'message' => 'Missing contact id.' ), 400 );
 	}
+	nxtcc_chat_require_contact_access( $contact_id, true );
 
 	if ( ! isset( $_FILES['file'] ) || ! is_array( $_FILES['file'] ) ) {
 		wp_send_json_error( array( 'message' => 'Missing file.' ), 400 );
@@ -436,6 +439,7 @@ function nxtcc_ajax_send_media(): void {
 	$result = nxtcc_send_media_link_immediately( $payload );
 
 	if ( is_array( $result ) && ! empty( $result['success'] ) ) {
+		NXTCC_Conversations::instance()->touch_outbound( $contact_id, NXTCC_Access_Control::get_current_tenant_context() );
 		wp_send_json_success(
 			array(
 				'message' => 'Media sent.',
@@ -503,6 +507,7 @@ function nxtcc_ajax_send_media_by_url(): void {
 	if ( 0 === $contact_id || '' === $link ) {
 		wp_send_json_error( array( 'message' => 'Missing contact or media URL.' ), 400 );
 	}
+	nxtcc_chat_require_contact_access( $contact_id, true );
 
 	$args = array(
 		'user_mailid'         => $user_mailid,
@@ -532,6 +537,7 @@ function nxtcc_ajax_send_media_by_url(): void {
 	$result = nxtcc_send_media_link_immediately( $args );
 
 	if ( is_array( $result ) && ! empty( $result['success'] ) ) {
+		NXTCC_Conversations::instance()->touch_outbound( $contact_id, NXTCC_Access_Control::get_current_tenant_context() );
 		wp_send_json_success(
 			array(
 				'message' => 'Media sent.',

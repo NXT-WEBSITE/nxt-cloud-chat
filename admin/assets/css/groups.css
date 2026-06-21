@@ -139,12 +139,17 @@
 
 .nxtcc-groups-search-input,
 .nxtcc-groups-select {
-	height: 34px;
-	padding: 6px 10px;
+	height: 36px;
+	padding: 7px 10px;
 }
 
 .nxtcc-groups-search-input {
 	min-width: 240px;
+}
+
+.nxtcc-groups-search-input.nxtcc-ui-filter-control {
+	width: 240px !important;
+	min-width: 240px !important;
 }
 
 .nxtcc-groups-select {
@@ -297,7 +302,7 @@
 
 .nxtcc-groups-table .checkbox-col {
 	width: 44px;
-	text-align: center;
+	text-align: left;
 }
 
 .nxtcc-groups-table .actions-col {
@@ -562,6 +567,11 @@
 	.nxtcc-groups-search-input {
 		min-width: 100%;
 		width: 100%;
+	}
+
+	.nxtcc-groups-search-input.nxtcc-ui-filter-control {
+		width: 100% !important;
+		min-width: 100% !important;
 	}
 
 	#nxtcc-groups-bulk-actions.nxtcc-groups-bulk-wrap,

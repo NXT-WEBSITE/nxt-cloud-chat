@@ -139,6 +139,36 @@
 	grid-column: 1 / -1;
 }
 
+.nxtcc-contacts-saved-views {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	margin-bottom: 10px;
+	padding: 10px;
+	border: 1px solid var(--nxtcc-contacts-border);
+	border-radius: 8px;
+	background: #f8fbfa;
+}
+
+.nxtcc-contacts-saved-view-select {
+	flex: 1 1 260px;
+	max-width: 400px;
+	min-width: 0;
+}
+
+.nxtcc-contacts-saved-view-select select {
+	width: 100%;
+}
+
+.nxtcc-contacts-saved-view-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
 .nxtcc-contacts-toolbar-actions,
 .nxtcc-bulk-toolbar,
 .nxtcc-input-with-inline-link,
@@ -159,6 +189,112 @@
 
 .nxtcc-contacts-filter-field {
 	min-width: 0;
+}
+
+.nxtcc-tag-filter {
+	position: relative;
+}
+
+.nxtcc-tag-filter-toggle {
+	position: relative;
+	padding-right: 30px;
+	text-align: left;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.nxtcc-tag-filter-toggle::after {
+	position: absolute;
+	top: 50%;
+	right: 11px;
+	width: 0;
+	height: 0;
+	border-top: 5px solid #50575e;
+	border-right: 4px solid transparent;
+	border-left: 4px solid transparent;
+	content: "";
+	transform: translateY(-35%);
+}
+
+.nxtcc-tag-filter-toggle[aria-expanded="true"]::after {
+	transform: translateY(-60%) rotate(180deg);
+}
+
+.nxtcc-tag-filter-panel {
+	position: absolute;
+	z-index: 20;
+	top: calc(100% + 4px);
+	left: 0;
+	width: max(100%, 230px);
+	max-width: 320px;
+	padding: 6px;
+	border: 1px solid var(--nxtcc-contacts-border);
+	border-radius: 7px;
+	background: #fff;
+	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+	box-sizing: border-box;
+}
+
+.nxtcc-tag-filter-panel[hidden] {
+	display: none;
+}
+
+.nxtcc-tag-filter-select-all,
+.nxtcc-tag-filter-option {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+	padding: 5px 7px;
+	border-radius: 5px;
+	color: var(--nxtcc-contacts-text);
+	font-size: 12px;
+	line-height: 1.35;
+	cursor: pointer;
+	box-sizing: border-box;
+}
+
+.nxtcc-tag-filter-select-all {
+	margin-bottom: 4px;
+	border-bottom: 1px solid var(--nxtcc-contacts-border-soft);
+	border-radius: 5px 5px 0 0;
+	font-weight: 600;
+}
+
+.nxtcc-tag-filter-option:hover,
+.nxtcc-tag-filter-select-all:hover {
+	background: #f2f7f6;
+}
+
+.nxtcc-tag-filter-select-all input,
+.nxtcc-tag-filter-option input {
+	width: 16px;
+	height: 16px;
+	min-width: 16px;
+	margin: 0;
+}
+
+.nxtcc-tag-filter-options {
+	max-height: 220px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.nxtcc-tag-filter-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--nxtcc-filter-tag-color, #2271b1);
+	flex: 0 0 auto;
+}
+
+.nxtcc-tag-filter-empty {
+	padding: 8px 7px;
+	color: var(--nxtcc-contacts-muted);
+	font-size: 12px;
+	line-height: 1.4;
 }
 
 .nxtcc-contacts-filter-dates {
@@ -407,6 +543,14 @@
 	white-space: nowrap;
 }
 
+.nxtcc-contacts-widget.is-view-only #nxtcc-add-contact-btn,
+.nxtcc-contacts-widget.is-view-only #nxtcc-bulk-toolbar,
+.nxtcc-contacts-widget.is-view-only .nxtcc-contact-row-actions,
+.nxtcc-contacts-widget.is-view-only .nxtcc-contacts-table [data-col="checkbox"],
+.nxtcc-contacts-widget.is-view-only .nxtcc-contacts-table .actions-col {
+	display: none !important;
+}
+
 .nxtcc-contact-row-actions .nxtcc-btn-sm {
 	flex: 0 0 auto;
 }
@@ -448,6 +592,12 @@
 	background: #f4f5f6;
 	border-color: #dfe1e3;
 	color: var(--nxtcc-contacts-muted);
+}
+
+.nxtcc-chip-assigned {
+	border-color: #b8c7e8;
+	background: #edf3ff;
+	color: #174ea6;
 }
 
 .nxtcc-modal {
@@ -745,6 +895,22 @@
 	margin-top: 0;
 }
 
+.nxtcc-saved-view-default {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 4px 20px 14px;
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--nxtcc-contacts-text);
+}
+
+.nxtcc-saved-view-default input {
+	width: 16px;
+	height: 16px;
+	margin: 0;
+}
+
 .nxtcc-popover {
 	position: absolute;
 	z-index: 100010;
@@ -786,6 +952,20 @@
 	}
 
 	.nxtcc-contacts-toolbar-actions {
+		justify-content: flex-start;
+	}
+
+	.nxtcc-contacts-saved-views {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.nxtcc-contacts-saved-view-select {
+		flex-basis: auto;
+		max-width: none;
+	}
+
+	.nxtcc-contacts-saved-view-actions {
 		justify-content: flex-start;
 	}
 
