@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat - CRM, Inbox & OTP Login
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       WhatsApp CRM for WordPress with real-time messaging, customer communication, contact management, sales pipelines, team management, automated notifications, and WhatsApp OTP login.
- * Version:           1.1.0
+ * Version:           1.1.1
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.1.0' );
+	define( 'NXTCC_VERSION', '1.1.1' );
 }
 
 /**

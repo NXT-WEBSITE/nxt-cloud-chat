@@ -508,6 +508,39 @@ final class NXTCC_Helpers {
 	}
 
 	/**
+	 * List configured tenant profiles without exposing credentials.
+	 *
+	 * @return array<int, array<string, string>> Tenant profiles.
+	 */
+	public static function list_tenant_profiles(): array {
+		$rows = apply_filters( 'nxtcc_db_list_tenant_profiles', array() );
+		return is_array( $rows ) ? array_values( $rows ) : array();
+	}
+
+	/**
+	 * Resolve one configured tenant profile without exposing credentials.
+	 *
+	 * @param string $user_mailid         Connection owner email.
+	 * @param string $business_account_id Business account ID.
+	 * @param string $phone_number_id     Phone number ID.
+	 * @return array<string, string>|false Tenant profile or false.
+	 */
+	public static function get_tenant_profile( string $user_mailid, string $business_account_id, string $phone_number_id ) {
+		$profile = apply_filters( 'nxtcc_db_get_tenant_profile', null, $user_mailid, $business_account_id, $phone_number_id );
+		return is_array( $profile ) ? $profile : false;
+	}
+
+	/**
+	 * Get the primary connection's display phone number.
+	 *
+	 * @return string Digits-only display phone number, or an empty string.
+	 */
+	public static function get_primary_display_phone_number(): string {
+		$phone_number = apply_filters( 'nxtcc_db_get_primary_display_phone_number', '' );
+		return self::sanitize_phone_number( $phone_number );
+	}
+
+	/**
 	 * Return cached templates list for a user/phone number.
 	 *
 	 * @param string $user_mailid     User identifier/email.
