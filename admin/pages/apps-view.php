@@ -41,10 +41,14 @@ if ( function_exists( 'get_plugin_data' ) && file_exists( $nxtcc_plugin_file ) )
  *
  * If the image file does not exist, the UI will fall back to a letter icon.
  */
-$nxtcc_default_icon_path = trailingslashit( NXTCC_PLUGIN_DIR ) . 'admin/assets/vendor/images/nxt-cloud-chat.png';
-$nxtcc_default_icon_url  = file_exists( $nxtcc_default_icon_path )
+$nxtcc_default_icon_path       = trailingslashit( NXTCC_PLUGIN_DIR ) . 'admin/assets/vendor/images/nxt-cloud-chat.png';
+$nxtcc_default_icon_url        = file_exists( $nxtcc_default_icon_path )
 	? trailingslashit( NXTCC_PLUGIN_URL ) . 'admin/assets/vendor/images/nxt-cloud-chat.png'
 	: '';
+$nxtcc_floating_chat_icon_path = trailingslashit( NXTCC_PLUGIN_DIR ) . 'admin/assets/vendor/images/nxt-floating-chat.png';
+$nxtcc_floating_chat_icon_url  = file_exists( $nxtcc_floating_chat_icon_path )
+	? trailingslashit( NXTCC_PLUGIN_URL ) . 'admin/assets/vendor/images/nxt-floating-chat.png'
+	: $nxtcc_default_icon_url;
 
 /**
  * My Account URL for the header link (derived from Author URI).
@@ -61,6 +65,65 @@ if ( '' === esc_url_raw( $nxtcc_product_url ) ) {
 	$nxtcc_product_url = $nxtcc_author_uri;
 }
 
+$nxtcc_floating_chat_plugin_basename = 'nxt-floating-chat-widget/nxt-floating-chat-widget.php';
+$nxtcc_floating_chat_plugin_file     = trailingslashit( WP_PLUGIN_DIR ) . $nxtcc_floating_chat_plugin_basename;
+$nxtcc_floating_chat_url             = 'https://nxtwebsite.com/wordpress/nxt-floating-chat/';
+$nxtcc_floating_chat_name            = __( 'NXT Floating Chat', 'nxt-cloud-chat' );
+$nxtcc_floating_chat_description     = __( 'Add a lightweight floating chat button to your site, connect it with a selected NXT Cloud Chat tenant profile, and track clicks without storing visitor data.', 'nxt-cloud-chat' );
+$nxtcc_floating_chat_active          = function_exists( 'is_plugin_active' ) && is_plugin_active( $nxtcc_floating_chat_plugin_basename );
+
+if ( function_exists( 'get_plugin_data' ) && file_exists( $nxtcc_floating_chat_plugin_file ) ) {
+	$nxtcc_floating_chat_data = get_plugin_data( $nxtcc_floating_chat_plugin_file, false, false );
+	if ( ! empty( $nxtcc_floating_chat_data['Name'] ) ) {
+		$nxtcc_floating_chat_name = (string) $nxtcc_floating_chat_data['Name'];
+	}
+	if ( ! empty( $nxtcc_floating_chat_data['Description'] ) ) {
+		$nxtcc_floating_chat_description = (string) $nxtcc_floating_chat_data['Description'];
+	}
+	if ( ! empty( $nxtcc_floating_chat_data['PluginURI'] ) ) {
+		$nxtcc_floating_chat_url = (string) $nxtcc_floating_chat_data['PluginURI'];
+	}
+}
+
+if ( $nxtcc_floating_chat_active ) {
+	$nxtcc_floating_chat_primary = array(
+		'label'    => __( 'Activated', 'nxt-cloud-chat' ),
+		'url'      => '',
+		'external' => false,
+		'disabled' => true,
+	);
+} elseif ( file_exists( $nxtcc_floating_chat_plugin_file ) ) {
+	$nxtcc_floating_chat_primary = array(
+		'label'    => __( 'Activate', 'nxt-cloud-chat' ),
+		'url'      => wp_nonce_url(
+			add_query_arg(
+				array(
+					'action' => 'activate',
+					'plugin' => $nxtcc_floating_chat_plugin_basename,
+				),
+				self_admin_url( 'plugins.php' )
+			),
+			'activate-plugin_' . $nxtcc_floating_chat_plugin_basename
+		),
+		'external' => false,
+	);
+} else {
+	$nxtcc_floating_chat_primary = array(
+		'label'    => __( 'Install', 'nxt-cloud-chat' ),
+		'url'      => wp_nonce_url(
+			add_query_arg(
+				array(
+					'action' => 'install-plugin',
+					'plugin' => 'nxt-floating-chat-widget',
+				),
+				self_admin_url( 'update.php' )
+			),
+			'install-plugin_nxt-floating-chat-widget'
+		),
+		'external' => false,
+	);
+}
+
 /**
  * Add-ons list.
  *
@@ -70,7 +133,7 @@ if ( '' === esc_url_raw( $nxtcc_product_url ) ) {
  * - secondary CTA { label, url }
  */
 $nxtcc_addons = array(
-	'nxtcc-pro' => array(
+	'nxtcc-pro'         => array(
 		'slug'        => 'nxtcc-pro',
 		'name'        => __( 'NXT Cloud Chat Pro', 'nxt-cloud-chat' ),
 		'badge'       => 'pro',
@@ -83,6 +146,20 @@ $nxtcc_addons = array(
 		'secondary'   => array(
 			'label' => __( 'Learn More', 'nxt-cloud-chat' ),
 			'url'   => $nxtcc_product_url,
+		),
+	),
+	'nxt-floating-chat' => array(
+		'slug'        => 'nxt-floating-chat',
+		'name'        => $nxtcc_floating_chat_name,
+		'badge'       => 'free',
+		'badge_label' => __( 'FREE', 'nxt-cloud-chat' ),
+		'icon_url'    => $nxtcc_floating_chat_icon_url,
+		'description' => $nxtcc_floating_chat_description,
+		'primary'     => $nxtcc_floating_chat_primary,
+		'secondary'   => array(
+			'label'    => __( 'Learn More', 'nxt-cloud-chat' ),
+			'url'      => $nxtcc_floating_chat_url,
+			'external' => true,
 		),
 	),
 );
@@ -136,8 +213,12 @@ $nxtcc_addons = array(
 	<div class="nxtcc-apps-grid">
 		<?php foreach ( $nxtcc_addons as $nxtcc_addon ) : ?>
 			<?php
-			$nxtcc_badge    = isset( $nxtcc_addon['badge'] ) ? (string) $nxtcc_addon['badge'] : '';
-			$nxtcc_icon_url = isset( $nxtcc_addon['icon_url'] ) ? (string) $nxtcc_addon['icon_url'] : '';
+			$nxtcc_badge       = isset( $nxtcc_addon['badge'] ) ? (string) $nxtcc_addon['badge'] : '';
+			$nxtcc_badge_label = isset( $nxtcc_addon['badge_label'] ) ? (string) $nxtcc_addon['badge_label'] : '';
+			$nxtcc_icon_url    = isset( $nxtcc_addon['icon_url'] ) ? (string) $nxtcc_addon['icon_url'] : '';
+			if ( '' === $nxtcc_badge_label && '' !== $nxtcc_badge ) {
+				$nxtcc_badge_label = ( 'pro' === $nxtcc_badge ) ? __( 'PRO', 'nxt-cloud-chat' ) : __( 'New', 'nxt-cloud-chat' );
+			}
 			?>
 			<article
 				class="nxtcc-app-card<?php echo ( 'pro' === $nxtcc_badge ) ? ' is-pro' : ''; ?>"
@@ -161,7 +242,7 @@ $nxtcc_addons = array(
 
 						<?php if ( $nxtcc_badge ) : ?>
 							<span class="nxtcc-app-badge nxtcc-app-badge-<?php echo esc_attr( $nxtcc_badge ); ?>">
-								<?php echo ( 'pro' === $nxtcc_badge ) ? esc_html__( 'PRO', 'nxt-cloud-chat' ) : esc_html__( 'New', 'nxt-cloud-chat' ); ?>
+								<?php echo esc_html( $nxtcc_badge_label ); ?>
 							</span>
 						<?php endif; ?>
 					</div>
@@ -190,25 +271,32 @@ $nxtcc_addons = array(
 
 					<div class="nxtcc-app-footer">
 						<?php if ( ! empty( $nxtcc_addon['secondary']['label'] ) && ! empty( $nxtcc_addon['secondary']['url'] ) ) : ?>
+							<?php $nxtcc_secondary_external = ! isset( $nxtcc_addon['secondary']['external'] ) || (bool) $nxtcc_addon['secondary']['external']; ?>
 							<a
 								href="<?php echo esc_url( $nxtcc_addon['secondary']['url'] ); ?>"
 								class="nxtcc-app-cta-secondary"
-								target="_blank"
-								rel="noopener noreferrer"
+								<?php echo $nxtcc_secondary_external ? 'target="_blank" rel="noopener noreferrer"' : ''; ?>
 							>
 								<?php echo esc_html( $nxtcc_addon['secondary']['label'] ); ?>
 							</a>
 						<?php endif; ?>
 
-						<?php if ( ! empty( $nxtcc_addon['primary']['label'] ) && ! empty( $nxtcc_addon['primary']['url'] ) ) : ?>
-							<a
-								href="<?php echo esc_url( $nxtcc_addon['primary']['url'] ); ?>"
-								class="button nxtcc-app-cta-primary"
-								target="_blank"
-								rel="noopener noreferrer"
-							>
-								<?php echo esc_html( $nxtcc_addon['primary']['label'] ); ?>
-							</a>
+						<?php if ( ! empty( $nxtcc_addon['primary']['label'] ) ) : ?>
+							<?php $nxtcc_primary_external = ! isset( $nxtcc_addon['primary']['external'] ) || (bool) $nxtcc_addon['primary']['external']; ?>
+							<?php $nxtcc_primary_disabled = ! empty( $nxtcc_addon['primary']['disabled'] ); ?>
+							<?php if ( $nxtcc_primary_disabled ) : ?>
+								<span class="button nxtcc-app-cta-primary is-disabled" aria-disabled="true">
+									<?php echo esc_html( $nxtcc_addon['primary']['label'] ); ?>
+								</span>
+							<?php elseif ( ! empty( $nxtcc_addon['primary']['url'] ) ) : ?>
+								<a
+									href="<?php echo esc_url( $nxtcc_addon['primary']['url'] ); ?>"
+									class="button nxtcc-app-cta-primary"
+									<?php echo $nxtcc_primary_external ? 'target="_blank" rel="noopener noreferrer"' : ''; ?>
+								>
+									<?php echo esc_html( $nxtcc_addon['primary']['label'] ); ?>
+								</a>
+							<?php endif; ?>
 						<?php endif; ?>
 					</div>
 				</div>

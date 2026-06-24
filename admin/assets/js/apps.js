@@ -1,7 +1,7 @@
 /**
  * Apps admin screen interactions.
  *
- * Handles app card clicks and opens the primary CTA in a new tab.
+ * Handles app card clicks and opens the primary CTA with its configured target.
  *
  * @package NXTCC
  */
@@ -26,7 +26,7 @@ jQuery(
 					if ( href && href !== '#' ) {
 						window.open(
 							href,
-							$primary.attr( 'target' ) || '_blank'
+							$primary.attr( 'target' ) || '_self'
 						);
 					}
 				}
@@ -34,6 +34,5 @@ jQuery(
 		);
 	}
 );
-
 
 

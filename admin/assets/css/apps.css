@@ -223,5 +223,12 @@
 	border-color: #075E54 !important;
 }
 
+.nxtcc-app-cta-primary.is-disabled {
+	background: #f3f4f6 !important;
+	border-color: #d1d5db !important;
+	color: #6b7280 !important;
+	cursor: default;
+	pointer-events: none;
+}
 
 

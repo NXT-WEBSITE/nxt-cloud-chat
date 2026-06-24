@@ -390,7 +390,7 @@ final class NXTCC_Helpers {
 		}
 
 		/*
-		 * Intentionally no error_log() call here to avoid noisy logs in production.
+		 * Intentionally avoid direct production logging here.
 		 * The return value is prepared so a caller may log it if desired.
 		 */
 	}

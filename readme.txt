@@ -1,10 +1,10 @@
-=== NXT Cloud Chat – CRM, Inbox & OTP Login ===
+=== NXT Cloud Chat - CRM, Inbox & OTP Login ===
 Contributors: nxtwebsite
 Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -406,6 +406,11 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 
 == Changelog ==
 
+= 1.1.2 =
+* Added an NXT Floating Chat add-on card to the Upgrade page alongside NXT Cloud Chat Pro.
+* Added install, activate, and activated states for the NXT Floating Chat card.
+* Updated the NXT Floating Chat card to use the dedicated add-on logo.
+
 = 1.1.1 =
 * Added credential-free public wrappers for listing configured tenant profiles and resolving an exact tenant profile.
 * Added `nxtcc_get_primary_display_phone_number()` for safely reading the primary connection's digits-only display phone number.
@@ -501,6 +506,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.1.2 =
+Adds the NXT Floating Chat add-on card to the Upgrade page and fixes the readme/plugin-header name match for Plugin Check.
 
 = 1.1.1 =
 Adds public connection-profile wrappers, primary display-phone access, runtime capability discovery, and refreshed connection caches.
