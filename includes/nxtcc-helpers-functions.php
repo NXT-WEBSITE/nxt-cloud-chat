@@ -121,6 +121,42 @@ if ( ! function_exists( 'nxtcc_get_tenant_api_credentials' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nxtcc_list_tenant_profiles' ) ) {
+	/**
+	 * List configured tenant profiles without exposing credentials.
+	 *
+	 * @return array<int, array<string, string>> Tenant profiles.
+	 */
+	function nxtcc_list_tenant_profiles(): array {
+		return NXTCC_Helpers::list_tenant_profiles();
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_tenant_profile' ) ) {
+	/**
+	 * Resolve one tenant profile without exposing credentials.
+	 *
+	 * @param string $user_mailid         Connection owner email.
+	 * @param string $business_account_id Business account ID.
+	 * @param string $phone_number_id     Phone number ID.
+	 * @return array<string, string>|false Tenant profile or false.
+	 */
+	function nxtcc_get_tenant_profile( string $user_mailid, string $business_account_id, string $phone_number_id ) {
+		return NXTCC_Helpers::get_tenant_profile( $user_mailid, $business_account_id, $phone_number_id );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_primary_display_phone_number' ) ) {
+	/**
+	 * Get the primary connection's display phone number.
+	 *
+	 * @return string Digits-only display phone number, or an empty string.
+	 */
+	function nxtcc_get_primary_display_phone_number(): string {
+		return NXTCC_Helpers::get_primary_display_phone_number();
+	}
+}
+
 if ( ! function_exists( 'nxtcc_sync_templates_from_meta' ) ) {
 	/**
 	 * Wrapper for syncing templates.

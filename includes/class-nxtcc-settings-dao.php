@@ -288,6 +288,13 @@ final class NXTCC_Settings_DAO {
 		$now_utc  = current_time( 'mysql', 1 );
 		$actor_id = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::current_user_id() : (int) get_current_user_id();
 		$existing = self::get_latest_for_user( $user_mailid );
+		$previous = is_object( $existing )
+			? array(
+				'user_mailid'         => (string) ( $existing->user_mailid ?? '' ),
+				'business_account_id' => (string) ( $existing->business_account_id ?? '' ),
+				'phone_number_id'     => (string) ( $existing->phone_number_id ?? '' ),
+			)
+			: array();
 
 		$data['updated_at'] = $now_utc;
 		if ( $actor_id > 0 ) {
@@ -314,6 +321,7 @@ final class NXTCC_Settings_DAO {
 		if ( $ok ) {
 			NXTCC_DB_AdminSettings::cache_delete( self::ck_latest_by_user( $user_mailid ) );
 			NXTCC_DB_AdminSettings::cache_delete( self::ck_latest_any() );
+			wp_cache_delete( 'latest_connection_row', 'nxtcc_user_settings' );
 
 			if ( ! empty( $data['business_account_id'] ) && ! empty( $data['phone_number_id'] ) ) {
 				NXTCC_DB_AdminSettings::cache_delete(
@@ -322,6 +330,22 @@ final class NXTCC_Settings_DAO {
 						(string) $data['business_account_id'],
 						(string) $data['phone_number_id']
 					)
+				);
+			}
+
+			if ( class_exists( 'NXTCC_DAO' ) ) {
+				if ( ! empty( $previous ) ) {
+					NXTCC_DAO::invalidate_tenant_connection_caches(
+						(string) $previous['user_mailid'],
+						(string) $previous['business_account_id'],
+						(string) $previous['phone_number_id']
+					);
+				}
+
+				NXTCC_DAO::invalidate_tenant_connection_caches(
+					$user_mailid,
+					(string) ( $data['business_account_id'] ?? '' ),
+					(string) ( $data['phone_number_id'] ?? '' )
 				);
 			}
 		}

@@ -1,7 +1,8 @@
 # NXT Cloud Chat Developer Integration Guide
 
-**Applies to:** NXT Cloud Chat 1.1.0 and NXT Cloud Chat Pro 1.1.0  
-**Audience:** WordPress plugin, theme, agency, integration, AI, and automation developers  
+**Applies to:** NXT Cloud Chat 1.1.2 and NXT Cloud Chat Pro 1.1.1
+
+**Audience:** WordPress plugin, theme, agency, integration, AI, and automation developers
 **Integration style:** Server-side PHP wrappers and WordPress hooks
 
 This guide explains how another WordPress plugin can integrate safely with NXT
@@ -10,7 +11,7 @@ sync contacts, update consent, assign CRM records, work with conversations,
 create deals, query segments, dispatch workflow events, create broadcasts, or
 read automation data.
 
-This Markdown guide is the easier-to-navigate companion for Free and Pro 1.1.0.
+This Markdown guide is the easier-to-navigate companion for Free 1.1.2 and Pro 1.1.1.
 
 ## Table of Contents
 
@@ -169,10 +170,10 @@ The main shape is:
 
 ```php
 array(
-	'contract_version' => '1.1.0',
+	'contract_version' => '1.1.1',
 	'plugin'           => array(
 		'slug'         => 'nxt-cloud-chat',
-		'version'      => '1.1.0',
+		'version'      => '1.1.1',
 		'distribution' => 'FREE',
 	),
 	'capabilities'     => array(),
@@ -207,6 +208,12 @@ plugin supports several NXT Cloud Chat versions.
 | Queries | `contact_query_reader`, `contact_query_provider_reader` |
 | Messaging | `session_reply_sender`, `background_session_reply_sender`, `message_history_reader`, `message_history_wamid_reader`, `latest_inbound_reader` |
 | Connection | `tenant_credentials_wrapper`, `meta_health_status_reader` |
+
+Tenant selector integrations can also discover `tenant_profile_list_reader`
+and `tenant_profile_reader`. These credential-free readers are intended for
+authorized server-side settings screens and stable runtime resolution.
+Use `primary_display_phone_number_reader` to discover the primary connection's
+public display-number wrapper.
 
 Additional published discovery keys:
 
@@ -264,6 +271,60 @@ analytics:
 - Webhook verification secrets
 - Unnecessary message or cart payloads
 
+### Tenant profile selectors
+
+Use the published profile wrappers when an authorized administrator must select
+one configured NXT Cloud Chat connection for another plugin:
+
+```php
+if (
+	function_exists( 'nxtcc_has_runtime_capability' )
+	&& nxtcc_has_runtime_capability( 'tenant_profile_list_reader' )
+	&& function_exists( 'nxtcc_list_tenant_profiles' )
+) {
+	$profiles = nxtcc_list_tenant_profiles();
+}
+```
+
+Each row contains only `user_mailid`, `business_account_id`,
+`phone_number_id`, and `phone_number`. No credentials are returned. The list is
+bounded to 500 configured profiles. Check a WordPress capability and nonce
+before displaying or saving a selection.
+
+Store the complete selected tenant tuple, not a copied phone number. Resolve it
+again at execution time so connection changes are reflected and deleted tenants
+fail closed:
+
+```php
+$profile = nxtcc_get_tenant_profile(
+	$tenant['user_mailid'],
+	$tenant['business_account_id'],
+	$tenant['phone_number_id']
+);
+```
+
+The resolver returns the same credential-free shape or `false`. A public-facing
+integration may use the resolved phone number server-side, but should not expose
+tenant owner emails or Meta identifiers in frontend markup.
+
+For a site that only needs the configured primary display number, use the
+dedicated wrapper instead of loading the full tenant selector:
+
+```php
+$display_phone_number = function_exists( 'nxtcc_get_primary_display_phone_number' )
+	? nxtcc_get_primary_display_phone_number()
+	: '';
+
+if ( '' !== $display_phone_number ) {
+	$contact_url = 'https://wa.me/' . rawurlencode( $display_phone_number );
+}
+```
+
+The wrapper returns digits only or an empty string when no valid primary
+connection is configured. It never returns access tokens, owner emails,
+business account IDs, or phone number IDs. Escape the final URL or HTML output
+for its destination context.
+
 ## Result and Error Conventions
 
 Most writers return an array containing `success`.
@@ -273,7 +334,7 @@ $result = nxtcc_update_contact_subscription_status( $args );
 
 if ( empty( $result['success'] ) ) {
 	$error = sanitize_key( (string) ( $result['error'] ?? 'unknown_error' ) );
-	error_log( 'NXTCC operation failed: ' . $error );
+	do_action( 'my_plugin_nxtcc_operation_failed', $error, $result );
 	return;
 }
 ```
@@ -657,7 +718,7 @@ $result = nxtcc_update_conversation(
 );
 ```
 
-Statuses: `unassigned`, `open`, `pending`, `snoozed`, `resolved`, `closed`.  
+Statuses: `unassigned`, `open`, `pending`, `snoozed`, `resolved`, `closed`.
 Priorities: `low`, `normal`, `high`, `urgent`.
 
 For `snoozed`, pass `snoozed_until` as a UTC `Y-m-d H:i:s` value.
@@ -2023,7 +2084,7 @@ wrapper through one endpoint.
 
 ## Free API Index
 
-These are the Free-owned stable runtime functions published in 1.1.0. Array
+These are the Free-owned stable runtime functions available through 1.1.2. Array
 writers are documented by domain in the examples above; always include the
 complete tenant tuple in tenant-scoped argument arrays.
 
@@ -2033,6 +2094,16 @@ complete tenant tuple in tenant-scoped argument arrays.
 nxtcc_get_runtime_contract(): array
 nxtcc_get_runtime_capabilities(): array
 nxtcc_has_runtime_capability( string $capability ): bool
+
+nxtcc_list_tenant_profiles(): array
+
+nxtcc_get_tenant_profile(
+	string $user_mailid,
+	string $business_account_id,
+	string $phone_number_id
+): array|false
+
+nxtcc_get_primary_display_phone_number(): string
 
 nxtcc_get_tenant_api_credentials(
 	string $user_mailid,

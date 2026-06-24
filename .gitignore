@@ -40,3 +40,7 @@ build/
 # =========================
 *.zip
 *.tar.gz
+plan.txt
+phpcs.xml
+home_page.txt
+new_home_page.txt

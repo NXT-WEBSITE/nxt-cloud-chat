@@ -34,10 +34,192 @@ final class NXTCC_DAO {
 	 */
 	public static function init(): void {
 		add_filter( 'nxtcc_db_get_tenant_creds', array( __CLASS__, 'get_tenant_creds' ), 10, 4 );
+		add_filter( 'nxtcc_db_list_tenant_profiles', array( __CLASS__, 'list_tenant_profiles' ), 10, 1 );
+		add_filter( 'nxtcc_db_get_tenant_profile', array( __CLASS__, 'get_tenant_profile' ), 10, 4 );
+		add_filter( 'nxtcc_db_get_primary_display_phone_number', array( __CLASS__, 'get_primary_display_phone_number' ), 10, 1 );
 		add_filter( 'nxtcc_db_get_templates', array( __CLASS__, 'get_templates' ), 10, 3 );
 		add_filter( 'nxtcc_db_get_template_names', array( __CLASS__, 'get_template_names' ), 10, 4 );
 		add_action( 'nxtcc_db_upsert_template', array( __CLASS__, 'upsert_template' ), 10, 1 );
 		add_action( 'nxtcc_db_delete_template', array( __CLASS__, 'delete_template' ), 10, 1 );
+	}
+
+	/**
+	 * Filter callback: List the latest configured tenant profiles.
+	 *
+	 * The result intentionally excludes credentials and is bounded for safe use
+	 * in integration selectors.
+	 *
+	 * @param mixed $profiles Filter passthrough.
+	 * @return array<int, array<string, string>> Tenant profiles.
+	 */
+	public static function list_tenant_profiles( $profiles ): array {
+		global $wpdb;
+		unset( $profiles );
+
+		$ckey = NXTCC_Helpers::ckey( 'dao:tenant:profiles', array( 'all' ) );
+		$hit  = wp_cache_get( $ckey, self::GROUP );
+		if ( false !== $hit ) {
+			return is_array( $hit ) ? $hit : array();
+		}
+
+		$rows = call_user_func(
+			array( $wpdb, 'get_results' ),
+			$wpdb->prepare(
+				'SELECT s.user_mailid, s.business_account_id, s.phone_number_id, s.phone_number
+				 FROM `' . $wpdb->prefix . 'nxtcc_user_settings` s
+				 INNER JOIN (
+					SELECT user_mailid, business_account_id, phone_number_id, MAX(id) AS latest_id
+					FROM `' . $wpdb->prefix . 'nxtcc_user_settings`
+					WHERE user_mailid <> %s AND business_account_id <> %s AND phone_number_id <> %s
+					GROUP BY user_mailid, business_account_id, phone_number_id
+				 ) latest ON latest.latest_id = s.id
+				 WHERE s.phone_number <> %s
+				 ORDER BY s.user_mailid ASC, s.id DESC
+				 LIMIT %d',
+				'',
+				'',
+				'',
+				'',
+				500
+			),
+			ARRAY_A
+		);
+
+		$out = array();
+		foreach ( is_array( $rows ) ? $rows : array() as $row ) {
+			$profile = self::sanitize_tenant_profile( $row );
+			if ( ! empty( $profile ) ) {
+				$out[] = $profile;
+			}
+		}
+
+		wp_cache_set( $ckey, $out, self::GROUP, 300 );
+		return $out;
+	}
+
+	/**
+	 * Filter callback: Resolve one exact tenant profile without credentials.
+	 *
+	 * @param mixed  $profile             Filter passthrough.
+	 * @param string $user_mailid         Connection owner email.
+	 * @param string $business_account_id Business account ID.
+	 * @param string $phone_number_id     Phone number ID.
+	 * @return array<string, string>|false Tenant profile or false.
+	 */
+	public static function get_tenant_profile( $profile, $user_mailid, $business_account_id, $phone_number_id ) {
+		global $wpdb;
+
+		$user_mailid         = sanitize_email( (string) $user_mailid );
+		$business_account_id = sanitize_text_field( (string) $business_account_id );
+		$phone_number_id     = sanitize_text_field( (string) $phone_number_id );
+		if ( '' === $user_mailid || '' === $business_account_id || '' === $phone_number_id ) {
+			return false;
+		}
+
+		$ckey = NXTCC_Helpers::ckey( 'dao:tenant:profile', array( $user_mailid, $business_account_id, $phone_number_id ) );
+		$hit  = wp_cache_get( $ckey, self::GROUP );
+		if ( false !== $hit ) {
+			return is_array( $hit ) ? $hit : false;
+		}
+
+		$row = call_user_func(
+			array( $wpdb, 'get_row' ),
+			$wpdb->prepare(
+				'SELECT user_mailid, business_account_id, phone_number_id, phone_number
+				 FROM `' . $wpdb->prefix . 'nxtcc_user_settings`
+				 WHERE user_mailid = %s AND business_account_id = %s AND phone_number_id = %s
+				 ORDER BY id DESC LIMIT 1',
+				$user_mailid,
+				$business_account_id,
+				$phone_number_id
+			),
+			ARRAY_A
+		);
+
+		$out = is_array( $row ) ? self::sanitize_tenant_profile( $row ) : array();
+		$out = ! empty( $out ) ? $out : false;
+		wp_cache_set( $ckey, $out, self::GROUP, 300 );
+		return $out;
+	}
+
+	/**
+	 * Filter callback: Get the primary connection's display phone number.
+	 *
+	 * @param mixed $phone_number Filter passthrough.
+	 * @return string Digits-only display phone number, or an empty string.
+	 */
+	public static function get_primary_display_phone_number( $phone_number ): string {
+		unset( $phone_number );
+
+		if ( ! class_exists( 'NXTCC_Settings_DAO' ) ) {
+			return '';
+		}
+
+		$row = null;
+		if ( class_exists( 'NXTCC_Access_Control' ) ) {
+			$tenant = NXTCC_Access_Control::get_primary_tenant_context();
+			if ( ! in_array( '', $tenant, true ) ) {
+				$row = NXTCC_Settings_DAO::get_row_for_tenant(
+					$tenant['user_mailid'],
+					$tenant['business_account_id'],
+					$tenant['phone_number_id']
+				);
+			}
+		}
+
+		// Existing installations may not have bootstrapped the primary tenant yet.
+		if ( ! is_object( $row ) ) {
+			$row = NXTCC_Settings_DAO::get_latest_any();
+		}
+
+		return is_object( $row )
+			? NXTCC_Helpers::sanitize_phone_number( $row->phone_number ?? '' )
+			: '';
+	}
+
+	/**
+	 * Invalidate connection caches after a tenant settings write.
+	 *
+	 * @param string $user_mailid         Connection owner email.
+	 * @param string $business_account_id Business account ID.
+	 * @param string $phone_number_id     Phone number ID.
+	 * @return void
+	 */
+	public static function invalidate_tenant_connection_caches( string $user_mailid, string $business_account_id, string $phone_number_id ): void {
+		wp_cache_delete( NXTCC_Helpers::ckey( 'dao:tenant:profiles', array( 'all' ) ), self::GROUP );
+
+		$user_mailid         = sanitize_email( $user_mailid );
+		$business_account_id = sanitize_text_field( $business_account_id );
+		$phone_number_id     = sanitize_text_field( $phone_number_id );
+		if ( '' === $user_mailid || '' === $business_account_id || '' === $phone_number_id ) {
+			return;
+		}
+
+		$tenant = array( $user_mailid, $business_account_id, $phone_number_id );
+		wp_cache_delete( NXTCC_Helpers::ckey( 'dao:tenant:profile', $tenant ), self::GROUP );
+		wp_cache_delete( NXTCC_Helpers::ckey( 'dao:tenant', $tenant ), self::GROUP );
+		wp_cache_delete( NXTCC_Helpers::ckey( 'tenant_creds', $tenant ), self::GROUP );
+	}
+
+	/**
+	 * Normalize one credential-free tenant profile.
+	 *
+	 * @param mixed $row Raw database row.
+	 * @return array<string, string> Profile or an empty array.
+	 */
+	private static function sanitize_tenant_profile( $row ): array {
+		if ( ! is_array( $row ) ) {
+			return array();
+		}
+
+		$profile = array(
+			'user_mailid'         => sanitize_email( (string) ( $row['user_mailid'] ?? '' ) ),
+			'business_account_id' => sanitize_text_field( (string) ( $row['business_account_id'] ?? '' ) ),
+			'phone_number_id'     => sanitize_text_field( (string) ( $row['phone_number_id'] ?? '' ) ),
+			'phone_number'        => NXTCC_Helpers::sanitize_phone_number( $row['phone_number'] ?? '' ),
+		);
+
+		return in_array( '', $profile, true ) ? array() : $profile;
 	}
 
 	/**
