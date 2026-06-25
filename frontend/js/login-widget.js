@@ -133,7 +133,11 @@ jQuery( function ( $ ) {
 	}
 
 	function getSafeRedirectTo() {
-		return sanitizeRedirectUrl( document.referrer || '' );
+		const params = new URLSearchParams( window.location.search );
+		const requested = params.get( 'nxtcc_return_to' ) || '';
+
+		return sanitizeRedirectUrl( requested ) ||
+			sanitizeRedirectUrl( document.referrer || '' );
 	}
 
 	function selectedCode() {

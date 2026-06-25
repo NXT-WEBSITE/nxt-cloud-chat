@@ -123,6 +123,13 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'meta_health_status_reader'           => function_exists( 'nxtcc_get_meta_health_status' ),
 				'latest_inbound_reader'               => function_exists( 'nxtcc_get_latest_inbound_at' ),
 				'verified_phone_reader'               => function_exists( 'nxtcc_get_latest_verified_phone_for_user' ),
+				'meta_flow_response_detector'         => function_exists( 'nxtcc_is_meta_flow_response' ),
+				'meta_interactive_message_parser'     => function_exists( 'nxtcc_parse_meta_interactive_message' ),
+				'history_interactive_message_reader'  => function_exists( 'nxtcc_get_interactive_message_from_history' ),
+				'history_flow_response_reader'        => function_exists( 'nxtcc_get_flow_response_from_history' ),
+				'template_preview_builder'            => function_exists( 'nxtcc_build_template_preview_snapshot' ),
+				'template_history_normalizer'         => function_exists( 'nxtcc_normalize_template_history_row' ),
+				'history_template_preview_reader'     => function_exists( 'nxtcc_get_template_preview_from_history' ),
 			),
 			'hooks'            => array(
 				'nxtcc_inbound_message_persisted',
@@ -171,6 +178,13 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'nxtcc_send_background_session_reply',
 				'nxtcc_get_message_history_after_id',
 				'nxtcc_get_message_history_id_by_wamid',
+				'nxtcc_is_meta_flow_response',
+				'nxtcc_parse_meta_interactive_message',
+				'nxtcc_get_interactive_message_from_history',
+				'nxtcc_get_flow_response_from_history',
+				'nxtcc_build_template_preview_snapshot',
+				'nxtcc_normalize_template_history_row',
+				'nxtcc_get_template_preview_from_history',
 				'nxtcc_get_contact_by_id',
 				'nxtcc_get_contact_by_phone',
 				'nxtcc_get_contact_by_wp_user',
@@ -319,7 +333,7 @@ if ( ! function_exists( 'nxtcc_get_message_history_after_id' ) ) {
 
 		$db          = NXTCC_DB::i();
 		$history_sql = nxtcc_runtime_quote_table_name( $db->t_message_history() );
-		$sql         = 'SELECT id, queue_id, user_mailid, business_account_id, phone_number_id, contact_id, display_phone_number, template_type, message_content, status, status_timestamps, meta_message_id, created_at, response_json
+		$sql         = 'SELECT id, queue_id, user_mailid, business_account_id, phone_number_id, contact_id, display_phone_number, template_name, template_type, template_data, message_content, status, status_timestamps, meta_message_id, created_at, response_json
 			FROM ' . $history_sql . '
 			WHERE id > %d
 			  AND status = %s

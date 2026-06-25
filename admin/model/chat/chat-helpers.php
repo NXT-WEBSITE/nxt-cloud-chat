@@ -37,6 +37,37 @@ if ( ! function_exists( 'nxtcc_chat_make_reply_payload' ) ) {
 			'media_id'   => '',
 		);
 
+		if ( function_exists( 'nxtcc_get_interactive_message_from_history' ) ) {
+			$interactive = nxtcc_get_interactive_message_from_history( $row );
+
+			if ( ! empty( $interactive ) ) {
+				$out['kind']             = sanitize_key( (string) ( $interactive['kind'] ?? 'interactive_reply' ) );
+				$out['interactive_type'] = sanitize_key( (string) ( $interactive['interactive_type'] ?? '' ) );
+				$out['text']             = sanitize_textarea_field( (string) ( $interactive['summary'] ?? '' ) );
+
+				if ( 'flow_response' === $out['kind'] ) {
+					$flow                = isset( $interactive['flow_response'] ) && is_array( $interactive['flow_response'] )
+						? $interactive['flow_response']
+						: array();
+					$out['title']        = sanitize_text_field( (string) ( $flow['title'] ?? '' ) );
+					$out['answer_count'] = absint( $flow['answer_count'] ?? 0 );
+				}
+
+				return $out;
+			}
+		}
+
+		if ( function_exists( 'nxtcc_get_template_preview_from_history' ) ) {
+			$template = nxtcc_get_template_preview_from_history( $row );
+
+			if ( ! empty( $template ) ) {
+				$out['kind']          = 'template_preview';
+				$out['text']          = sanitize_textarea_field( (string) ( $template['body'] ?? '' ) );
+				$out['template_name'] = sanitize_text_field( (string) ( $template['template_name'] ?? '' ) );
+				return $out;
+			}
+		}
+
 		$raw = isset( $row->message_content ) ? $row->message_content : '';
 
 		if ( is_string( $raw ) ) {
@@ -80,6 +111,81 @@ if ( ! function_exists( 'nxtcc_chat_make_reply_payload' ) ) {
 		}
 
 		return $out;
+	}
+}
+
+if ( ! function_exists( 'nxtcc_chat_get_template_preview_payload' ) ) {
+	/**
+	 * Build a browser-safe sent-template preview payload.
+	 *
+	 * @param object|array $message Message row.
+	 * @return array<string, mixed>
+	 */
+	function nxtcc_chat_get_template_preview_payload( $message ): array {
+		if ( ! function_exists( 'nxtcc_get_template_preview_from_history' ) ) {
+			return array();
+		}
+
+		$preview = nxtcc_get_template_preview_from_history( $message );
+		if ( empty( $preview ) ) {
+			return array();
+		}
+
+		return array(
+			'message_kind'     => 'template_preview',
+			'message_content'  => sanitize_textarea_field( (string) ( $preview['body'] ?? '' ) ),
+			'template_preview' => $preview,
+		);
+	}
+}
+
+if ( ! function_exists( 'nxtcc_chat_get_interactive_payload' ) ) {
+	/**
+	 * Build the browser-safe interactive payload for a history row.
+	 *
+	 * @param object|array $message Message row.
+	 * @return array<string, mixed>
+	 */
+	function nxtcc_chat_get_interactive_payload( $message ): array {
+		if ( ! function_exists( 'nxtcc_get_interactive_message_from_history' ) ) {
+			return array();
+		}
+
+		$interactive = nxtcc_get_interactive_message_from_history( $message );
+		if ( empty( $interactive ) ) {
+			return array();
+		}
+
+		$kind    = sanitize_key( (string) ( $interactive['kind'] ?? '' ) );
+		$payload = array(
+			'message_kind'     => $kind,
+			'interactive_type' => sanitize_key( (string) ( $interactive['interactive_type'] ?? '' ) ),
+			'message_content'  => sanitize_textarea_field( (string) ( $interactive['summary'] ?? '' ) ),
+		);
+
+		if ( 'flow_response' === $kind ) {
+			$flow = isset( $interactive['flow_response'] ) && is_array( $interactive['flow_response'] )
+				? $interactive['flow_response']
+				: array();
+
+			$payload['flow_response'] = array(
+				'title'        => sanitize_text_field( (string) ( $flow['title'] ?? __( 'Flow Response', 'nxt-cloud-chat' ) ) ),
+				'name'         => sanitize_text_field( (string) ( $flow['name'] ?? '' ) ),
+				'answer_count' => absint( $flow['answer_count'] ?? 0 ),
+				'fields'       => isset( $flow['fields'] ) && is_array( $flow['fields'] ) ? $flow['fields'] : array(),
+				'malformed'    => ! empty( $flow['malformed'] ),
+			);
+		} elseif ( 'interactive_reply' === $kind ) {
+			$reply = isset( $interactive['interactive_reply'] ) && is_array( $interactive['interactive_reply'] )
+				? $interactive['interactive_reply']
+				: array();
+
+			// The reply id is useful server-side but is not needed in the chat UI.
+			unset( $reply['id'] );
+			$payload['interactive_reply'] = $reply;
+		}
+
+		return $payload;
 	}
 }
 

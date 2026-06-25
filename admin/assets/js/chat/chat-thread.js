@@ -291,6 +291,263 @@ jQuery( function ( $ ) {
 		}
 
 		/**
+		 * Render a submitted Flow response as a compact field list.
+		 *
+		 * @param {Object} response Normalized Flow response.
+		 * @return {Element} Flow response card.
+		 */
+		function renderFlowResponseEl( response ) {
+			const data = response && 'object' === typeof response ? response : {};
+			const root = U.el( 'div', { class: 'nxtcc-flow-response' } );
+			const head = U.el( 'div', { class: 'nxtcc-flow-response-head' } );
+			const title = 'Flow Response';
+			const count = Number.parseInt( data.answer_count, 10 ) || 0;
+			const meta  = U.el( 'div', { class: 'nxtcc-flow-response-head-meta' } );
+
+			U.safeAppend( head, U.el( 'div', { class: 'nxtcc-flow-response-title' }, title ) );
+			U.safeAppend(
+				meta,
+				U.el( 'span', { class: 'nxtcc-flow-response-status' }, 'Received' )
+			);
+			U.safeAppend(
+				meta,
+				U.el(
+					'span',
+					{ class: 'nxtcc-flow-response-count' },
+					count + ( 1 === count ? ' answer' : ' answers' )
+				)
+			);
+			U.safeAppend( head, meta );
+			U.safeAppend( root, head );
+
+			const fields = Array.isArray( data.fields ) ? data.fields : [];
+			const body   = U.el( 'div', { class: 'nxtcc-flow-response-fields' } );
+
+			if ( fields.length ) {
+				fields.forEach( function ( field ) {
+					const row   = U.el( 'div', { class: 'nxtcc-flow-response-field' } );
+					const label = U.toStr( field && field.label ? field.label : 'Response' );
+					const value = U.toStr( field && field.value !== undefined ? field.value : '' );
+
+					U.safeAppend( row, U.el( 'div', { class: 'nxtcc-flow-response-label' }, label ) );
+					U.safeAppend(
+						row,
+						U.el( 'div', { class: 'nxtcc-flow-response-value' }, value || 'Not provided' )
+					);
+					U.safeAppend( body, row );
+				} );
+			} else {
+				U.safeAppend(
+					body,
+					U.el(
+						'div',
+						{ class: 'nxtcc-flow-response-empty' },
+						data.malformed ? 'Response details could not be read.' : 'No submitted answers.'
+					)
+				);
+			}
+
+			U.safeAppend( root, body );
+			return root;
+		}
+
+		/**
+		 * Render a button or list reply.
+		 *
+		 * @param {Object} reply Normalized interactive reply.
+		 * @return {Element} Interactive reply card.
+		 */
+		function renderInteractiveReplyEl( reply ) {
+			const data = reply && 'object' === typeof reply ? reply : {};
+			const type = U.toStr( data.type || '' );
+			const label = 'button_reply' === type ? 'Button response' : 'List response';
+			const root = U.el( 'div', { class: 'nxtcc-interactive-reply' } );
+
+			U.safeAppend( root, U.el( 'div', { class: 'nxtcc-interactive-reply-label' }, label ) );
+			U.safeAppend(
+				root,
+				U.el(
+					'div',
+					{ class: 'nxtcc-interactive-reply-title' },
+					U.toStr( data.title || 'Interactive response' )
+				)
+			);
+
+			if ( data.description ) {
+				U.safeAppend(
+					root,
+					U.el(
+						'div',
+						{ class: 'nxtcc-interactive-reply-description' },
+						U.toStr( data.description )
+					)
+				);
+			}
+
+			return root;
+		}
+
+		/**
+		 * Render WhatsApp-style inline formatting without HTML injection.
+		 *
+		 * @param {string} text Template text.
+		 * @return {DocumentFragment} Formatted fragment.
+		 */
+		function renderTemplateTextFragment( text ) {
+			const frag         = document.createDocumentFragment();
+			const lines        = U.toStr( text || '' ).split( '\n' );
+			const tokenPattern = /(\*[^*]+\*|_[^_]+_|~[^~]+~|`[^`]+`)/g;
+
+			lines.forEach( function ( line, lineIndex ) {
+				line.split( tokenPattern ).forEach( function ( token ) {
+					if ( ! token ) {
+						return;
+					}
+
+					let node = null;
+					if ( /^\*[^*]+\*$/.test( token ) ) {
+						node = U.el( 'strong', {}, token.slice( 1, -1 ) );
+					} else if ( /^_[^_]+_$/.test( token ) ) {
+						node = U.el( 'em', {}, token.slice( 1, -1 ) );
+					} else if ( /^~[^~]+~$/.test( token ) ) {
+						node = U.el( 'del', {}, token.slice( 1, -1 ) );
+					} else if ( /^`[^`]+`$/.test( token ) ) {
+						node = U.el( 'code', { class: 'nxtcc-template-preview-code' }, token.slice( 1, -1 ) );
+					} else {
+						node = document.createTextNode( token );
+					}
+
+					U.safeAppend( frag, node );
+				} );
+
+				if ( lineIndex < lines.length - 1 ) {
+					U.safeAppend( frag, document.createElement( 'br' ) );
+				}
+			} );
+
+			return frag;
+		}
+
+		/**
+		 * Render a sent template snapshot.
+		 *
+		 * @param {Object} preview Normalized template preview.
+		 * @return {Element} Template preview card.
+		 */
+		function renderTemplatePreviewEl( preview ) {
+			const data    = preview && 'object' === typeof preview ? preview : {};
+			const name    = U.toStr( data.template_name || '' );
+			const root    = U.el(
+				'div',
+				{
+					class: 'nxtcc-template-preview',
+					title: name ? 'Template: ' + name : 'Template message'
+				}
+			);
+			const header  = data.header && 'object' === typeof data.header ? data.header : {};
+			const type    = U.toStr( header.type || '' );
+			const body    = U.toStr( data.body || '' );
+			const footer  = U.toStr( data.footer || '' );
+			const buttons = Array.isArray( data.buttons ) ? data.buttons : [];
+
+			if ( 'image' === type && header.media_url ) {
+				U.safeAppend(
+					root,
+					U.el(
+						'img',
+						{
+							class: 'nxtcc-template-preview-media',
+							src: U.toStr( header.media_url ),
+							alt: 'Template image'
+						}
+					)
+				);
+			} else if ( 'video' === type && header.media_url ) {
+				const video = U.el( 'video', {
+					class: 'nxtcc-template-preview-media',
+					controls: 'controls',
+					preload: 'metadata'
+				} );
+				video.src   = U.toStr( header.media_url );
+				U.safeAppend( root, video );
+			} else if ( 'document' === type ) {
+				U.safeAppend(
+					root,
+					U.el(
+						'div',
+						{ class: 'nxtcc-template-preview-document' },
+						U.toStr( header.filename || 'Document' )
+					)
+				);
+			} else if ( header.text ) {
+				U.safeAppend(
+					root,
+					U.el( 'div', { class: 'nxtcc-template-preview-header' }, U.toStr( header.text ) )
+				);
+			}
+
+			const bodyWrap = U.el( 'div', { class: 'nxtcc-template-preview-body-wrap' } );
+			const bodyEl   = U.el( 'div', { class: 'nxtcc-template-preview-body is-collapsed' } );
+			const moreBtn  = U.el(
+				'button',
+				{
+					type: 'button',
+					class: 'nxtcc-template-preview-more',
+					'aria-expanded': 'false',
+					hidden: 'hidden'
+				},
+				'Read more...'
+			);
+
+			U.safeAppend( bodyEl, renderTemplateTextFragment( body ) );
+			U.safeAppend( bodyWrap, bodyEl );
+			U.safeAppend( bodyWrap, moreBtn );
+			U.safeAppend( root, bodyWrap );
+
+			moreBtn.addEventListener( 'click', function ( event ) {
+				event.preventDefault();
+				event.stopPropagation();
+
+				const collapsed = bodyEl.classList.toggle( 'is-collapsed' );
+				moreBtn.textContent = collapsed ? 'Read more...' : 'Read less';
+				moreBtn.setAttribute( 'aria-expanded', collapsed ? 'false' : 'true' );
+			} );
+
+			window.requestAnimationFrame( function () {
+				if ( bodyEl.scrollHeight <= bodyEl.clientHeight + 1 ) {
+					bodyEl.classList.remove( 'is-collapsed' );
+				} else {
+					moreBtn.hidden = false;
+				}
+			} );
+
+			if ( footer ) {
+				U.safeAppend( root, U.el( 'div', { class: 'nxtcc-template-preview-footer' }, footer ) );
+			}
+
+			if ( buttons.length ) {
+				const buttonWrap = U.el( 'div', { class: 'nxtcc-template-preview-buttons' } );
+
+				buttons.forEach( function ( button ) {
+					if ( ! button || ! button.text ) {
+						return;
+					}
+					U.safeAppend(
+						buttonWrap,
+						U.el(
+							'div',
+							{ class: 'nxtcc-template-preview-button' },
+							U.toStr( button.text )
+						)
+					);
+				} );
+				U.safeAppend( root, buttonWrap );
+			}
+
+			return root;
+		}
+
+		/**
 		 * Render quoted-reply header for a message bubble.
 		 *
 		 * @param {Object} rep Reply payload.
@@ -323,11 +580,20 @@ jQuery( function ( $ ) {
 
 			let line = '';
 			if ( 'text' === kind ) {
-				line = U.toStr( rep.text || '' ).slice( 0, 140 );
+				line = U.toStr( rep.text || '' );
+			} else if ( 'flow_response' === kind || 'interactive_reply' === kind ) {
+				line = U.toStr( rep.text || rep.title || 'Interactive response' );
+			} else if ( 'template_preview' === kind ) {
+				line = U.toStr( rep.text || rep.template_name || 'Template message' );
 			} else {
 				const label = '[' + kind.charAt( 0 ).toUpperCase() + kind.slice( 1 ) + '] ';
 				const meta  = U.toStr( rep.caption || rep.filename || '' );
-				line        = ( label + meta ).slice( 0, 140 );
+				line        = label + meta;
+			}
+
+			const characters = Array.from( line );
+			if ( characters.length > 50 ) {
+				line = characters.slice( 0, 49 ).join( '' ) + '\u2026';
 			}
 
 			textEl.textContent = line || '(media)';
@@ -391,7 +657,15 @@ jQuery( function ( $ ) {
 				}
 			}
 
-			U.safeAppend( bubble, renderMessageFragment( msg.message_content ) );
+			if ( 'flow_response' === msg.message_kind ) {
+				U.safeAppend( bubble, renderFlowResponseEl( msg.flow_response ) );
+			} else if ( 'interactive_reply' === msg.message_kind ) {
+				U.safeAppend( bubble, renderInteractiveReplyEl( msg.interactive_reply ) );
+			} else if ( 'template_preview' === msg.message_kind ) {
+				U.safeAppend( bubble, renderTemplatePreviewEl( msg.template_preview ) );
+			} else {
+				U.safeAppend( bubble, renderMessageFragment( msg.message_content ) );
+			}
 
 			const meta = U.el( 'div', { class: 'nxtcc-msg-meta' } );
 

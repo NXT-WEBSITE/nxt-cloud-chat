@@ -414,6 +414,10 @@ jQuery( function ( $ ) {
 			'checked',
 			Boolean( parseInt( POLICY.redirect_wp_login || 0, 10 ) )
 		);
+		$( '#nxtcc-require-verified-cod' ).prop(
+			'checked',
+			Boolean( parseInt( POLICY.require_verified_cod || 0, 10 ) )
+		);
 
 		toggleForceControls();
 		toggleGraceDays();
@@ -896,6 +900,9 @@ jQuery( function ( $ ) {
 			redirect_wp_login:
 				! $( '#nxtcc-show-password' ).is( ':checked' ) &&
 				$( '#nxtcc-redirect-wp-login' ).is( ':checked' )
+					? 1
+					: 0,
+			require_verified_cod: $( '#nxtcc-require-verified-cod' ).is( ':checked' )
 					? 1
 					: 0,
 

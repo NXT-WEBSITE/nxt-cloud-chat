@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat - CRM, Inbox & OTP Login
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       WhatsApp CRM for WordPress with real-time messaging, customer communication, contact management, sales pipelines, team management, automated notifications, and WhatsApp OTP login.
- * Version:           1.1.2
+ * Version:           1.1.3
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.1.2' );
+	define( 'NXTCC_VERSION', '1.1.3' );
 }
 
 /**
@@ -271,6 +271,10 @@ require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-contact-query.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-access-policy.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-conversations.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-analytics.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-interactive-messages.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-interactive-functions.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-template-preview.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-template-preview-functions.php';
 
 require_once NXTCC_PLUGIN_DIR . '/includes/pages-dao/class-nxtcc-pages-dao.php';
 
@@ -302,10 +306,10 @@ require_once NXTCC_PLUGIN_DIR . 'admin/model/class-nxtcc-dashboard-handler.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/queue-runner.php';
 
 require_once NXTCC_PLUGIN_DIR . 'includes/force-migration/options.php';
-require_once NXTCC_PLUGIN_DIR . 'includes/force-migration/policy.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/force-migration/gate.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/force-migration/page-default.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/force-migration/banner.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/force-migration/woocommerce-cod.php';
 
 require_once NXTCC_PLUGIN_DIR . 'includes/profile-whatsapp-field.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/auth-otp-pruner.php';
@@ -1299,14 +1303,15 @@ add_action(
 		}
 
 		$policy = array(
-			'show_password'     => ! empty( $raw_policy['show_password'] ) ? 1 : 0,
-			'force_migrate'     => ! empty( $raw_policy['force_migrate'] ) ? 1 : 0,
-			'force_path'        => $force_path,
-			'grace_enabled'     => ! empty( $raw_policy['grace_enabled'] ) ? 1 : 0,
-			'grace_days'        => isset( $raw_policy['grace_days'] ) ? max( 1, min( 90, (int) $raw_policy['grace_days'] ) ) : 7,
-			'redirect_wp_login' => ! empty( $raw_policy['redirect_wp_login'] ) ? 1 : 0,
-			'widget_branding'   => isset( $raw_policy['widget_branding'] ) ? ( ! empty( $raw_policy['widget_branding'] ) ? 1 : 0 ) : 1,
-			'allowed_countries' => array_values(
+			'show_password'        => ! empty( $raw_policy['show_password'] ) ? 1 : 0,
+			'force_migrate'        => ! empty( $raw_policy['force_migrate'] ) ? 1 : 0,
+			'force_path'           => $force_path,
+			'grace_enabled'        => ! empty( $raw_policy['grace_enabled'] ) ? 1 : 0,
+			'grace_days'           => isset( $raw_policy['grace_days'] ) ? max( 1, min( 90, (int) $raw_policy['grace_days'] ) ) : 7,
+			'redirect_wp_login'    => ! empty( $raw_policy['redirect_wp_login'] ) ? 1 : 0,
+			'require_verified_cod' => ! empty( $raw_policy['require_verified_cod'] ) ? 1 : 0,
+			'widget_branding'      => isset( $raw_policy['widget_branding'] ) ? ( ! empty( $raw_policy['widget_branding'] ) ? 1 : 0 ) : 1,
+			'allowed_countries'    => array_values(
 				array_unique(
 					array_map(
 						'strtoupper',

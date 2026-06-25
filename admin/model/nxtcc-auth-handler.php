@@ -528,7 +528,8 @@ function nxtcc_ajax_generate_default_template(): void {
  *   auth_template, default_tenant_key, login page target, login button
  *   placement/appearance.
  * - Policy: show_password, force_migrate, grace_enabled, widget_branding,
- *   force_path, grace_days, redirect_wp_login, allowed_countries.
+ *   force_path, grace_days, redirect_wp_login, require_verified_cod,
+ *   allowed_countries.
  *
  * @return void
  */
@@ -611,11 +612,12 @@ function nxtcc_ajax_save_auth_options(): void {
 		$policy = array();
 	}
 
-	$policy['show_password']     = ! empty( $_POST['show_password'] ) ? 1 : 0;
-	$policy['force_migrate']     = ! empty( $_POST['force_migrate'] ) ? 1 : 0;
-	$policy['grace_enabled']     = ! empty( $_POST['grace_enabled'] ) ? 1 : 0;
-	$policy['redirect_wp_login'] = ! empty( $_POST['redirect_wp_login'] ) ? 1 : 0;
-	$policy['widget_branding']   = ! empty( $_POST['widget_branding'] ) ? 1 : 0;
+	$policy['show_password']        = ! empty( $_POST['show_password'] ) ? 1 : 0;
+	$policy['force_migrate']        = ! empty( $_POST['force_migrate'] ) ? 1 : 0;
+	$policy['grace_enabled']        = ! empty( $_POST['grace_enabled'] ) ? 1 : 0;
+	$policy['redirect_wp_login']    = ! empty( $_POST['redirect_wp_login'] ) ? 1 : 0;
+	$policy['require_verified_cod'] = ! empty( $_POST['require_verified_cod'] ) ? 1 : 0;
+	$policy['widget_branding']      = ! empty( $_POST['widget_branding'] ) ? 1 : 0;
 
 	$force_path = isset( $_POST['force_path'] ) ? sanitize_text_field( wp_unslash( (string) $_POST['force_path'] ) ) : '/nxt-whatsapp-login/';
 	$force_path = trim( $force_path );
@@ -665,8 +667,6 @@ function nxtcc_ajax_save_auth_options(): void {
 
 	if ( function_exists( 'nxtcc_fm_update_options' ) ) {
 		nxtcc_fm_update_options( $policy );
-	} elseif ( function_exists( 'nxtcc_fm_update_options' ) ) {
-			nxtcc_fm_update_options( $policy );
 	} else {
 		update_option( 'nxtcc_auth_policy', $policy );
 	}
@@ -676,14 +676,15 @@ function nxtcc_ajax_save_auth_options(): void {
 			'saved'  => true,
 			'opts'   => nxtcc_auth_get_ui_options(),
 			'policy' => array(
-				'show_password'     => (int) ( $policy['show_password'] ?? 1 ),
-				'force_migrate'     => (int) ( $policy['force_migrate'] ?? 0 ),
-				'force_path'        => (string) ( $policy['force_path'] ?? '/nxt-whatsapp-login/' ),
-				'grace_enabled'     => (int) ( $policy['grace_enabled'] ?? 0 ),
-				'grace_days'        => (int) ( $policy['grace_days'] ?? 7 ),
-				'redirect_wp_login' => (int) ( $policy['redirect_wp_login'] ?? 0 ),
-				'widget_branding'   => isset( $policy['widget_branding'] ) ? (int) $policy['widget_branding'] : 1,
-				'allowed_countries' => array_map( 'strval', (array) ( $policy['allowed_countries'] ?? array() ) ),
+				'show_password'        => (int) ( $policy['show_password'] ?? 1 ),
+				'force_migrate'        => (int) ( $policy['force_migrate'] ?? 0 ),
+				'force_path'           => (string) ( $policy['force_path'] ?? '/nxt-whatsapp-login/' ),
+				'grace_enabled'        => (int) ( $policy['grace_enabled'] ?? 0 ),
+				'grace_days'           => (int) ( $policy['grace_days'] ?? 7 ),
+				'redirect_wp_login'    => (int) ( $policy['redirect_wp_login'] ?? 0 ),
+				'require_verified_cod' => (int) ( $policy['require_verified_cod'] ?? 0 ),
+				'widget_branding'      => isset( $policy['widget_branding'] ) ? (int) $policy['widget_branding'] : 1,
+				'allowed_countries'    => array_map( 'strval', (array) ( $policy['allowed_countries'] ?? array() ) ),
 			),
 		)
 	);

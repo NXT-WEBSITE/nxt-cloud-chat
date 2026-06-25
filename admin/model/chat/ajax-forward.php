@@ -147,8 +147,26 @@ function nxtcc_forward_parse_message_content( $raw ): array {
 			$obj = json_decode( $trim, true );
 
 			if ( is_array( $obj ) && ! empty( $obj['kind'] ) ) {
-				$kind  = (string) $obj['kind'];
-				$media = $obj;
+				$kind = sanitize_key( (string) $obj['kind'] );
+
+				if ( 'template_preview' === $kind ) {
+					$parts = array_filter(
+						array(
+							isset( $obj['header']['text'] ) ? sanitize_textarea_field( (string) $obj['header']['text'] ) : '',
+							isset( $obj['body'] ) ? sanitize_textarea_field( (string) $obj['body'] ) : '',
+							isset( $obj['footer'] ) ? sanitize_textarea_field( (string) $obj['footer'] ) : '',
+						)
+					);
+					$kind  = 'text';
+					$text  = implode( "\n\n", $parts );
+					$media = null;
+				} elseif ( in_array( $kind, array( 'flow_response', 'interactive_reply' ), true ) ) {
+					$kind  = 'text';
+					$text  = isset( $obj['text'] ) ? sanitize_textarea_field( (string) $obj['text'] ) : __( 'Interactive response', 'nxt-cloud-chat' );
+					$media = null;
+				} else {
+					$media = $obj;
+				}
 			} elseif ( is_array( $obj ) && isset( $obj['text'] ) ) {
 				$kind = 'text';
 				$text = (string) $obj['text'];
