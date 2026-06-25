@@ -106,12 +106,13 @@ if ( ! is_array( $nxtcc_policy ) ) {
 $nxtcc_auth_defaults = nxtcc_auth_get_ui_defaults();
 $nxtcc_opts          = nxtcc_auth_get_ui_options();
 
-$nxtcc_show_password     = isset( $nxtcc_policy['show_password'] ) ? (int) $nxtcc_policy['show_password'] : 1;
-$nxtcc_force_migrate     = ! empty( $nxtcc_policy['force_migrate'] );
-$nxtcc_grace_enabled     = ! empty( $nxtcc_policy['grace_enabled'] );
-$nxtcc_grace_days_raw    = isset( $nxtcc_policy['grace_days'] ) ? (int) $nxtcc_policy['grace_days'] : 7;
-$nxtcc_grace_days        = max( 1, min( 90, $nxtcc_grace_days_raw ) );
-$nxtcc_redirect_wp_login = ! empty( $nxtcc_policy['redirect_wp_login'] ) ? 1 : 0;
+$nxtcc_show_password        = isset( $nxtcc_policy['show_password'] ) ? (int) $nxtcc_policy['show_password'] : 1;
+$nxtcc_force_migrate        = ! empty( $nxtcc_policy['force_migrate'] );
+$nxtcc_grace_enabled        = ! empty( $nxtcc_policy['grace_enabled'] );
+$nxtcc_grace_days_raw       = isset( $nxtcc_policy['grace_days'] ) ? (int) $nxtcc_policy['grace_days'] : 7;
+$nxtcc_grace_days           = max( 1, min( 90, $nxtcc_grace_days_raw ) );
+$nxtcc_redirect_wp_login    = ! empty( $nxtcc_policy['redirect_wp_login'] ) ? 1 : 0;
+$nxtcc_require_verified_cod = ! empty( $nxtcc_policy['require_verified_cod'] ) ? 1 : 0;
 
 $nxtcc_force_path_in  = ( isset( $nxtcc_policy['force_path'] ) && is_string( $nxtcc_policy['force_path'] ) ) ? $nxtcc_policy['force_path'] : '';
 $nxtcc_force_path     = '' !== $nxtcc_force_path_in ? $nxtcc_force_path_in : '/nxt-whatsapp-login/';
@@ -344,6 +345,17 @@ $nxtcc_woo_active = class_exists( 'WooCommerce' );
 						<p id="nxtcc-redirect-help" class="nxtcc-help">
 							<?php esc_html_e( 'Available only when "Try another sign-in method" is disabled.', 'nxt-cloud-chat' ); ?>
 						</p>
+
+						<label class="nxtcc-check nxtcc-check-block">
+							<input
+								type="checkbox"
+								id="nxtcc-require-verified-cod"
+								<?php checked( $nxtcc_require_verified_cod, 1 ); ?>
+							/>
+							<span>
+								<?php esc_html_e( 'Require verified login for WooCommerce COD orders', 'nxt-cloud-chat' ); ?>
+							</span>
+						</label>
 
 						<div class="nxtcc-field" style="margin-top:.9rem;margin-bottom:0;">
 							<label class="nxtcc-label">

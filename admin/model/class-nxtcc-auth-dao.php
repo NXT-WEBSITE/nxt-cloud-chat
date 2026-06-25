@@ -357,6 +357,10 @@ final class NXTCC_Auth_DAO {
 	public static function history_insert( array $data ): void {
 		global $wpdb;
 
+		if ( function_exists( 'nxtcc_normalize_template_history_row' ) ) {
+			$data = nxtcc_normalize_template_history_row( $data );
+		}
+
 		$fmt_map = array(
 			'user_mailid'         => '%s',
 			'business_account_id' => '%s',

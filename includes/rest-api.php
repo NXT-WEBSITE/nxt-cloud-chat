@@ -352,6 +352,8 @@ function nxtcc_rest_verify_webhook_signature( WP_REST_Request $request, string $
  *
  * - Text messages: store plain text body.
  * - Media messages: store JSON payload (kind/caption/filename/link/media_id/text).
+ * - Interactive replies: store a normalized JSON payload for buttons, lists,
+ *   and Flow submissions.
  * - Template messages:
  *   - If header has IMAGE/VIDEO/DOCUMENT, store JSON payload with kind + media_id/link.
  *   - Otherwise store a readable fallback: "Template: <name> (<lang>)".
@@ -407,6 +409,21 @@ function nxtcc_build_inbound_message_content_from_webhook( array $m ): string {
 		}
 
 		return 'Reaction';
+	}
+
+	// -------------------------
+	// Interactive replies
+	// -------------------------
+	if ( 'interactive' === $type && function_exists( 'nxtcc_parse_meta_interactive_message' ) ) {
+		$interactive = nxtcc_parse_meta_interactive_message( $m );
+		$content     = isset( $interactive['content'] ) && is_array( $interactive['content'] )
+			? $interactive['content']
+			: array();
+
+		if ( ! empty( $content ) ) {
+			$json = wp_json_encode( $content, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+			return is_string( $json ) ? $json : '';
+		}
 	}
 
 	// -------------------------
@@ -1088,8 +1105,23 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 					continue;
 				}
 
-				// Build message_content for ALL supported types (text/media/template).
-				$message_content = nxtcc_build_inbound_message_content_from_webhook( $m );
+				// Build display content for all supported inbound message types.
+				$interactive        = function_exists( 'nxtcc_parse_meta_interactive_message' )
+					? nxtcc_parse_meta_interactive_message( $m )
+					: array();
+				$message_content    = nxtcc_build_inbound_message_content_from_webhook( $m );
+				$message_event_text = ! empty( $interactive['summary'] )
+					? sanitize_textarea_field( (string) $interactive['summary'] )
+					: $message_content;
+				$interactive_type   = isset( $interactive['interactive_type'] )
+					? sanitize_key( (string) $interactive['interactive_type'] )
+					: '';
+				$flow_response      = isset( $interactive['flow_response'] ) && is_array( $interactive['flow_response'] )
+					? $interactive['flow_response']
+					: array();
+				$flow_answer_count  = isset( $flow_response['answer_count'] )
+					? absint( $flow_response['answer_count'] )
+					: 0;
 
 				// Sender name (if provided by Meta).
 				$sender_name = isset( $name_by_wa[ $from_wa ] ) ? (string) $name_by_wa[ $from_wa ] : '';
@@ -1217,7 +1249,10 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 							'meta_message_id'      => $meta_message_id,
 							'from_wa_id'           => $from_wa,
 							'message_type'         => $type,
-							'message_content'      => $message_content,
+							'message_content'      => $message_event_text,
+							'interactive_type'     => $interactive_type,
+							'flow_response'        => $flow_response,
+							'flow_answer_count'    => $flow_answer_count,
 							'reply_to_wamid'       => $reply_to_wamid,
 							'reply_to_history_id'  => $reply_to_history_id,
 							'received_at'          => $received_at,

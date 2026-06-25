@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -406,6 +406,13 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 
 == Changelog ==
 
+= 1.1.3 =
+* Added normalized inbound button, list, and Flow response rendering in the Chat Window.
+* Added sent-template message previews in chat without requiring the Pro plugin at display time.
+* Added optional verified-login enforcement for Cash on Delivery checkout orders.
+* Hardened public template and interactive-message payload parsing with bounded JSON and scalar-only parameter handling.
+* Removed an unused duplicate authentication policy controller.
+
 = 1.1.2 =
 * Added an NXT Floating Chat add-on card to the Upgrade page alongside NXT Cloud Chat Pro.
 * Added install, activate, and activated states for the NXT Floating Chat card.
@@ -506,6 +513,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.1.3 =
+Adds inbound interactive responses, standalone template previews, optional COD login verification, and payload hardening.
 
 = 1.1.2 =
 Adds the NXT Floating Chat add-on card to the Upgrade page and fixes the readme/plugin-header name match for Plugin Check.

@@ -192,7 +192,43 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 			$chat->last_msg_time = get_date_from_gmt( $chat->last_msg_time, 'Y-m-d h:i A' );
 		}
 
-		$preview = isset( $chat->message_preview ) ? $chat->message_preview : '';
+		$preview             = isset( $chat->message_preview ) ? $chat->message_preview : '';
+		$interactive_preview = function_exists( 'nxtcc_chat_get_interactive_payload' )
+			? nxtcc_chat_get_interactive_payload(
+				array(
+					'message_content' => $chat->message_preview,
+					'response_json'   => isset( $chat->message_preview_json ) ? $chat->message_preview_json : '',
+				)
+			)
+			: array();
+		$template_preview    = function_exists( 'nxtcc_chat_get_template_preview_payload' )
+			? nxtcc_chat_get_template_preview_payload(
+				array(
+					'user_mailid'         => isset( $chat->message_preview_user_mailid ) ? $chat->message_preview_user_mailid : '',
+					'business_account_id' => isset( $chat->message_preview_business_account_id ) ? $chat->message_preview_business_account_id : '',
+					'phone_number_id'     => isset( $chat->message_preview_phone_number_id ) ? $chat->message_preview_phone_number_id : '',
+					'template_name'       => isset( $chat->message_preview_template_name ) ? $chat->message_preview_template_name : '',
+					'template_type'       => isset( $chat->message_preview_template_type ) ? $chat->message_preview_template_type : '',
+					'template_data'       => isset( $chat->message_preview_template_data ) ? $chat->message_preview_template_data : '',
+					'message_content'     => $chat->message_preview,
+				)
+			)
+			: array();
+
+		if ( ! empty( $interactive_preview['message_content'] ) ) {
+			$preview               = (string) $interactive_preview['message_content'];
+			$chat->message_preview = $preview;
+		} elseif ( ! empty( $template_preview['template_preview'] ) ) {
+			$template_name         = sanitize_text_field( (string) ( $template_preview['template_preview']['template_name'] ?? '' ) );
+			$chat->message_preview = '' !== $template_name
+				? sprintf(
+					/* translators: %s: Template name. */
+					__( 'Template: %s', 'nxt-cloud-chat' ),
+					$template_name
+				)
+				: __( 'Template message', 'nxt-cloud-chat' );
+			$preview = $chat->message_preview;
+		}
 
 		if ( ( ! is_string( $preview ) || '' === trim( $preview ) ) && function_exists( 'nxtcc_chat_extract_message_content_from_message' ) ) {
 			$preview               = nxtcc_chat_extract_message_content_from_message(
@@ -234,6 +270,16 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 				}
 			}
 		}
+
+		unset(
+			$chat->message_preview_json,
+			$chat->message_preview_template_name,
+			$chat->message_preview_template_type,
+			$chat->message_preview_template_data,
+			$chat->message_preview_user_mailid,
+			$chat->message_preview_business_account_id,
+			$chat->message_preview_phone_number_id
+		);
 	}
 	unset( $chat );
 
@@ -412,6 +458,26 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 				$msg->reply_to_wamid = $derived_reply_wamid;
 			}
 		}
+
+		if ( function_exists( 'nxtcc_chat_get_interactive_payload' ) ) {
+			$interactive_payload = nxtcc_chat_get_interactive_payload( $msg );
+
+			if ( ! empty( $interactive_payload ) ) {
+				foreach ( $interactive_payload as $key => $value ) {
+					$msg->{$key} = $value;
+				}
+			}
+		}
+
+		if ( empty( $msg->message_kind ) && function_exists( 'nxtcc_chat_get_template_preview_payload' ) ) {
+			$template_payload = nxtcc_chat_get_template_preview_payload( $msg );
+
+			if ( ! empty( $template_payload ) ) {
+				foreach ( $template_payload as $key => $value ) {
+					$msg->{$key} = $value;
+				}
+			}
+		}
 	}
 	unset( $msg );
 
@@ -482,6 +548,7 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 		}
 
 		unset( $msg->response_json );
+		unset( $msg->template_data, $msg->template_type, $msg->template_name );
 	}
 	unset( $msg );
 

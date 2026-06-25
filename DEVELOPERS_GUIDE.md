@@ -1,6 +1,6 @@
 # NXT Cloud Chat Developer Integration Guide
 
-**Applies to:** NXT Cloud Chat 1.1.2 and NXT Cloud Chat Pro 1.1.1
+**Applies to:** NXT Cloud Chat 1.1.3 and NXT Cloud Chat Pro 1.1.2
 
 **Audience:** WordPress plugin, theme, agency, integration, AI, and automation developers
 **Integration style:** Server-side PHP wrappers and WordPress hooks
@@ -11,7 +11,7 @@ sync contacts, update consent, assign CRM records, work with conversations,
 create deals, query segments, dispatch workflow events, create broadcasts, or
 read automation data.
 
-This Markdown guide is the easier-to-navigate companion for Free 1.1.2 and Pro 1.1.1.
+This Markdown guide is the easier-to-navigate companion for Free 1.1.3 and Pro 1.1.2.
 
 ## Table of Contents
 
@@ -170,10 +170,10 @@ The main shape is:
 
 ```php
 array(
-	'contract_version' => '1.1.1',
+	'contract_version' => '1.1.3',
 	'plugin'           => array(
 		'slug'         => 'nxt-cloud-chat',
-		'version'      => '1.1.1',
+		'version'      => '1.1.3',
 		'distribution' => 'FREE',
 	),
 	'capabilities'     => array(),
@@ -182,6 +182,10 @@ array(
 	'extensions'       => array(), // Present when extensions publish themselves.
 );
 ```
+
+`contract_version` currently follows the installed plugin release. Discover
+capabilities and wrappers by key instead of comparing this value as though it
+were an independent API version.
 
 Check one feature:
 
@@ -206,7 +210,7 @@ plugin supports several NXT Cloud Chat versions.
 | CRM | `crm_activity_reader`, `crm_activity_writer`, `lifecycle_stage_reader`, `lifecycle_stage_writer`, `crm_task_reader`, `crm_task_writer`, `crm_saved_view_reader`, `crm_saved_view_writer` |
 | Sales | `crm_pipeline_reader`, `crm_pipeline_writer`, `crm_deal_reader`, `crm_deal_writer`, `crm_deal_lifecycle_writer`, `crm_deal_access_checker`, `crm_analytics_reader` |
 | Queries | `contact_query_reader`, `contact_query_provider_reader` |
-| Messaging | `session_reply_sender`, `background_session_reply_sender`, `message_history_reader`, `message_history_wamid_reader`, `latest_inbound_reader` |
+| Messaging | `session_reply_sender`, `background_session_reply_sender`, `message_history_reader`, `message_history_wamid_reader`, `latest_inbound_reader`, `meta_flow_response_detector`, `meta_interactive_message_parser`, `history_interactive_message_reader`, `history_flow_response_reader`, `template_preview_builder`, `template_history_normalizer`, `history_template_preview_reader` |
 | Connection | `tenant_credentials_wrapper`, `meta_health_status_reader` |
 
 Tenant selector integrations can also discover `tenant_profile_list_reader`
@@ -1514,6 +1518,129 @@ $history_id = nxtcc_get_message_history_id_by_wamid( $wamid );
 Prefer hooks for real-time work. Use the cursor reader for recovery, migration,
 or integrations that cannot listen to hooks. The reader is capped at 500 rows.
 
+### Interactive replies and Flow responses
+
+Meta sends Flow submissions as an inbound `interactive` message whose subtype is
+`nfm_reply`. NXT Cloud Chat keeps Meta's original message object in the history
+row's `response_json` column and exposes a normalized, display-safe response
+through public wrappers.
+
+Payload reference: [Meta Interactive messages webhook object](https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/interactive).
+
+Detect and parse the message directly inside a webhook-aware integration:
+
+```php
+if ( nxtcc_is_meta_flow_response( $meta_message ) ) {
+	$interactive = nxtcc_parse_meta_interactive_message( $meta_message );
+	$flow        = $interactive['flow_response'] ?? array();
+
+	foreach ( $flow['fields'] ?? array() as $field ) {
+		$key   = sanitize_text_field( (string) ( $field['key'] ?? '' ) );
+		$value = sanitize_textarea_field( (string) ( $field['value'] ?? '' ) );
+
+		// Map approved Flow fields into your tenant-scoped record.
+	}
+}
+```
+
+Read a normalized response from a row returned by the message-history wrapper:
+
+```php
+$rows = nxtcc_get_message_history_after_id(
+	$after_id,
+	100,
+	array_merge( $tenant, array( 'status' => 'received' ) )
+);
+
+foreach ( $rows as $row ) {
+	$flow = nxtcc_get_flow_response_from_history( $row );
+	if ( empty( $flow ) ) {
+		continue;
+	}
+
+	$title        = sanitize_text_field( (string) ( $flow['title'] ?? '' ) );
+	$answer_count = absint( $flow['answer_count'] ?? 0 );
+}
+```
+
+`nxtcc_parse_meta_interactive_message()` also normalizes `button_reply` and
+`list_reply`. `nxtcc_get_interactive_message_from_history()` handles new records
+and older records whose normalized `message_content` is empty by rebuilding the
+response from `response_json`.
+
+Normalized Flow fields contain `key`, `label`, `value`, and `type`. Nested values
+are flattened into dotted keys. Scalar lists are converted to readable comma-
+separated values. The normalized server-side Flow response also preserves Meta's
+`body` value for integrations, while the chat UI always labels the inbound card
+as `Flow Response` with a `Received` status. The transport-only `flow_token` is
+intentionally excluded.
+
+Parsing is bounded for safe integration use: encoded history content is limited
+to 131,072 bytes, Flow response JSON to 65,536 bytes, nesting to eight levels,
+and normalized output to 100 fields and 32,768 total value characters. Values
+are individually truncated. Treat a missing or empty normalized result as an
+unsupported, malformed, or oversized payload rather than retrying it unchanged.
+
+Do not expose the raw `response_json` value in public pages or browser scripts.
+
+### Sent-template preview snapshots
+
+NXT Cloud Chat stores a normalized send-time preview in `message_content` for
+outbound template messages. The snapshot contains only display data: resolved
+header text or media metadata, resolved body text, footer text, button labels,
+template name, type, and language. It does not replace `template_data`, so queue
+workers and reporting integrations retain their existing parameter data.
+
+Build a snapshot directly:
+
+```php
+$snapshot = nxtcc_build_template_preview_snapshot(
+	array(
+		'template_name' => 'order_ready',
+		'template_type' => 'UTILITY',
+		'language'      => 'en_US',
+		'components'    => $meta_template_components,
+		'params'        => array(
+			'body_var_1' => 'A-1042',
+			'body_var_2' => 'Ready for pickup',
+		),
+	)
+);
+```
+
+Normalize a history row before inserting it:
+
+```php
+$history_row = nxtcc_normalize_template_history_row(
+	array(
+		'user_mailid'         => $tenant['user_mailid'],
+		'business_account_id' => $tenant['business_account_id'],
+		'phone_number_id'     => $tenant['phone_number_id'],
+		'template_name'       => 'order_ready',
+		'template_type'       => 'UTILITY',
+		'template_data'       => wp_json_encode( $resolved_params ),
+		'message_content'     => 'Template: order_ready',
+	)
+);
+```
+
+For message-history rows, use:
+
+```php
+$preview = nxtcc_get_template_preview_from_history( $history_row );
+```
+
+New sends retain their snapshot even if Pro is deactivated or the source
+template is later edited or deleted. Older rows using `Template: name` are
+reconstructed from the locally cached template definition when available and
+otherwise retain the readable fallback.
+
+Template preview JSON is limited to 131,072 bytes. Parameters are flat,
+scalar display values; arrays are reduced to at most 100 scalar items and nested
+objects are ignored. Body preview text is bounded to 12,000 characters. Keep
+operational IDs and structured business data in the original integration
+context rather than encoding them into a display snapshot.
+
 ### Meta health status
 
 ```php
@@ -1566,6 +1693,21 @@ function example_receive_nxtcc_message( array $event ): void {
 	// Create or update a tenant-scoped record in your plugin.
 }
 ```
+
+For an `nfm_reply`, `message_content` is a short readable summary rather than
+the submitted JSON. Structured values are available in:
+
+```php
+$interactive_type  = sanitize_key( (string) ( $event['interactive_type'] ?? '' ) );
+$flow_response     = is_array( $event['flow_response'] ?? null )
+	? $event['flow_response']
+	: array();
+$flow_answer_count = absint( $event['flow_answer_count'] ?? 0 );
+```
+
+This prevents keyword or message-text automation from matching hidden transport
+fields. Validate the expected Flow and field keys before writing values into
+your plugin.
 
 ### Message status hook
 
@@ -1889,8 +2031,9 @@ $result = nxtcc_pro_dispatch_workflow_event(
 
 The optional `occurred_at` must be a UTC `Y-m-d H:i:s` value. Payloads are
 sanitized, limited to six nesting levels and 200 entries per array level, and
-must encode to no more than 65,535 bytes. Never put access tokens, OTP values,
-or unnecessary personal data in workflow payloads.
+must encode to no more than 65,535 bytes. Individual string values are limited
+to 12,000 characters. Never put access tokens, OTP values, or unnecessary
+personal data in workflow payloads.
 
 Use a stable dedupe key for the same source event. New integrations should use
 `nxtcc_pro_dispatch_workflow_event()`; `nxtcc_pro_emit_workflow_event()` performs
@@ -2084,7 +2227,7 @@ wrapper through one endpoint.
 
 ## Free API Index
 
-These are the Free-owned stable runtime functions available through 1.1.2. Array
+These are the Free-owned stable runtime functions available through 1.1.3. Array
 writers are documented by domain in the examples above; always include the
 complete tenant tuple in tenant-scoped argument arrays.
 
@@ -2121,6 +2264,14 @@ nxtcc_get_message_history_after_id(
 ): array
 
 nxtcc_get_message_history_id_by_wamid( string $wamid ): int
+
+nxtcc_is_meta_flow_response( array $message ): bool
+nxtcc_parse_meta_interactive_message( array $message ): array
+nxtcc_get_interactive_message_from_history( object|array $history ): array
+nxtcc_get_flow_response_from_history( object|array $history ): array
+nxtcc_build_template_preview_snapshot( array $args ): array
+nxtcc_normalize_template_history_row( array $data ): array
+nxtcc_get_template_preview_from_history( object|array $history ): array
 
 nxtcc_get_latest_inbound_at(
 	int $contact_id,
