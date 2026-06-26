@@ -163,6 +163,29 @@ if ( ! function_exists( 'nxtcc_chat_resolve_tenant_context' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nxtcc_chat_requested_ticket_id' ) ) {
+	/**
+	 * Validate an optional ticket context from the chat composer.
+	 *
+	 * @param int   $contact_id      Contact ID.
+	 * @param array $tenant          Tenant tuple.
+	 * @param int   $conversation_id Requested ticket ID.
+	 * @return int
+	 */
+	function nxtcc_chat_requested_ticket_id( int $contact_id, array $tenant, int $conversation_id ): int {
+		if ( $conversation_id <= 0 ) {
+			return 0;
+		}
+
+		$conversation = NXTCC_Conversations::instance()->get( $conversation_id, $tenant );
+		if ( ! is_array( $conversation ) || absint( $conversation['contact_id'] ?? 0 ) !== $contact_id ) {
+			wp_send_json_error( array( 'message' => 'Invalid ticket context.' ), 400 );
+		}
+
+		return $conversation_id;
+	}
+}
+
 /**
  * AJAX handler: Send a text message (optionally with reply context).
  *
@@ -192,6 +215,11 @@ function nxtcc_ajax_send_message(): void {
 	}
 
 	$contact_id = isset( $_POST['contact_id'] ) ? absint( wp_unslash( $_POST['contact_id'] ) ) : 0;
+	$tenant     = array(
+		'user_mailid'         => $user_mailid,
+		'business_account_id' => $business_account_id,
+		'phone_number_id'     => $phone_number_id,
+	);
 
 	$message_content = '';
 	if ( isset( $_POST['message_content'] ) ) {
@@ -205,6 +233,8 @@ function nxtcc_ajax_send_message(): void {
 		wp_send_json_error( array( 'message' => 'Missing contact id.' ), 400 );
 	}
 	nxtcc_chat_require_contact_access( $contact_id, true );
+	$requested_ticket_id = isset( $_POST['conversation_id'] ) ? absint( wp_unslash( $_POST['conversation_id'] ) ) : 0;
+	$conversation_id     = nxtcc_chat_requested_ticket_id( $contact_id, $tenant, $requested_ticket_id );
 
 	if ( '' === trim( (string) $message_content ) ) {
 		wp_send_json_error( array( 'message' => 'Empty message.' ), 400 );
@@ -224,6 +254,7 @@ function nxtcc_ajax_send_message(): void {
 		'business_account_id' => $business_account_id,
 		'phone_number_id'     => $phone_number_id,
 		'contact_id'          => $contact_id,
+		'conversation_id'     => $conversation_id,
 		'message_content'     => $message_content,
 		'origin_type'         => 'chat_user',
 		'origin_user_id'      => (int) get_current_user_id(),
@@ -244,7 +275,11 @@ function nxtcc_ajax_send_message(): void {
 	$result = nxtcc_send_message_immediately( $args );
 
 	if ( is_array( $result ) && ! empty( $result['success'] ) ) {
-		NXTCC_Conversations::instance()->touch_outbound( $contact_id, NXTCC_Access_Control::get_current_tenant_context() );
+		if ( $conversation_id > 0 ) {
+			NXTCC_Conversations::instance()->touch_outbound_for_ticket( $conversation_id, $tenant );
+		} else {
+			NXTCC_Conversations::instance()->touch_outbound( $contact_id, $tenant );
+		}
 		wp_send_json_success(
 			array(
 				'message' => 'Message sent.',
@@ -289,10 +324,17 @@ function nxtcc_ajax_send_media(): void {
 	}
 
 	$contact_id = isset( $_POST['contact_id'] ) ? absint( wp_unslash( $_POST['contact_id'] ) ) : 0;
+	$tenant     = array(
+		'user_mailid'         => $user_mailid,
+		'business_account_id' => $business_account_id,
+		'phone_number_id'     => $phone_number_id,
+	);
 	if ( 0 === $contact_id ) {
 		wp_send_json_error( array( 'message' => 'Missing contact id.' ), 400 );
 	}
 	nxtcc_chat_require_contact_access( $contact_id, true );
+	$requested_ticket_id = isset( $_POST['conversation_id'] ) ? absint( wp_unslash( $_POST['conversation_id'] ) ) : 0;
+	$conversation_id     = nxtcc_chat_requested_ticket_id( $contact_id, $tenant, $requested_ticket_id );
 
 	if ( ! isset( $_FILES['file'] ) || ! is_array( $_FILES['file'] ) ) {
 		wp_send_json_error( array( 'message' => 'Missing file.' ), 400 );
@@ -414,6 +456,7 @@ function nxtcc_ajax_send_media(): void {
 		'business_account_id' => $business_account_id,
 		'phone_number_id'     => $phone_number_id,
 		'contact_id'          => $contact_id,
+		'conversation_id'     => $conversation_id,
 		'kind'                => $kind,
 		'link'                => $url,
 		'local_path'          => wp_normalize_path( (string) $path ),
@@ -439,7 +482,11 @@ function nxtcc_ajax_send_media(): void {
 	$result = nxtcc_send_media_link_immediately( $payload );
 
 	if ( is_array( $result ) && ! empty( $result['success'] ) ) {
-		NXTCC_Conversations::instance()->touch_outbound( $contact_id, NXTCC_Access_Control::get_current_tenant_context() );
+		if ( $conversation_id > 0 ) {
+			NXTCC_Conversations::instance()->touch_outbound_for_ticket( $conversation_id, $tenant );
+		} else {
+			NXTCC_Conversations::instance()->touch_outbound( $contact_id, $tenant );
+		}
 		wp_send_json_success(
 			array(
 				'message' => 'Media sent.',
@@ -484,6 +531,11 @@ function nxtcc_ajax_send_media_by_url(): void {
 	}
 
 	$contact_id = isset( $_POST['contact_id'] ) ? absint( wp_unslash( $_POST['contact_id'] ) ) : 0;
+	$tenant     = array(
+		'user_mailid'         => $user_mailid,
+		'business_account_id' => $business_account_id,
+		'phone_number_id'     => $phone_number_id,
+	);
 
 	$kind_raw = isset( $_POST['kind'] ) ? sanitize_text_field( wp_unslash( $_POST['kind'] ) ) : '';
 	$kind     = nxtcc_chat_normalize_kind( $kind_raw );
@@ -508,12 +560,15 @@ function nxtcc_ajax_send_media_by_url(): void {
 		wp_send_json_error( array( 'message' => 'Missing contact or media URL.' ), 400 );
 	}
 	nxtcc_chat_require_contact_access( $contact_id, true );
+	$requested_ticket_id = isset( $_POST['conversation_id'] ) ? absint( wp_unslash( $_POST['conversation_id'] ) ) : 0;
+	$conversation_id     = nxtcc_chat_requested_ticket_id( $contact_id, $tenant, $requested_ticket_id );
 
 	$args = array(
 		'user_mailid'         => $user_mailid,
 		'business_account_id' => $business_account_id,
 		'phone_number_id'     => $phone_number_id,
 		'contact_id'          => $contact_id,
+		'conversation_id'     => $conversation_id,
 		'kind'                => $kind,
 		'link'                => $link,
 		'filename'            => $filename,
@@ -537,7 +592,11 @@ function nxtcc_ajax_send_media_by_url(): void {
 	$result = nxtcc_send_media_link_immediately( $args );
 
 	if ( is_array( $result ) && ! empty( $result['success'] ) ) {
-		NXTCC_Conversations::instance()->touch_outbound( $contact_id, NXTCC_Access_Control::get_current_tenant_context() );
+		if ( $conversation_id > 0 ) {
+			NXTCC_Conversations::instance()->touch_outbound_for_ticket( $conversation_id, $tenant );
+		} else {
+			NXTCC_Conversations::instance()->touch_outbound( $contact_id, $tenant );
+		}
 		wp_send_json_success(
 			array(
 				'message' => 'Media sent.',

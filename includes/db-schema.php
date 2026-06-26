@@ -61,6 +61,153 @@ if ( ! function_exists( 'nxtcc_schema_current_prefix' ) ) {
 	}
 }
 
+if ( ! function_exists( 'nxtcc_upgrade_ticket_schema' ) ) {
+	/**
+	 * Apply ticket schema changes that dbDelta cannot express safely.
+	 *
+	 * @param string $prefix Current site table prefix.
+	 * @return void
+	 */
+	function nxtcc_upgrade_ticket_schema( string $prefix ): void {
+		global $wpdb;
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time schema migration queries must inspect and update the database directly.
+		$conversations = $prefix . 'nxtcc_conversations';
+		$state         = $prefix . 'nxtcc_contact_ticket_state';
+		$categories    = $prefix . 'nxtcc_ticket_categories';
+		$legacy_index  = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM information_schema.statistics
+				WHERE table_schema = DATABASE() AND table_name = %s AND index_name = %s',
+				$conversations,
+				'uq_conversation_contact_channel'
+			)
+		);
+
+		if ( $legacy_index > 0 ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.SchemaChange -- Required one-time index migration.
+			$wpdb->query( $wpdb->prepare( 'ALTER TABLE %i DROP INDEX `uq_conversation_contact_channel`', $conversations ) );
+		}
+
+		$state_exists = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM information_schema.tables
+				WHERE table_schema = DATABASE() AND table_name = %s',
+				$state
+			)
+		);
+		if ( $state_exists <= 0 ) {
+			return;
+		}
+		$categories_exists = (int) $wpdb->get_var(
+			$wpdb->prepare(
+				'SELECT COUNT(*) FROM information_schema.tables
+				WHERE table_schema = DATABASE() AND table_name = %s',
+				$categories
+			)
+		);
+
+		/*
+		 * Existing installations had one ticket per contact. Seeding the latest
+		 * ticket keeps inbound routing stable after enabling multiple tickets.
+		 */
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time schema migration.
+		$wpdb->query(
+			$wpdb->prepare(
+				'INSERT IGNORE INTO %i
+				(user_mailid, business_account_id, phone_number_id, contact_id, channel, current_conversation_id, updated_by, updated_at)
+			SELECT c.user_mailid, c.business_account_id, c.phone_number_id, c.contact_id, c.channel, c.id, NULL, c.updated_at
+			FROM %i c
+			INNER JOIN (
+				SELECT user_mailid, business_account_id, phone_number_id, contact_id, channel, MAX(id) AS current_id
+				FROM %i
+				GROUP BY user_mailid, business_account_id, phone_number_id, contact_id, channel
+			) latest ON latest.current_id = c.id',
+				$state,
+				$conversations,
+				$conversations
+			)
+		);
+
+		if ( $categories_exists <= 0 ) {
+			return;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time schema migration.
+		$legacy_categories = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT DISTINCT user_mailid, business_account_id, phone_number_id, category
+				FROM %i
+				WHERE category_id IS NULL AND category IS NOT NULL AND category <> ''
+				ORDER BY category ASC LIMIT 5000",
+				$conversations
+			),
+			ARRAY_A
+		);
+		foreach ( is_array( $legacy_categories ) ? $legacy_categories : array() as $legacy_category ) {
+			$name = sanitize_text_field( (string) ( $legacy_category['category'] ?? '' ) );
+			$slug = substr( sanitize_title( $name ), 0, 100 );
+			if ( '' === $name || '' === $slug ) {
+				continue;
+			}
+
+			$tenant_values = array(
+				sanitize_email( (string) ( $legacy_category['user_mailid'] ?? '' ) ),
+				sanitize_text_field( (string) ( $legacy_category['business_account_id'] ?? '' ) ),
+				sanitize_text_field( (string) ( $legacy_category['phone_number_id'] ?? '' ) ),
+			);
+			$now           = current_time( 'mysql', true );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time schema migration.
+			$wpdb->query(
+				$wpdb->prepare(
+					'INSERT IGNORE INTO %i
+					(user_mailid, business_account_id, phone_number_id, category_name, category_slug, color, is_active, created_at, updated_at)
+					VALUES (%s, %s, %s, %s, %s, %s, 1, %s, %s)',
+					$categories,
+					$tenant_values[0],
+					$tenant_values[1],
+					$tenant_values[2],
+					$name,
+					$slug,
+					'#2271b1',
+					$now,
+					$now
+				)
+			);
+			$category_id = absint(
+				$wpdb->get_var(
+					$wpdb->prepare(
+						'SELECT id FROM %i
+						WHERE user_mailid = %s AND business_account_id = %s AND phone_number_id = %s AND category_slug = %s LIMIT 1',
+						$categories,
+						$tenant_values[0],
+						$tenant_values[1],
+						$tenant_values[2],
+						$slug
+					)
+				)
+			);
+			if ( $category_id <= 0 ) {
+				continue;
+			}
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- One-time schema migration.
+			$wpdb->query(
+				$wpdb->prepare(
+					'UPDATE %i SET category_id = %d
+					WHERE user_mailid = %s AND business_account_id = %s AND phone_number_id = %s AND category = %s AND category_id IS NULL',
+					$conversations,
+					$category_id,
+					$tenant_values[0],
+					$tenant_values[1],
+					$tenant_values[2],
+					$name
+				)
+			);
+		}
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+	}
+}
+
 if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 	/**
 	 * Install / update NXTCC DB schema (Free).
@@ -539,8 +686,10 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   contact_id BIGINT(20) UNSIGNED NOT NULL,
   ticket_number VARCHAR(40) NOT NULL,
   subject VARCHAR(191) NULL,
+  category_id BIGINT(20) UNSIGNED NULL,
   category VARCHAR(100) NULL,
   channel VARCHAR(30) NOT NULL DEFAULT 'whatsapp',
+  origin_source VARCHAR(30) NOT NULL DEFAULT 'system',
   status VARCHAR(20) NOT NULL DEFAULT 'unassigned',
   priority VARCHAR(20) NOT NULL DEFAULT 'normal',
   assigned_user_id BIGINT(20) UNSIGNED NULL,
@@ -562,15 +711,51 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_conversation_contact_channel (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, channel),
   UNIQUE KEY uq_conversation_ticket (ticket_number),
+  KEY idx_conversation_contact_channel (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, channel, updated_at),
   KEY idx_conversation_tenant_status (user_mailid(100), business_account_id(100), phone_number_id(100), status, updated_at),
   KEY idx_conversation_tenant_updated (user_mailid(100), business_account_id(100), phone_number_id(100), updated_at),
   KEY idx_conversation_assigned_user (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_user_id, status),
   KEY idx_conversation_assigned_role (user_mailid(100), business_account_id(100), phone_number_id(100), assigned_role, status),
   KEY idx_conversation_contact (contact_id),
+  KEY idx_conversation_origin (origin_source, created_at),
   KEY idx_conversation_priority (priority, status),
   KEY idx_conversation_sla (first_response_due_at, resolution_due_at)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_ticket_categories (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  category_name VARCHAR(100) NOT NULL,
+  category_slug VARCHAR(100) NOT NULL,
+  color VARCHAR(7) NOT NULL DEFAULT '#2271b1',
+  description VARCHAR(500) NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_by BIGINT(20) UNSIGNED NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_ticket_category_slug (user_mailid(100), business_account_id(100), phone_number_id(100), category_slug),
+  KEY idx_ticket_category_active (user_mailid(100), business_account_id(100), phone_number_id(100), is_active, category_name)
+) {$nxtcc_charset_collate};",
+
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_contact_ticket_state (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  channel VARCHAR(30) NOT NULL DEFAULT 'whatsapp',
+  current_conversation_id BIGINT(20) UNSIGNED NOT NULL,
+  updated_by BIGINT(20) UNSIGNED NULL,
+  updated_at DATETIME NOT NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_contact_ticket_state (user_mailid(100), business_account_id(100), phone_number_id(100), contact_id, channel),
+  KEY idx_contact_ticket_current (current_conversation_id),
+  KEY idx_contact_ticket_updated (user_mailid(100), business_account_id(100), phone_number_id(100), updated_at)
 ) {$nxtcc_charset_collate};",
 
 			"CREATE TABLE {$nxtcc_prefix}nxtcc_conversation_assignment_history (
@@ -621,6 +806,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   phone_number_id VARCHAR(255) NOT NULL,
   group_ids TEXT NULL,
   contact_id BIGINT(20) UNSIGNED NULL,
+  conversation_id BIGINT(20) UNSIGNED NULL,
   display_phone_number VARCHAR(30) NULL,
   template_id VARCHAR(255) NULL,
   template_name VARCHAR(255) NULL,
@@ -663,6 +849,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   KEY idx_reply_wamid (reply_to_wamid),
   KEY idx_reply_history_id (reply_to_history_id),
   KEY idx_contact_id (contact_id),
+  KEY idx_conversation_thread (conversation_id, id),
   KEY idx_thread_poll (contact_id, user_mailid(191), phone_number_id(191), deleted_at, id)
 ) {$nxtcc_charset_collate};",
 
@@ -802,6 +989,8 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
 		foreach ( $nxtcc_tables as $nxtcc_sql ) {
 			nxtcc_run_dbdelta_sql( $nxtcc_sql );
 		}
+
+		nxtcc_upgrade_ticket_schema( $nxtcc_prefix );
 
 		if ( function_exists( 'nxtcc_schema_signature' ) ) {
 			update_option( 'nxtcc_schema_signature', nxtcc_schema_signature(), false );

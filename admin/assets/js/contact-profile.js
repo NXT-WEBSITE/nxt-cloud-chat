@@ -388,6 +388,9 @@ jQuery( function ( $ ) {
 			if ( key ) {
 				item.dataset.activityId = key;
 				seenActivityIds[ key ] = true;
+				item.tabIndex = 0;
+				item.setAttribute( 'role', 'button' );
+				item.setAttribute( 'title', text.open_in_chat || 'Show this activity in the chat timeline' );
 			}
 			marker.className    = 'nxtcc-profile-activity-marker';
 			content.className   = 'nxtcc-profile-activity-content';
@@ -616,6 +619,20 @@ jQuery( function ( $ ) {
 	}
 
 	root.addEventListener( 'click', function ( event ) {
+		const activityItem = event.target.closest( '[data-activity-id]' );
+		if ( activityItem && root.contains( activityItem ) ) {
+			document.dispatchEvent(
+				new CustomEvent( 'nxtcc:focus-chat-activity', {
+					detail: {
+						activityId: parseInt( activityItem.dataset.activityId, 10 ) || 0,
+						contactId: activeContact,
+					},
+				} )
+			);
+			closeProfile();
+			return;
+		}
+
 		const taskButton = event.target.closest( '[data-task-id]' );
 		if ( taskButton && root.contains( taskButton ) ) {
 			requestMutation( 'nxtcc_contact_profile_update_task', {
@@ -630,6 +647,14 @@ jQuery( function ( $ ) {
 			requestMutation( 'nxtcc_contact_profile_merge_duplicate', {
 				source_contact_id: mergeButton.dataset.mergeContactId,
 			} );
+		}
+	} );
+
+	root.addEventListener( 'keydown', function ( event ) {
+		const activityItem = event.target.closest( '[data-activity-id]' );
+		if ( activityItem && ( 'Enter' === event.key || ' ' === event.key ) ) {
+			event.preventDefault();
+			activityItem.click();
 		}
 	} );
 

@@ -1,6 +1,6 @@
 # NXT Cloud Chat Developer Integration Guide
 
-**Applies to:** NXT Cloud Chat 1.1.3 and NXT Cloud Chat Pro 1.1.2
+**Applies to:** The current NXT Cloud Chat Free and Pro runtime contracts
 
 **Audience:** WordPress plugin, theme, agency, integration, AI, and automation developers
 **Integration style:** Server-side PHP wrappers and WordPress hooks
@@ -11,7 +11,8 @@ sync contacts, update consent, assign CRM records, work with conversations,
 create deals, query segments, dispatch workflow events, create broadcasts, or
 read automation data.
 
-This Markdown guide is the easier-to-navigate companion for Free 1.1.3 and Pro 1.1.2.
+This Markdown guide is the canonical integration reference for the shared Free
+runtime and licensed Pro extensions.
 
 ## Table of Contents
 
@@ -206,8 +207,8 @@ plugin supports several NXT Cloud Chat versions.
 | Tags and groups | `contact_group_reader`, `contact_tag_reader`, `contact_tag_writer`, `contact_tag_definition_writer` |
 | Assignment | `contact_assignment_reader`, `contact_assignment_writer`, `contact_auto_assignment_writer`, `contact_assignment_targets_reader` |
 | Access | `crm_access_policy_reader`, `crm_contact_access_checker`, `access_teams_reader` |
-| Conversations | `conversation_reader`, `conversation_writer`, `conversation_assignment_writer`, `conversation_auto_assignment_writer`, `conversation_note_writer`, `conversation_watcher_writer`, `conversation_activity_reader`, `conversation_access_checker` |
-| CRM | `crm_activity_reader`, `crm_activity_writer`, `lifecycle_stage_reader`, `lifecycle_stage_writer`, `crm_task_reader`, `crm_task_writer`, `crm_saved_view_reader`, `crm_saved_view_writer` |
+| Conversations and tickets | `conversation_reader`, `conversation_create_writer`, `conversation_writer`, `conversation_assignment_writer`, `conversation_auto_assignment_writer`, `conversation_note_writer`, `conversation_watcher_writer`, `conversation_activity_reader`, `conversation_access_checker`, `ticket_reader`, `ticket_create_writer`, `ticket_list_reader`, `ticket_explicit_create_writer`, `ticket_current_writer`, `ticket_category_reader`, `ticket_category_writer`, `ticket_writer`, `ticket_assignment_writer`, `ticket_auto_assignment_writer`, `ticket_note_writer`, `ticket_activity_writer`, `ticket_explicit_activity_writer`, `ticket_access_checker` |
+| CRM | `crm_activity_reader`, `crm_activity_writer`, `chat_timeline_reader`, `token_catalog_reader`, `token_context_builder`, `lifecycle_stage_reader`, `lifecycle_stage_writer`, `crm_task_reader`, `crm_task_writer`, `crm_saved_view_reader`, `crm_saved_view_writer` |
 | Sales | `crm_pipeline_reader`, `crm_pipeline_writer`, `crm_deal_reader`, `crm_deal_writer`, `crm_deal_lifecycle_writer`, `crm_deal_access_checker`, `crm_analytics_reader` |
 | Queries | `contact_query_reader`, `contact_query_provider_reader` |
 | Messaging | `session_reply_sender`, `background_session_reply_sender`, `message_history_reader`, `message_history_wamid_reader`, `latest_inbound_reader`, `meta_flow_response_detector`, `meta_interactive_message_parser`, `history_interactive_message_reader`, `history_flow_response_reader`, `template_preview_builder`, `template_history_normalizer`, `history_template_preview_reader` |
@@ -676,30 +677,114 @@ writer; create and manage teams through the authorized NXT Cloud Chat admin UI.
 Conversation tickets represent active Inbox work. Conversation assignment is
 separate from long-term contact ownership.
 
-### Get or create a conversation
+The original `conversation` wrappers remain supported. New integrations should
+prefer the equivalent `ticket` aliases. Both names operate on the same records,
+IDs, tables, permissions, hooks, and workflow machine identifiers.
+
+### Get or create a ticket
+
+`nxtcc_create_or_get_ticket()` returns the contact's current ticket and creates
+one only when no ticket exists. Use `nxtcc_create_ticket()` when the integration
+must open a separate issue for a contact who already has tickets.
 
 ```php
-$conversation = nxtcc_get_or_create_conversation(
+$ticket = nxtcc_create_or_get_ticket(
 	$contact_id,
 	$tenant,
 	array(
 		'subject'  => 'Checkout support',
 		'priority' => 'high',
+		'source'   => 'integration',
 		'actor_id' => get_current_user_id(),
 	)
 );
 ```
 
+### Create and select multiple tickets
+
+```php
+$ticket = nxtcc_create_ticket(
+	$contact_id,
+	$tenant,
+	array(
+		'subject'     => 'Damaged shipment',
+		'category_id' => $category_id,
+		'priority'    => 'high',
+		'source'      => 'integration',
+		'actor_id'    => get_current_user_id(),
+	)
+);
+
+$tickets = nxtcc_list_tickets_for_contact( $contact_id, $tenant, 50 );
+
+if ( is_array( $ticket ) ) {
+	nxtcc_set_current_ticket(
+		$contact_id,
+		absint( $ticket['id'] ),
+		$tenant,
+		get_current_user_id()
+	);
+}
+```
+
+The current ticket receives newly persisted inbound messages and is the default
+ticket returned by the compatibility wrappers. Selecting a ticket never changes
+the long-term contact owner.
+
+The Chat Window uses the ticket panel as its only manual assignment surface.
+Creating or saving a ticket requires a valid WordPress member or Access Team,
+and the ticket cannot be manually returned to an unassigned state from that UI.
+The `unassigned` status and assignment target remain available to public
+wrappers and existing workflows for backward compatibility and controlled
+integration use.
+
+When the Inbox ticket form is saved with a customer-facing message, Pro workflow
+events preserve it as `{{ticket.message}}`. New tickets expose it through
+**Ticket Created**. Existing tickets expose it through **Ticket Details Changed**
+with `message` as the changed field. The value is an immutable event snapshot,
+so it remains stable through queued sends and Wait nodes.
+
+Choosing **Save & Send** intentionally permits both delivery paths:
+
+- The Free Inbox sends the text as a direct session message.
+- Any matching Pro workflow may independently send its configured template.
+
+Internal notes and handoff notes are never exposed as `ticket.message`.
+
+### Manage ticket categories
+
+```php
+$saved = nxtcc_save_ticket_category(
+	array_merge(
+		$tenant,
+		array(
+			'category_name' => 'Billing',
+			'color'         => '#2271b1',
+			'description'   => 'Invoices, charges, and refunds.',
+			'actor_id'      => get_current_user_id(),
+		)
+	)
+);
+
+$category_id = absint( $saved['category']['id'] ?? 0 );
+$categories  = nxtcc_list_ticket_categories( $tenant );
+```
+
+`nxtcc_delete_ticket_category()` permanently deletes an unused category.
+Categories referenced by tickets are archived instead, preserving historical
+ticket data. Pass `true` as the second argument to
+`nxtcc_list_ticket_categories()` when archived categories are needed.
+
 Before a user-facing read or mutation:
 
 ```php
-$conversation_id = absint( $conversation['id'] ?? 0 );
+$ticket_id = absint( $ticket['id'] ?? 0 );
 
-if ( ! nxtcc_user_can_view_conversation( $conversation_id, $tenant ) ) {
+if ( ! nxtcc_user_can_view_ticket( $ticket_id, $tenant ) ) {
 	wp_die( esc_html__( 'You cannot view this conversation.', 'example-plugin' ), 403 );
 }
 
-if ( ! nxtcc_user_can_manage_conversation( $conversation_id, $tenant ) ) {
+if ( ! nxtcc_user_can_manage_ticket( $ticket_id, $tenant ) ) {
 	wp_die( esc_html__( 'You cannot update this conversation.', 'example-plugin' ), 403 );
 }
 ```
@@ -707,16 +792,17 @@ if ( ! nxtcc_user_can_manage_conversation( $conversation_id, $tenant ) ) {
 ### Update ticket details
 
 ```php
-$result = nxtcc_update_conversation(
+$result = nxtcc_update_ticket(
 	array_merge(
 		$tenant,
 		array(
-			'conversation_id' => $conversation_id,
-			'status'          => 'pending',
-			'priority'        => 'high',
-			'subject'         => 'Checkout support',
-			'category'        => 'billing',
-			'actor_id'       => get_current_user_id(),
+			'ticket_id' => $ticket_id,
+			'status'    => 'pending',
+			'priority'  => 'high',
+			'subject'   => 'Checkout support',
+			'category_id' => $category_id,
+			'source'    => 'integration',
+			'actor_id'  => get_current_user_id(),
 		)
 	)
 );
@@ -726,6 +812,9 @@ Statuses: `unassigned`, `open`, `pending`, `snoozed`, `resolved`, `closed`.
 Priorities: `low`, `normal`, `high`, `urgent`.
 
 For `snoozed`, pass `snoozed_until` as a UTC `Y-m-d H:i:s` value.
+Pass `status => reopened` to reopen an eligible snoozed, resolved, or closed
+ticket. The stored status becomes `open`, the resolution SLA is refreshed, and
+the reopen counter is incremented.
 
 ### Assign or hand off a ticket
 
@@ -735,11 +824,11 @@ Use compact targets returned by `nxtcc_list_contact_assignment_targets()`:
 - `role:sales_support` (an Access Team queue)
 
 ```php
-$result = nxtcc_assign_conversation(
+$result = nxtcc_assign_ticket(
 	array_merge(
 		$tenant,
 		array(
-			'conversation_id'  => $conversation_id,
+			'ticket_id'         => $ticket_id,
 			'assignment_target' => 'role:sales_support',
 			'note'              => 'Customer needs a billing specialist.',
 			'reason'            => 'Billing escalation',
@@ -756,11 +845,11 @@ including reassignment and unassignment.
 ### Auto-route a ticket
 
 ```php
-$result = nxtcc_auto_assign_conversation(
+$result = nxtcc_auto_assign_ticket(
 	array_merge(
 		$tenant,
 		array(
-			'conversation_id' => $conversation_id,
+			'ticket_id'       => $ticket_id,
 			'strategy'        => 'least_busy', // least_busy or round_robin.
 			'role_key'       => 'sales_support',
 			'route_key'      => 'example_support_queue',
@@ -777,11 +866,11 @@ $result = nxtcc_auto_assign_conversation(
 ### Internal notes, watchers, activities, and SLA
 
 ```php
-$note = nxtcc_add_conversation_note(
+$note = nxtcc_add_ticket_note(
 	array_merge(
 		$tenant,
 		array(
-			'conversation_id' => $conversation_id,
+			'ticket_id'      => $ticket_id,
 			'note'            => 'Refund receipt requested from finance.',
 			'source'          => 'integration',
 			'actor_id'        => get_current_user_id(),
@@ -789,19 +878,19 @@ $note = nxtcc_add_conversation_note(
 	)
 );
 
-$watcher = nxtcc_set_conversation_watcher(
+$watcher = nxtcc_set_ticket_watcher(
 	array_merge(
 		$tenant,
 		array(
-			'conversation_id' => $conversation_id,
-			'wp_user_id'      => get_current_user_id(),
-			'watch'           => true,
-			'actor_id'        => get_current_user_id(),
+			'ticket_id'  => $ticket_id,
+			'wp_user_id' => get_current_user_id(),
+			'watch'      => true,
+			'actor_id'   => get_current_user_id(),
 		)
 	)
 );
 
-$activities = nxtcc_get_conversation_activities( $conversation_id, $tenant, 50 );
+$activities = nxtcc_get_ticket_activities( $ticket_id, $tenant, 50 );
 $sla_targets = nxtcc_get_conversation_sla_targets();
 $candidates = nxtcc_list_conversation_sla_candidates( $tenant, 0, 100 );
 ```
@@ -821,6 +910,24 @@ add_filter(
 	}
 );
 ```
+
+### Record a ticket-aware outbound message
+
+Use this only after your integration successfully sends a customer-facing
+message that belongs to an existing ticket:
+
+```php
+$recorded = nxtcc_record_ticket_outbound_by_id(
+	$ticket_id,
+	$tenant,
+	current_time( 'mysql', true ),
+	'integration'
+);
+```
+
+The explicit wrapper updates the selected ticket's message and first-response
+timestamps. The older `nxtcc_record_ticket_outbound()` contact-based wrapper
+continues updating the contact's current ticket and can optionally create one.
 
 ## CRM Activities, Lifecycle Stages, Tasks, and Saved Views
 
@@ -864,6 +971,27 @@ $timeline = nxtcc_get_contact_crm_activities(
 	)
 );
 ```
+
+Read one activity or a Chat Window-ready activity page:
+
+```php
+$activity = nxtcc_get_crm_activity( $activity_id, $tenant );
+
+$chat_timeline = nxtcc_get_chat_timeline(
+	$contact_id,
+	$tenant,
+	array(
+		'limit'              => 20,
+		'before_activity_id' => $before_activity_id,
+	)
+);
+
+$focus_window = nxtcc_get_chat_timeline_context( $activity_id, $tenant, 10 );
+```
+
+The Chat Window merges message rows and CRM activity markers by UTC timestamp.
+Use the activity ID as the stable focus identifier. Never expose internal-note
+markers to users who lack CRM activity permission.
 
 Built-in activity types are returned by `nxtcc_get_crm_activity_types()`. The
 writer accepts `contact_id`, optional `conversation_id`, `task_id`, or `deal_id`,
@@ -1451,6 +1579,7 @@ $result = nxtcc_send_session_reply(
 		$tenant,
 		array(
 			'contact_id'      => $contact_id,
+			'conversation_id' => $ticket_id,
 			'message_content' => 'Thanks. We received your request.',
 			'origin_type'     => 'chat_user',
 			'origin_ref'      => 'example-ticket-123',
@@ -1459,8 +1588,10 @@ $result = nxtcc_send_session_reply(
 );
 ```
 
-Optional reply fields include `reply_to_message_id`, `reply_to_history_id`,
-`origin_type`, `origin_user_id`, and `origin_ref`.
+Optional reply fields include `conversation_id`, `reply_to_message_id`,
+`reply_to_history_id`, `origin_type`, `origin_user_id`, and `origin_ref`.
+When supplied, `conversation_id` must belong to the same tenant and contact;
+the history row is linked to that exact ticket.
 
 Use the background sender only in trusted server-side jobs:
 
@@ -1810,6 +1941,7 @@ Conversations:
 - `nxtcc_conversation_internal_note_added`
 - `nxtcc_conversation_watcher_updated`
 - `nxtcc_conversation_reopened`
+- `nxtcc_conversation_first_response_recorded`
 
 Hook listeners must remain tenant-aware and idempotent. Do not repeat the same
 write from its completion hook without a recursion/deduplication guard.
@@ -1863,6 +1995,83 @@ isolated by the token runtime so an optional integration cannot interrupt
 message sending, but providers should still return an empty array when no data
 is available.
 
+### CRM token catalog and contextual providers
+
+Use the public catalog for a variable picker:
+
+```php
+$catalog = nxtcc_get_token_catalog(
+	array_merge(
+		$tenant,
+		array(
+			'include_wp' => true,
+			'include_wc' => class_exists( 'WooCommerce' ),
+		)
+	)
+);
+```
+
+Built-in CRM namespaces are `contact`, `ticket`, `assignment`, `lifecycle`,
+`task`, `deal`, `event`, `wp`, and optional `wc`. Pro adds workflow-specific
+order, cart, and license namespaces to its template picker.
+
+Build current, tenant-scoped values at execution time:
+
+```php
+$context = nxtcc_build_token_context(
+	array(
+		'tenant'         => $tenant,
+		'contact_id'     => $contact_id,
+		'ticket_id'      => $ticket_id,
+		'task_id'        => $task_id,
+		'deal_id'        => $deal_id,
+		'event_snapshot' => array(
+			'type'            => 'crm.conversation.status.changed',
+			'previous_status' => 'pending',
+			'new_status'      => 'resolved',
+		),
+	)
+);
+```
+
+The builder re-reads current ticket, lifecycle, task, and deal data. The
+`event_snapshot` remains immutable across Wait nodes. Internal-note content,
+credentials, raw metadata, and private user data are intentionally excluded.
+
+Add discoverable variables with `nxtcc_token_catalog`, and resolve them with a
+context provider:
+
+```php
+add_filter(
+	'nxtcc_token_catalog',
+	static function ( array $catalog ): array {
+		$catalog['booking'][] = array(
+			'key'   => 'booking.reference',
+			'label' => 'Booking Reference',
+		);
+		return $catalog;
+	}
+);
+
+add_filter(
+	'nxtcc_token_context_providers',
+	static function ( array $providers ): array {
+		$providers['booking'] = static function ( array $args, array $context ): array {
+			unset( $context );
+			$contact_id = absint( $args['contact_id'] ?? 0 );
+			return array(
+				'reference' => example_get_booking_reference( $contact_id ),
+			);
+		};
+		return $providers;
+	}
+);
+```
+
+Return only bounded scalar values. Missing required template values fail direct
+and queued workflow sends unless the expression supplies an explicit fallback,
+for example `{{ticket.subject|default:"Support request"}}`.
+
 ### Advanced extension filters
 
 The following implemented filters are useful to compatible plugins. Use them
@@ -1875,6 +2084,9 @@ additively and preserve all security checks and existing entries.
 | `nxtcc_contact_query_providers` | Register normalized, prepared contact-query providers. |
 | `nxtcc_crm_deal_item_providers` | Register external deal line-item catalogs. |
 | `nxtcc_token_providers` | Add token providers; prefer `nxtcc_token_register_provider()` when possible. |
+| `nxtcc_token_catalog` | Add discoverable grouped token definitions. |
+| `nxtcc_token_context_providers` | Add lazy, execution-time token namespaces. |
+| `nxtcc_token_context` | Add or adjust the final bounded scalar context. |
 | `nxtcc_conversation_sla_targets` | Adjust bounded priority-based SLA minute targets. |
 | `nxtcc_eligible_staff_roles` | Add WordPress roles eligible for tenant team access. |
 | `nxtcc_registered_capabilities` | Extend the NXT Cloud Chat capability catalog without removing required capabilities. |
@@ -2063,6 +2275,44 @@ $run = nxtcc_pro_get_workflow_run( 91, $tenant );
 ```
 
 Workflow run context and step traces are private CRM/automation data.
+
+### Built-in Ticket workflow compatibility
+
+Ticket workflow features continue using the established Conversation machine
+IDs, such as `conversation_status_is` and `assign_conversation`. Existing
+published workflows require no migration. Runtime context contains both
+`conversation` and the developer-friendly `ticket` alias.
+
+Available Ticket lifecycle triggers include created, assigned or handed off,
+status changed, priority changed, reopened, SLA exceeded, details changed, and
+internal note added. Workflow-originated ticket mutations are not re-emitted,
+which prevents self-triggering loops.
+
+Available conditions cover assignment, status, priority, SLA state,
+subject/category matching, age, last activity, first response, reopen count,
+and source. Actions include Create/Get Ticket, assign, auto-assign, status,
+priority, details, snooze, internal note, escalation, and watcher updates.
+
+The Send Template action can use grouped CRM variables in body text, text
+headers, and text button parameters:
+
+```text
+{{contact.name}}
+{{ticket.number}}
+{{ticket.subject|default:"Support request"}}
+{{ticket.assignee_name}}
+{{lifecycle.name}}
+{{task.due_at|date:"M j, Y"}}
+{{deal.value|number_format:"2"}}
+{{event.previous_status}}
+{{event.new_status}}
+```
+
+Current entity values are re-read when the message is sent, including after
+Wait nodes. Previous and trigger-specific values come from the immutable event
+snapshot. Direct and queued sends use the same resolver. A required expression
+that resolves empty fails clearly unless it has an explicit `default` filter.
+Internal note content is never available as a customer-facing variable.
 
 ## Pro Broadcasts, Abandoned Carts, and Analytics
 
@@ -2368,7 +2618,7 @@ nxtcc_filter_contact_ids_by_access(
 nxtcc_get_access_teams( array $tenant = array() ): array
 ```
 
-### Conversations
+### Conversations and Ticket aliases
 
 ```php
 nxtcc_get_conversation( int $conversation_id, array $tenant ): ?array
@@ -2383,14 +2633,39 @@ nxtcc_get_conversation_sla_targets(): array
 nxtcc_list_conversation_sla_candidates( array $tenant, int $after_id = 0, int $limit = 100 ): array
 nxtcc_user_can_view_conversation( int $conversation_id, array $tenant = array(), int $user_id = 0 ): bool
 nxtcc_user_can_manage_conversation( int $conversation_id, array $tenant = array(), int $user_id = 0 ): bool
+
+nxtcc_get_ticket( int $ticket_id, array $tenant ): ?array
+nxtcc_create_or_get_ticket( int $contact_id, array $tenant, array $args = array() ): ?array
+nxtcc_create_ticket( int $contact_id, array $tenant, array $args = array() ): ?array
+nxtcc_list_tickets_for_contact( int $contact_id, array $tenant, int $limit = 50 ): array
+nxtcc_set_current_ticket( int $contact_id, int $ticket_id, array $tenant, int $actor_id = 0 ): bool
+nxtcc_list_ticket_categories( array $tenant, bool $include_archived = false ): array
+nxtcc_save_ticket_category( array $args ): array
+nxtcc_delete_ticket_category( int $category_id, array $tenant, int $actor_id = 0 ): array
+nxtcc_update_ticket( array $args ): array
+nxtcc_assign_ticket( array $args ): array
+nxtcc_auto_assign_ticket( array $args ): array
+nxtcc_add_ticket_note( array $args ): array
+nxtcc_set_ticket_watcher( array $args ): array
+nxtcc_get_ticket_activities( int $ticket_id, array $tenant, int $limit = 100 ): array
+nxtcc_record_ticket_outbound( int $contact_id, array $tenant, ?string $sent_at = null, string $source = 'integration', bool $create_if_missing = false ): bool
+nxtcc_record_ticket_outbound_by_id( int $ticket_id, array $tenant, ?string $sent_at = null, string $source = 'integration' ): bool
+nxtcc_user_can_view_ticket( int $ticket_id, array $tenant = array(), int $user_id = 0 ): bool
+nxtcc_user_can_manage_ticket( int $ticket_id, array $tenant = array(), int $user_id = 0 ): bool
 ```
 
 ### CRM activities, lifecycle, tasks, and saved views
 
 ```php
 nxtcc_get_crm_activity_types(): array
+nxtcc_get_crm_activity( int $activity_id, array $tenant ): ?array
 nxtcc_get_contact_crm_activities( int $contact_id, array $tenant, array $args = array() ): array
+nxtcc_get_chat_timeline( int $contact_id, array $tenant, array $args = array() ): array
+nxtcc_get_chat_timeline_context( int $activity_id, array $tenant, int $radius = 10 ): array
 nxtcc_record_crm_activity( array $args ): array
+
+nxtcc_get_token_catalog( array $args = array() ): array
+nxtcc_build_token_context( array $args ): array
 
 nxtcc_list_lifecycle_stages( array $tenant, bool $active_only = true ): array
 nxtcc_upsert_lifecycle_stage( array $args ): array

@@ -285,71 +285,14 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 
 	wp_send_json_success(
 		array(
-			'contacts'           => $rows,
-			'assignment_targets' => nxtcc_list_contact_assignment_targets( $tenant ),
-			'access_policy'      => array(
-				'action_level' => (string) ( $policy['action_level'] ?? 'view_only' ),
-				'data_scope'   => (string) ( $policy['data_scope'] ?? 'assigned' ),
-				'can_manage'   => NXTCC_CRM_Access_Policy::can_manage( $policy ),
-				'can_reassign' => NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_reassign_conversations' ) ),
+			'contacts'      => $rows,
+			'access_policy' => array(
+				'can_manage' => NXTCC_CRM_Access_Policy::can_manage( $policy ),
 			),
 		)
 	);
 }
 add_action( 'wp_ajax_nxtcc_fetch_inbox_summary', 'nxtcc_ajax_fetch_inbox_summary' );
-
-/**
- * AJAX handler: Update the conversation assignment.
- *
- * @return void
- */
-function nxtcc_ajax_chat_update_assignment(): void {
-	if ( ! is_user_logged_in() ) {
-		wp_send_json_error( array( 'message' => 'Not logged in.' ), 401 );
-	}
-
-	nxtcc_chat_ajax_require_caps();
-	if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_reassign_conversations' ) ) ) {
-		wp_send_json_error( array( 'message' => __( 'Insufficient permissions.', 'nxt-cloud-chat' ) ), 403 );
-	}
-
-	check_ajax_referer( 'nxtcc_received_messages', 'nonce', true );
-
-	$contact_id = filter_input( INPUT_POST, 'contact_id', FILTER_SANITIZE_NUMBER_INT );
-	$target     = filter_input( INPUT_POST, 'assignment_target', FILTER_SANITIZE_FULL_SPECIAL_CHARS );
-	nxtcc_chat_require_contact_access( absint( $contact_id ), true );
-	$tenant       = NXTCC_Access_Control::get_current_tenant_context();
-	$conversation = NXTCC_Conversations::instance()->get_or_create_for_contact( absint( $contact_id ), $tenant );
-	$result       = NXTCC_Conversations::instance()->assign(
-		array_merge(
-			$tenant,
-			array(
-				'conversation_id'   => absint( $conversation['id'] ?? 0 ),
-				'assignment_target' => sanitize_text_field( wp_unslash( (string) $target ) ),
-				'note'              => isset( $_POST['note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note'] ) ) : '',
-				'actor_id'          => get_current_user_id(),
-				'source'            => 'manual',
-			)
-		)
-	);
-
-	if ( empty( $result['success'] ) ) {
-		wp_send_json_error(
-			array(
-				'message' => isset( $result['message'] ) ? (string) $result['message'] : __( 'Unable to update the assignment.', 'nxt-cloud-chat' ),
-			),
-			400
-		);
-	}
-
-	wp_send_json_success(
-		array(
-			'message'      => __( 'Assignment updated.', 'nxt-cloud-chat' ),
-			'conversation' => $result['conversation'] ?? null,
-		)
-	);
-}
-add_action( 'wp_ajax_nxtcc_chat_update_assignment', 'nxtcc_ajax_chat_update_assignment' );
 
 /**
  * AJAX handler: Fetch chat thread for a contact.
@@ -406,41 +349,71 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 		}
 	}
 
-	$limit = 20;
-	$repo  = nxtcc_chat_repo();
+	$after_activity_id  = isset( $_POST['after_activity_id'] ) ? absint( wp_unslash( $_POST['after_activity_id'] ) ) : 0;
+	$before_activity_id = isset( $_POST['before_activity_id'] ) ? absint( wp_unslash( $_POST['before_activity_id'] ) ) : 0;
+	$include_messages   = ! isset( $_POST['include_messages'] ) || rest_sanitize_boolean( wp_unslash( $_POST['include_messages'] ) );
+	$include_activities = ! isset( $_POST['include_activities'] ) || rest_sanitize_boolean( wp_unslash( $_POST['include_activities'] ) );
+	$limit              = 20;
+	$repo               = nxtcc_chat_repo();
+	$tenant             = NXTCC_Access_Control::get_current_tenant_context();
+	$activity_page      = array(
+		'items'              => array(),
+		'has_more'           => false,
+		'oldest_activity_id' => 0,
+		'latest_activity_id' => 0,
+	);
+
+	if ( $include_activities && NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_view_crm_activity' ) ) ) {
+		$activity_page = NXTCC_Chat_Timeline::get(
+			$contact_id,
+			$tenant,
+			array(
+				'limit'              => $limit,
+				'after_activity_id'  => $after_activity_id,
+				'before_activity_id' => $before_activity_id,
+			)
+		);
+	}
 
 	/*
 	 * Poll-optimization:
 	 * If this is an "after_id" request (polling), do a cheap existence check first.
 	 * If no new rows, return early without building reply maps or formatting messages.
 	 */
-	if ( null !== $after_id && 0 < $after_id && method_exists( $repo, 'has_new_messages_after' ) ) {
+	if ( $include_messages && null !== $after_id && 0 < $after_id && method_exists( $repo, 'has_new_messages_after' ) ) {
 		$has_new = $repo->has_new_messages_after( $contact_id, $user_mailid, $phone_number_id, (int) $after_id );
 
-		if ( false === $has_new ) {
+		if ( false === $has_new && empty( $activity_page['items'] ) ) {
 			$last_incoming = $repo->get_last_incoming_time( $contact_id, $user_mailid );
 
 			wp_send_json_success(
 				array(
-					'messages'       => array(),
-					'can_reply_24hr' => nxtcc_chat_can_reply_24h( $last_incoming ),
+					'messages'          => array(),
+					'activities'        => array(),
+					'message_has_more'  => false,
+					'activity_has_more' => false,
+					'can_reply_24hr'    => nxtcc_chat_can_reply_24h( $last_incoming ),
 				)
 			);
 		}
 	}
 
-	$messages = $repo->get_chat_thread_messages(
-		$contact_id,
-		$user_mailid,
-		$phone_number_id,
-		$after_id,
-		$before_id,
-		$limit
-	);
+	$messages = $include_messages
+		? $repo->get_chat_thread_messages(
+			$contact_id,
+			$user_mailid,
+			$phone_number_id,
+			$after_id,
+			$before_id,
+			$limit + 1
+		)
+		: array();
 
 	if ( ! is_array( $messages ) ) {
 		$messages = array();
 	}
+	$message_has_more = count( $messages ) > $limit;
+	$messages         = array_slice( $messages, 0, $limit );
 
 	foreach ( $messages as &$msg ) {
 		if ( empty( $msg->message_content ) && function_exists( 'nxtcc_chat_extract_message_content_from_message' ) ) {
@@ -521,7 +494,8 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 
 	foreach ( $messages as &$msg ) {
 		if ( ! empty( $msg->created_at ) ) {
-			$msg->created_at = get_date_from_gmt( $msg->created_at, 'Y-m-d h:i A' );
+			$msg->created_at_utc = (string) $msg->created_at;
+			$msg->created_at     = get_date_from_gmt( $msg->created_at, 'Y-m-d h:i A' );
 		}
 
 		$msg->is_read     = isset( $msg->is_read ) ? (int) $msg->is_read : 0;
@@ -561,17 +535,54 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 	}
 
 	$last_incoming = $repo->get_last_incoming_time( $contact_id, $user_mailid );
-	$conversation  = NXTCC_Conversations::instance()->get_or_create_for_contact( $contact_id, NXTCC_Access_Control::get_current_tenant_context() );
+	$conversation  = NXTCC_Conversations::instance()->get_or_create_for_contact( $contact_id, $tenant );
 
 	wp_send_json_success(
 		array(
-			'messages'       => $messages,
-			'can_reply_24hr' => nxtcc_chat_can_reply_24h( $last_incoming ),
-			'conversation'   => $conversation,
+			'messages'           => $messages,
+			'activities'         => $activity_page['items'],
+			'message_has_more'   => $message_has_more,
+			'activity_has_more'  => ! empty( $activity_page['has_more'] ),
+			'oldest_activity_id' => absint( $activity_page['oldest_activity_id'] ?? 0 ),
+			'latest_activity_id' => absint( $activity_page['latest_activity_id'] ?? 0 ),
+			'can_reply_24hr'     => nxtcc_chat_can_reply_24h( $last_incoming ),
+			'conversation'       => $conversation,
 		)
 	);
 }
 add_action( 'wp_ajax_nxtcc_fetch_chat_thread', 'nxtcc_ajax_fetch_chat_thread' );
+
+/**
+ * AJAX handler: Fetch an exact CRM activity with nearby timeline context.
+ *
+ * @return void
+ */
+function nxtcc_ajax_focus_chat_activity(): void {
+	if ( ! is_user_logged_in() ) {
+		wp_send_json_error( array( 'message' => __( 'Not logged in.', 'nxt-cloud-chat' ) ), 401 );
+	}
+
+	nxtcc_chat_ajax_require_caps();
+	check_ajax_referer( 'nxtcc_received_messages', 'nonce', true );
+
+	if ( ! NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_view_crm_activity' ) ) ) {
+		wp_send_json_error( array( 'message' => __( 'You cannot view CRM activity.', 'nxt-cloud-chat' ) ), 403 );
+	}
+
+	$activity_id = isset( $_POST['activity_id'] ) ? absint( wp_unslash( $_POST['activity_id'] ) ) : 0;
+	$contact_id  = isset( $_POST['contact_id'] ) ? absint( wp_unslash( $_POST['contact_id'] ) ) : 0;
+	$tenant      = NXTCC_Access_Control::get_current_tenant_context();
+	$activity    = NXTCC_CRM_Activities::instance()->get( $activity_id, $tenant );
+
+	if ( ! is_array( $activity ) || 0 >= $contact_id || absint( $activity['contact_id'] ?? 0 ) !== $contact_id ) {
+		wp_send_json_error( array( 'message' => __( 'Activity not found for this contact.', 'nxt-cloud-chat' ) ), 404 );
+	}
+
+	nxtcc_chat_require_contact_access( $contact_id );
+
+	wp_send_json_success( NXTCC_Chat_Timeline::get_context( $activity_id, $tenant, 10 ) );
+}
+add_action( 'wp_ajax_nxtcc_focus_chat_activity', 'nxtcc_ajax_focus_chat_activity' );
 
 /**
  * AJAX handler: Mark chat as read for a contact.

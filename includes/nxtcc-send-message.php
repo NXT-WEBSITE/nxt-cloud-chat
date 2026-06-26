@@ -37,6 +37,7 @@ function nxtcc_mh_columns(): array {
 			'business_account_id'  => true,
 			'phone_number_id'      => true,
 			'contact_id'           => true,
+			'conversation_id'      => true,
 			'display_phone_number' => true,
 			'message_content'      => true,
 			'status'               => true,
@@ -462,6 +463,7 @@ function nxtcc_send_text_message_internal( array $args, bool $require_user_auth 
 	$business_account_id = sanitize_text_field( (string) $args['business_account_id'] );
 	$phone_number_id     = sanitize_text_field( (string) $args['phone_number_id'] );
 	$contact_id          = (int) $args['contact_id'];
+	$conversation_id     = isset( $args['conversation_id'] ) ? absint( $args['conversation_id'] ) : 0;
 
 	$message_content = sanitize_textarea_field( (string) $args['message_content'] );
 	$message_content = trim( $message_content );
@@ -501,6 +503,22 @@ function nxtcc_send_text_message_internal( array $args, bool $require_user_auth 
 			'success' => false,
 			'error'   => 'Empty message',
 		);
+	}
+	if ( $conversation_id > 0 && class_exists( 'NXTCC_Conversations' ) ) {
+		$conversation = NXTCC_Conversations::instance()->get(
+			$conversation_id,
+			array(
+				'user_mailid'         => $user_mailid,
+				'business_account_id' => $business_account_id,
+				'phone_number_id'     => $phone_number_id,
+			)
+		);
+		if ( ! is_array( $conversation ) || absint( $conversation['contact_id'] ?? 0 ) !== $contact_id ) {
+			return array(
+				'success' => false,
+				'error'   => 'Invalid ticket context',
+			);
+		}
 	}
 
 	$contact = NXTCC_Send_DAO::get_contact_row( $contact_id, $user_mailid );
@@ -609,6 +627,9 @@ function nxtcc_send_text_message_internal( array $args, bool $require_user_auth 
 		'failed_at'            => ( 'failed' === $meta_status ) ? $timestamp : null,
 		'is_read'              => 1,
 	);
+	if ( $conversation_id > 0 && nxtcc_mh_has_column( 'conversation_id' ) ) {
+		$row['conversation_id'] = $conversation_id;
+	}
 
 	if ( nxtcc_mh_has_column( 'origin_type' ) ) {
 		$row['origin_type'] = $origin_type;
@@ -717,6 +738,7 @@ function nxtcc_send_media_link_immediately( array $args ): array {
 	$business_account_id = sanitize_text_field( (string) $args['business_account_id'] );
 	$phone_number_id     = sanitize_text_field( (string) $args['phone_number_id'] );
 	$contact_id          = (int) $args['contact_id'];
+	$conversation_id     = isset( $args['conversation_id'] ) ? absint( $args['conversation_id'] ) : 0;
 
 	$kind_in             = nxtcc_normalize_kind( (string) $args['kind'] );
 	$link                = esc_url_raw( (string) $args['link'] );
@@ -750,6 +772,22 @@ function nxtcc_send_media_link_immediately( array $args ): array {
 			'success' => false,
 			'error'   => 'Invalid input',
 		);
+	}
+	if ( $conversation_id > 0 && class_exists( 'NXTCC_Conversations' ) ) {
+		$conversation = NXTCC_Conversations::instance()->get(
+			$conversation_id,
+			array(
+				'user_mailid'         => $user_mailid,
+				'business_account_id' => $business_account_id,
+				'phone_number_id'     => $phone_number_id,
+			)
+		);
+		if ( ! is_array( $conversation ) || absint( $conversation['contact_id'] ?? 0 ) !== $contact_id ) {
+			return array(
+				'success' => false,
+				'error'   => 'Invalid ticket context',
+			);
+		}
 	}
 
 	$contact = NXTCC_Send_DAO::get_contact_row( $contact_id, $user_mailid );
@@ -920,6 +958,9 @@ function nxtcc_send_media_link_immediately( array $args ): array {
 		'failed_at'            => ( 'failed' === $meta_status ) ? $timestamp : null,
 		'is_read'              => 1,
 	);
+	if ( $conversation_id > 0 && nxtcc_mh_has_column( 'conversation_id' ) ) {
+		$row['conversation_id'] = $conversation_id;
+	}
 
 	if ( nxtcc_mh_has_column( 'origin_type' ) ) {
 		$row['origin_type'] = $origin_type;
