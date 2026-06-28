@@ -36,6 +36,16 @@
 			String( NXTCC_ReceivedMessages.ajaxurl ) ) ||
 		( typeof ajaxurl !== 'undefined' && ajaxurl ? String( ajaxurl ) : '' );
 
+	Chat.cfg.settingsUrl =
+		( window.NXTCC_ReceivedMessages &&
+			window.NXTCC_ReceivedMessages.settingsUrl &&
+			String( window.NXTCC_ReceivedMessages.settingsUrl ) ) ||
+		( typeof NXTCC_ReceivedMessages !== 'undefined' &&
+			NXTCC_ReceivedMessages &&
+			NXTCC_ReceivedMessages.settingsUrl &&
+			String( NXTCC_ReceivedMessages.settingsUrl ) ) ||
+		'admin.php?page=nxtcc-settings';
+
 	Chat.util = Chat.util || {};
 	const U   = Chat.util;
 

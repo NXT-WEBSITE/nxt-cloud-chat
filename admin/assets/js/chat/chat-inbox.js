@@ -44,6 +44,60 @@ jQuery( function ( $ ) {
 		let searchDebounceTimer  = null;
 
 		/**
+		 * Render the missing/invalid connection notice with a settings link.
+		 *
+		 * @param {Element} listEl Inbox list element.
+		 * @param {Object}  data   Optional AJAX error data.
+		 * @return {void}
+		 */
+		function renderInvalidConnectionMessage( listEl, data ) {
+			if ( ! listEl ) {
+				return;
+			}
+
+			U.safeEmpty( listEl );
+
+			const notice = U.el( 'div', { class: 'nxtcc-chat-list-notice is-error' } );
+			notice.style.padding = '18px 8px';
+			notice.style.color   = '#b32d2e';
+
+			const settingsUrl = data && data.settings_url ? U.toStr( data.settings_url ) : U.toStr( Chat.cfg.settingsUrl || 'admin.php?page=nxtcc-settings' );
+			U.safeAppend( notice, document.createTextNode( 'Invalid WhatsApp connection. Please set up your WhatsApp connection in ' ) );
+			U.safeAppend( notice, U.el( 'a', { href: settingsUrl }, 'Settings' ) );
+			U.safeAppend( notice, document.createTextNode( '.' ) );
+			U.safeAppend( listEl, notice );
+		}
+
+		/**
+		 * Determine whether an AJAX error represents missing connection settings.
+		 *
+		 * @param {Object} data AJAX error data.
+		 * @return {boolean} Whether this is an invalid connection response.
+		 */
+		function isInvalidConnectionError( data ) {
+			const code    = data && data.code ? U.toStr( data.code ) : '';
+			const message = data && data.message ? U.toStr( data.message ).toLowerCase() : '';
+
+			return 'invalid_connection' === code ||
+				message.indexOf( 'connection' ) !== -1 ||
+				message.indexOf( 'phone number id not found' ) !== -1;
+		}
+
+		/**
+		 * Extract WordPress AJAX error data from a failed jQuery request.
+		 *
+		 * @param {Object} xhr jQuery XHR object.
+		 * @return {Object} Error data.
+		 */
+		function ajaxErrorData( xhr ) {
+			if ( xhr && xhr.responseJSON && xhr.responseJSON.data ) {
+				return xhr.responseJSON.data;
+			}
+
+			return {};
+		}
+
+		/**
 		 * Build one inbox row element for a contact thread.
 		 *
 		 * @param {Object} chat Inbox item returned by the server.
@@ -180,6 +234,12 @@ jQuery( function ( $ ) {
 			if ( pollInFlight ) {
 				return;
 			}
+
+			if ( ! ctx.phoneNumberId ) {
+				renderInvalidConnectionMessage( $chatList.get( 0 ), {} );
+				return;
+			}
+
 			pollInFlight = true;
 
 			$.post( Chat.cfg.ajaxurl, {
@@ -204,12 +264,23 @@ jQuery( function ( $ ) {
 
 					const listEl = $chatList.get( 0 );
 					if ( listEl ) {
+						if ( resp && resp.data && isInvalidConnectionError( resp.data ) ) {
+							renderInvalidConnectionMessage( listEl, resp.data );
+							return;
+						}
+
 						U.setListEmptyMessage( listEl, 'Failed to load chats.', '#f00' );
 					}
 				} )
-				.fail( function () {
+				.fail( function ( xhr ) {
 					const listEl = $chatList.get( 0 );
 					if ( listEl ) {
+						const data = ajaxErrorData( xhr );
+						if ( isInvalidConnectionError( data ) ) {
+							renderInvalidConnectionMessage( listEl, data );
+							return;
+						}
+
 						U.setListEmptyMessage( listEl, 'Failed to load chats.', '#f00' );
 					}
 				} )

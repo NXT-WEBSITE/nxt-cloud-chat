@@ -56,6 +56,18 @@ final class NXTCC_Admin_Settings {
 				'default' => array(),
 			)
 		);
+
+		register_setting(
+			'nxtcc_settings_group',
+			'nxtcc_support_badge_enabled',
+			array(
+				'type'              => 'integer',
+				'sanitize_callback' => static function ( $value ) {
+					return ! empty( $value ) ? 1 : 0;
+				},
+				'default'           => 1,
+			)
+		);
 	}
 
 	/**
@@ -1106,6 +1118,33 @@ final class NXTCC_Admin_Settings {
 				update_option(
 					'nxtcc_delete_data_on_uninstall',
 					self::post_has( 'nxtcc_delete_data_on_uninstall' ) ? 1 : 0
+				);
+			}
+		}
+
+		if ( self::post_has( 'nxtcc_save_support_settings' ) || 'save_support_settings' === $nxtcc_settings_action ) {
+			check_admin_referer( 'nxtcc_support_settings_save', 'nxtcc_support_settings_nonce' );
+
+			$nxtcc_active_tab = 'support';
+
+			if ( ! self::can_manage_settings() ) {
+				add_settings_error(
+					'nxtcc_settings',
+					'nxtcc_support_settings_forbidden',
+					__( 'You do not have permission to update support settings.', 'nxt-cloud-chat' ),
+					'error'
+				);
+			} else {
+				update_option(
+					'nxtcc_support_badge_enabled',
+					self::post_has( 'nxtcc_support_badge_enabled' ) ? 1 : 0
+				);
+
+				add_settings_error(
+					'nxtcc_settings',
+					'nxtcc_support_settings_saved',
+					__( 'Support settings saved.', 'nxt-cloud-chat' ),
+					'updated'
 				);
 			}
 		}

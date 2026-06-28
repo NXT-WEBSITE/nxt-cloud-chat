@@ -229,7 +229,7 @@ Additional published discovery keys:
 | Pipeline lifecycle | `crm_pipeline_overview_reader`, `crm_pipeline_lifecycle_writer` |
 | Deal item providers | `crm_deal_item_provider_reader`, `crm_deal_item_searcher`, `crm_deal_item_resolver` |
 | Contact duplicate handling | `contact_duplicate_reader`, `contact_merge_writer` |
-| Authentication lookup | `verified_phone_reader` |
+| Authentication lookup | `verified_phone_reader`, `auth_user_verification_checker`, `auth_verification_url_builder` |
 
 ## Security Requirements
 
@@ -329,6 +329,31 @@ The wrapper returns digits only or an empty string when no valid primary
 connection is configured. It never returns access tokens, owner emails,
 business account IDs, or phone number IDs. Escape the final URL or HTML output
 for its destination context.
+
+For integrations that need to require NXT Cloud Chat verification before a
+purchase, trial, booking, or protected action, use the auth verification
+wrappers instead of reading auth tables directly:
+
+```php
+$user_id = get_current_user_id();
+$return_url = function_exists( 'wc_get_checkout_url' ) ? wc_get_checkout_url() : home_url( '/' );
+
+if ( $user_id > 0 && function_exists( 'nxtcc_is_user_auth_verified' ) && ! nxtcc_is_user_auth_verified( $user_id ) ) {
+	$verification_url = function_exists( 'nxtcc_get_auth_verification_url' )
+		? nxtcc_get_auth_verification_url(
+			$return_url,
+			array( 'reason' => 'my_plugin_trial' )
+		)
+		: wp_login_url( $return_url );
+
+	wp_safe_redirect( $verification_url );
+	exit;
+}
+```
+
+`nxtcc_get_auth_verification_url()` accepts a same-site return URL and adds it
+as `nxtcc_return_to`. NXT Cloud Chat validates the return URL before redirecting
+after successful verification.
 
 ## Result and Error Conventions
 
@@ -2314,6 +2339,54 @@ snapshot. Direct and queued sends use the same resolver. A required expression
 that resolves empty fails clearly unless it has an explicit `default` filter.
 Internal note content is never available as a customer-facing variable.
 
+### Built-in License Manager workflow compatibility
+
+NXT Cloud Chat Pro can receive NXT License Manager events through the public Pro
+workflow event contract. The built-in License Status Changed trigger uses the
+event type `nxtlm.license.status.changed` and supports filters such as trial
+started, activated, paused, revoked, and expired.
+
+The License Status workflow condition uses the machine ID `license_status_is`
+and accepts one or more normalized statuses:
+
+```json
+{
+	"statuses": [ "trial", "active" ]
+}
+```
+
+Supported status values are `new`, `trial`, `active`, `paused`, `revoked`, and
+`expired`. Publishing fails if the condition is placed on a path where no
+license context can be resolved.
+
+External license integrations should dispatch status changes through the Pro
+wrapper instead of writing workflow rows directly:
+
+```php
+$result = nxtcc_pro_dispatch_workflow_event(
+	array_merge(
+		$tenant,
+		array(
+			'connector_id' => 'nxt.license_manager',
+			'event_type'   => 'nxtlm.license.status.changed',
+			'source_ref'   => 'license:123',
+			'dedupe_key'   => 'license-123-status-trial',
+			'payload'      => array(
+				'license' => array(
+					'id'         => 123,
+					'status'     => 'trial',
+					'status_new' => 'trial',
+					'status_old' => '',
+				),
+			),
+		)
+	)
+);
+```
+
+Use a stable dedupe key per source transition. Do not include license secrets,
+download keys, API tokens, or private billing metadata in workflow payloads.
+
 ## Pro Broadcasts, Abandoned Carts, and Analytics
 
 ### Create an idempotent broadcast
@@ -2531,6 +2604,8 @@ nxtcc_get_latest_inbound_at(
 ): ?string
 
 nxtcc_get_latest_verified_phone_for_user( int $user_id ): string
+nxtcc_is_user_auth_verified( int $user_id ): bool
+nxtcc_get_auth_verification_url( string $return_url = '', array $args = array() ): string
 nxtcc_get_meta_health_status( array $tenant = array(), array $args = array() ): array
 ```
 

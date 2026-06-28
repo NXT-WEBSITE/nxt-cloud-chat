@@ -62,6 +62,8 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'inbound_message_persisted_hook'      => true,
 				'message_history_status_updated_hook' => true,
 				'auth_lifecycle_hooks'                => true,
+				'auth_user_verification_checker'      => function_exists( 'nxtcc_is_user_auth_verified' ),
+				'auth_verification_url_builder'       => function_exists( 'nxtcc_get_auth_verification_url' ),
 				'tenant_credentials_wrapper'          => function_exists( 'nxtcc_get_tenant_api_credentials' ),
 				'tenant_profile_list_reader'          => function_exists( 'nxtcc_list_tenant_profiles' ),
 				'tenant_profile_reader'               => function_exists( 'nxtcc_get_tenant_profile' ),
@@ -306,6 +308,8 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'nxtcc_get_meta_health_status',
 				'nxtcc_get_latest_inbound_at',
 				'nxtcc_get_latest_verified_phone_for_user',
+				'nxtcc_is_user_auth_verified',
+				'nxtcc_get_auth_verification_url',
 			),
 		);
 
@@ -1860,6 +1864,96 @@ if ( ! function_exists( 'nxtcc_get_latest_verified_phone_for_user' ) ) {
 	 */
 	function nxtcc_get_latest_verified_phone_for_user( int $user_id ): string {
 		return NXTCC_Runtime_Integration::get_latest_verified_phone_for_user( $user_id );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_is_user_auth_verified' ) ) {
+	/**
+	 * Check whether a WordPress user has completed NXT Cloud Chat verification.
+	 *
+	 * This stable wrapper is intended for external plugins. It hides the
+	 * current auth-binding and force-migration implementation details.
+	 *
+	 * @param int $user_id WordPress user id.
+	 * @return bool
+	 */
+	function nxtcc_is_user_auth_verified( int $user_id ): bool {
+		$user_id = absint( $user_id );
+		if ( $user_id <= 0 ) {
+			return false;
+		}
+
+		if ( function_exists( 'nxtcc_is_user_whatsapp_verified' ) && nxtcc_is_user_whatsapp_verified( $user_id ) ) {
+			return true;
+		}
+
+		if ( function_exists( 'nxtcc_fm_user_is_migrated' ) && nxtcc_fm_user_is_migrated( $user_id ) ) {
+			return true;
+		}
+
+		if ( function_exists( 'nxtcc_get_latest_verified_phone_for_user' ) ) {
+			return '' !== (string) nxtcc_get_latest_verified_phone_for_user( $user_id );
+		}
+
+		if ( function_exists( 'nxtcc_get_user_phone_e164' ) ) {
+			return '' !== (string) nxtcc_get_user_phone_e164( $user_id );
+		}
+
+		return false;
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_auth_verification_url' ) ) {
+	/**
+	 * Build the public NXT Cloud Chat verification URL for integrations.
+	 *
+	 * Supported args:
+	 * - reason: short machine reason added as nxtcc_reason.
+	 *
+	 * @param string $return_url Optional same-site URL to return after verification.
+	 * @param array  $args Optional URL args.
+	 * @return string
+	 */
+	function nxtcc_get_auth_verification_url( string $return_url = '', array $args = array() ): string {
+		$return_url = '' !== trim( $return_url ) ? wp_validate_redirect( $return_url, home_url( '/' ) ) : '';
+		$reason     = isset( $args['reason'] ) ? sanitize_key( (string) $args['reason'] ) : 'integration_verification';
+		$base_url   = '';
+
+		if ( function_exists( 'nxtcc_auth_get_public_login_url' ) ) {
+			$base_url = nxtcc_auth_get_public_login_url();
+		}
+
+		if ( '' === $base_url && function_exists( 'nxtcc_fm_get_options' ) && function_exists( 'nxtcc_fm_normalize_force_path' ) ) {
+			$policy     = nxtcc_fm_get_options();
+			$policy     = is_array( $policy ) ? $policy : array();
+			$force_path = ! empty( $policy['force_path'] ) ? (string) $policy['force_path'] : '/nxt-whatsapp-login/';
+			$base_url   = (string) home_url( nxtcc_fm_normalize_force_path( $force_path ) );
+		}
+
+		if ( '' === $base_url ) {
+			return wp_login_url( $return_url );
+		}
+
+		$query = array(
+			'nxtcc_reason' => '' !== $reason ? $reason : 'integration_verification',
+		);
+
+		if ( '' !== $return_url ) {
+			$query['nxtcc_return_to'] = $return_url;
+		}
+
+		$url = add_query_arg( $query, $base_url );
+
+		/**
+		 * Filter the integration verification URL.
+		 *
+		 * @param string $url        Verification URL.
+		 * @param string $return_url Validated return URL.
+		 * @param array  $args       Original args.
+		 */
+		$filtered = apply_filters( 'nxtcc_auth_verification_url', $url, $return_url, $args );
+
+		return is_string( $filtered ) && '' !== $filtered ? esc_url_raw( $filtered ) : esc_url_raw( $url );
 	}
 }
 

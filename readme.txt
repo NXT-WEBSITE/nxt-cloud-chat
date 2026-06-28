@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.1.4
+Stable tag: 1.1.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -406,6 +406,11 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 
 == Changelog ==
 
+= 1.1.5 =
+* Added a Support settings tab with a tenant-owner toggle for showing or hiding the admin support badge.
+* Improved the Chat Window empty state when the connection is invalid, including a direct settings link.
+* Added public authentication verification wrappers for integrations that need to require NXT Cloud Chat verification before protected actions.
+
 = 1.1.4 =
 * Added multiple conversation tickets per contact with an explicitly selected current ticket.
 * Added tenant-managed ticket categories with safe archive behavior for referenced categories.
@@ -523,6 +528,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.1.5 =
+Adds the Support settings tab, clearer invalid-connection guidance in Chat Window, and public auth verification wrappers for integrations.
 
 = 1.1.4 =
 Adds multiple tickets per contact, ticket categories, unified ticket saving, ticket-linked messages, and developer APIs required by Pro ticket-message workflows.

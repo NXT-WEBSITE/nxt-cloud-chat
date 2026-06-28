@@ -44,6 +44,10 @@ if ( $nxtcc_can_manage_team ) {
 	$nxtcc_settings_tabs['team-access'] = __( 'Team Access', 'nxt-cloud-chat' );
 }
 
+if ( $nxtcc_can_manage_settings ) {
+	$nxtcc_settings_tabs['support'] = __( 'Support', 'nxt-cloud-chat' );
+}
+
 if ( '' === $nxtcc_active_tab_key || ! isset( $nxtcc_settings_tabs[ $nxtcc_active_tab_key ] ) ) {
 	$nxtcc_active_tab_key = ! empty( $nxtcc_settings_tabs ) ? (string) array_key_first( $nxtcc_settings_tabs ) : 'connection';
 }
@@ -119,6 +123,19 @@ $nxtcc_ajax_nonce = wp_create_nonce( 'nxtcc_admin_ajax' );
 			style="<?php echo esc_attr( 'team-access' === $nxtcc_active_tab_key ? 'display:block' : 'display:none' ); ?>"
 		>
 			<?php include __DIR__ . '/settings/team-access-view.php'; ?>
+		</div>
+	<?php endif; ?>
+
+	<?php if ( $nxtcc_can_manage_settings ) : ?>
+		<div
+			class="nxtcc-settings-tab-content"
+			id="panel-support"
+			role="tabpanel"
+			aria-labelledby="tab-support"
+			data-tab="support"
+			style="<?php echo esc_attr( 'support' === $nxtcc_active_tab_key ? 'display:block' : 'display:none' ); ?>"
+		>
+			<?php include __DIR__ . '/settings/support-view.php'; ?>
 		</div>
 	<?php endif; ?>
 </div>
