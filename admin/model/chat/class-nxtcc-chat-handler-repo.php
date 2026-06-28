@@ -733,7 +733,7 @@ final class NXTCC_Chat_Handler_Repo {
 
 		if ( null !== $after_id && (int) $after_id > 0 ) {
 			$query = $this->prepare_with_table_tokens(
-				'SELECT id, contact_id, message_content, status, created_at, is_read, is_favorite,
+				'SELECT id, contact_id, conversation_id, message_content, status, created_at, is_read, is_favorite,
 						meta_message_id, reply_to_history_id, reply_to_wamid, response_json,
 						user_mailid, business_account_id, phone_number_id, template_name, template_type, template_data
 				 FROM {history}
@@ -742,9 +742,10 @@ final class NXTCC_Chat_Handler_Repo {
 				   AND phone_number_id = %s
 				   AND deleted_at IS NULL
 				   AND id > %d
-				 ORDER BY id ASC',
+				 ORDER BY id ASC
+				 LIMIT %d',
 				$table_map,
-				array( $contact_id, $user_mailid, $phone_number_id, (int) $after_id )
+				array( $contact_id, $user_mailid, $phone_number_id, (int) $after_id, $limit )
 			);
 			if ( '' === $query ) {
 				return array();
@@ -753,7 +754,7 @@ final class NXTCC_Chat_Handler_Repo {
 			$rows = $db->get_results( $query );
 		} elseif ( null !== $before_id && (int) $before_id > 0 ) {
 			$query = $this->prepare_with_table_tokens(
-				'SELECT id, contact_id, message_content, status, created_at, is_read, is_favorite,
+				'SELECT id, contact_id, conversation_id, message_content, status, created_at, is_read, is_favorite,
 						meta_message_id, reply_to_history_id, reply_to_wamid, response_json,
 						user_mailid, business_account_id, phone_number_id, template_name, template_type, template_data
 				 FROM {history}
@@ -774,7 +775,7 @@ final class NXTCC_Chat_Handler_Repo {
 			$rows = $db->get_results( $query );
 		} else {
 			$query = $this->prepare_with_table_tokens(
-				'SELECT id, contact_id, message_content, status, created_at, is_read, is_favorite,
+				'SELECT id, contact_id, conversation_id, message_content, status, created_at, is_read, is_favorite,
 						meta_message_id, reply_to_history_id, reply_to_wamid, response_json,
 						user_mailid, business_account_id, phone_number_id, template_name, template_type, template_data
 				 FROM {history}

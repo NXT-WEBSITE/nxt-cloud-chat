@@ -44,6 +44,10 @@ jQuery( function ( $ ) {
 		ctx.state.chatContactId        = ctx.state.chatContactId || null;
 		ctx.state.lastMessageId        = null;
 		ctx.state.oldestMessageId      = null;
+		ctx.state.lastActivityId       = null;
+		ctx.state.oldestActivityId     = null;
+		ctx.state.hasOlderMessages     = false;
+		ctx.state.hasOlderActivities   = false;
 		ctx.state.loadingOlderMessages = false;
 
 		function syncProfileButton( contactId ) {
@@ -66,6 +70,7 @@ jQuery( function ( $ ) {
 		let activeThreadToken = 0; // increments when contact changes to ignore stale callbacks.
 		let loadRequestId     = 0;
 		let activeInboxKey    = '';
+		let pendingActivityId = 0;
 
 		// NEW: Pause thread polling while user is reading older messages (not at bottom).
 		let threadPollPaused = false;
@@ -648,6 +653,9 @@ jQuery( function ( $ ) {
 				class: 'nxtcc-chat-bubble ' + ( isSent ? 'sent' : 'received' ),
 				'data-msg-id': U.toStr( msg.id ),
 				'data-meta-id': U.toStr( msg.meta_message_id || '' ),
+				'data-timeline-kind': 'message',
+				'data-timeline-id': U.toStr( msg.id ),
+				'data-timeline-time': U.toStr( msg.created_at_utc || '' ),
 			} );
 
 			if ( msg.reply ) {
@@ -692,7 +700,163 @@ jQuery( function ( $ ) {
 			return bubble;
 		}
 
-		function patchChatThread( messages ) {
+		function makeActivityEl( activity ) {
+			const type = U.toStr( activity && activity.activity_type ? activity.activity_type : '' );
+			const item = U.el( 'article', {
+				class: 'nxtcc-chat-activity' + ( 'internal_note' === U.toStr( activity.item_type ) ? ' is-private-note' : '' ),
+				'data-activity-id': U.toStr( activity.activity_id || '' ),
+				'data-timeline-kind': 'activity',
+				'data-timeline-id': U.toStr( activity.activity_id || '' ),
+				'data-timeline-time': U.toStr( activity.created_at_utc || '' ),
+			} );
+			const line = U.el( 'div', { class: 'nxtcc-chat-activity-line' } );
+			const card = U.el( 'div', { class: 'nxtcc-chat-activity-card' } );
+
+			U.safeAppend( line, U.el( 'span', { class: 'nxtcc-chat-activity-dot', 'aria-hidden': 'true' } ) );
+			U.safeAppend( item, line );
+			U.safeAppend(
+				card,
+				U.el(
+					'strong',
+					{ class: 'nxtcc-chat-activity-title' },
+					U.toStr( activity.activity_label || type.replace( /_/g, ' ' ) || 'Activity' )
+				)
+			);
+
+			if ( activity.summary ) {
+				U.safeAppend( card, U.el( 'div', { class: 'nxtcc-chat-activity-summary' }, U.toStr( activity.summary ) ) );
+			}
+
+			U.safeAppend(
+				card,
+				U.el(
+					'div',
+					{ class: 'nxtcc-chat-activity-meta' },
+					[
+						U.toStr( activity.actor_label || 'System' ),
+						U.toStr( activity.created_at_display || '' ),
+					].filter( Boolean ).join( ' | ' )
+				)
+			);
+			U.safeAppend( item, card );
+			return item;
+		}
+
+		function timelineTimestamp( value ) {
+			const raw = U.toStr( value || '' ).trim();
+			if ( ! raw ) {
+				return 0;
+			}
+
+			const parsed = Date.parse( raw.replace( ' ', 'T' ) + ( /(?:Z|[+-]\d\d:\d\d)$/.test( raw ) ? '' : 'Z' ) );
+			return Number.isFinite( parsed ) ? parsed : 0;
+		}
+
+		function compareTimelineNodes( left, right ) {
+			const leftTime  = timelineTimestamp( left.getAttribute( 'data-timeline-time' ) );
+			const rightTime = timelineTimestamp( right.getAttribute( 'data-timeline-time' ) );
+			if ( leftTime !== rightTime ) {
+				return leftTime - rightTime;
+			}
+
+			const leftKind  = U.toStr( left.getAttribute( 'data-timeline-kind' ) );
+			const rightKind = U.toStr( right.getAttribute( 'data-timeline-kind' ) );
+			if ( leftKind !== rightKind ) {
+				return leftKind.localeCompare( rightKind );
+			}
+
+			return Number( left.getAttribute( 'data-timeline-id' ) || 0 ) - Number( right.getAttribute( 'data-timeline-id' ) || 0 );
+		}
+
+		function sortTimelineNodes( threadEl ) {
+			Array.from( threadEl.querySelectorAll( '[data-timeline-kind]' ) )
+				.sort( compareTimelineNodes )
+				.forEach( function ( node ) {
+					threadEl.appendChild( node );
+				} );
+		}
+
+		function appendTimelineItems( messages, activities ) {
+			const threadEl = $chatThread.get( 0 );
+			if ( ! threadEl ) {
+				return 0;
+			}
+
+			let added = 0;
+			( Array.isArray( messages ) ? messages : [] ).forEach( function ( msg ) {
+				if ( threadEl.querySelector( '[data-timeline-kind="message"][data-timeline-id="' + String( msg.id ) + '"]' ) ) {
+					return;
+				}
+				const bubble = makeBubbleEl( msg );
+				attachBubbleData( $( bubble ), msg );
+				U.safeAppend( threadEl, bubble );
+				added++;
+			} );
+			( Array.isArray( activities ) ? activities : [] ).forEach( function ( activity ) {
+				if ( threadEl.querySelector( '[data-activity-id="' + String( activity.activity_id ) + '"]' ) ) {
+					return;
+				}
+				U.safeAppend( threadEl, makeActivityEl( activity ) );
+				added++;
+			} );
+
+			if ( added ) {
+				sortTimelineNodes( threadEl );
+			}
+			return added;
+		}
+
+		function focusRenderedActivity( activityId ) {
+			const node = $chatThread.find( '[data-activity-id="' + String( activityId ) + '"]' ).get( 0 );
+			if ( ! node ) {
+				return false;
+			}
+
+			$chatThread.find( '.is-activity-focus' ).removeClass( 'is-activity-focus' );
+			node.classList.add( 'is-activity-focus' );
+			node.scrollIntoView( { behavior: 'smooth', block: 'center' } );
+			window.setTimeout( function () {
+				node.classList.remove( 'is-activity-focus' );
+			}, 2600 );
+			return true;
+		}
+
+		function focusActivity( activityId, contactId ) {
+			const id        = parseInt( activityId, 10 ) || 0;
+			const contact   = parseInt( contactId, 10 ) || parseInt( ctx.state.chatContactId, 10 ) || 0;
+			const currentId = parseInt( ctx.state.chatContactId, 10 ) || 0;
+			if ( id <= 0 || contact <= 0 ) {
+				return;
+			}
+
+			if ( currentId !== contact ) {
+				const $row = $chatList.find( '.nxtcc-chat-head[data-contact="' + String( contact ) + '"]' ).first();
+				if ( $row.length ) {
+					pendingActivityId = id;
+					$row.trigger( 'click' );
+				}
+				return;
+			}
+
+			if ( focusRenderedActivity( id ) ) {
+				return;
+			}
+
+			$.post( Chat.cfg.ajaxurl, {
+				action: 'nxtcc_focus_chat_activity',
+				contact_id: contact,
+				activity_id: id,
+				nonce: ctx.nonce,
+			} ).done( function ( resp ) {
+				if ( ! resp || ! resp.success || ! resp.data ) {
+					return;
+				}
+				appendTimelineItems( [], resp.data.items || [] );
+				focusRenderedActivity( id );
+			} );
+		}
+
+		function patchChatThread( messages, activities, meta ) {
 			const threadEl = $chatThread.get( 0 );
 			if ( ! threadEl ) {
 				return;
@@ -700,18 +864,16 @@ jQuery( function ( $ ) {
 
 			U.safeEmpty( threadEl );
 
-			if ( ! messages || ! messages.length ) {
-				U.setListEmptyMessage( threadEl, 'No messages in this chat.', '#888' );
+			if ( ( ! messages || ! messages.length ) && ( ! activities || ! activities.length ) ) {
+				U.setListEmptyMessage( threadEl, 'No messages or activity in this chat.', '#888' );
 				updateScrollButton();
 				return;
 			}
 
 			let firstUnreadFound = false;
-			const frag           = document.createDocumentFragment();
-
-			messages.forEach( function ( msg ) {
+			( messages || [] ).forEach( function ( msg ) {
 				const bub = makeBubbleEl( msg );
-				U.safeAppend( frag, bub );
+				U.safeAppend( threadEl, bub );
 				attachBubbleData( $( bub ), msg );
 
 				if ( 'received' === msg.status && 0 === Number( msg.is_read ) && ! firstUnreadFound ) {
@@ -719,13 +881,27 @@ jQuery( function ( $ ) {
 					firstUnreadFound = true;
 				}
 			} );
+			( activities || [] ).forEach( function ( activity ) {
+				U.safeAppend( threadEl, makeActivityEl( activity ) );
+			} );
+			sortTimelineNodes( threadEl );
 
-			U.safeAppend( threadEl, frag );
-
-			ctx.state.lastMessageId   = messages[ messages.length - 1 ].id;
-			ctx.state.oldestMessageId = messages[ 0 ].id;
+			if ( messages && messages.length ) {
+				ctx.state.lastMessageId   = messages[ messages.length - 1 ].id;
+				ctx.state.oldestMessageId = messages[ 0 ].id;
+			}
+			ctx.state.lastActivityId   = Number( meta && meta.latest_activity_id ? meta.latest_activity_id : 0 ) || null;
+			ctx.state.oldestActivityId = Number( meta && meta.oldest_activity_id ? meta.oldest_activity_id : 0 ) || null;
+			ctx.state.hasOlderMessages   = Boolean( meta && meta.message_has_more );
+			ctx.state.hasOlderActivities = Boolean( meta && meta.activity_has_more );
 
 			setTimeout( function () {
+				if ( pendingActivityId && focusRenderedActivity( pendingActivityId ) ) {
+					pendingActivityId = 0;
+					updateScrollButton();
+					return;
+				}
+
 				const $firstUnread = $chatThread.find( '.nxtcc-first-unread' );
 
 				if ( $firstUnread.length ) {
@@ -759,6 +935,10 @@ jQuery( function ( $ ) {
 		function resetThreadStateForContact() {
 			ctx.state.lastMessageId        = null;
 			ctx.state.oldestMessageId      = null;
+			ctx.state.lastActivityId       = null;
+			ctx.state.oldestActivityId     = null;
+			ctx.state.hasOlderMessages     = false;
+			ctx.state.hasOlderActivities   = false;
 			ctx.state.loadingOlderMessages = false;
 
 			threadPollPaused = false;
@@ -866,7 +1046,7 @@ jQuery( function ( $ ) {
 					}
 
 					if ( resp && resp.success && resp.data && resp.data.messages ) {
-						patchChatThread( resp.data.messages );
+						patchChatThread( resp.data.messages, resp.data.activities || [], resp.data );
 						setComposerEnabledFromResp( resp );
 						if ( ctx.api.tickets && ctx.api.tickets.renderConversation && resp.data.conversation ) {
 							ctx.api.tickets.renderConversation( resp.data.conversation );
@@ -999,6 +1179,7 @@ jQuery( function ( $ ) {
 				phone_number_id: ctx.phoneNumberId,
 				nonce: ctx.nonce,
 				after_id: ctx.state.lastMessageId,
+				after_activity_id: ctx.state.lastActivityId || 0,
 			} )
 				.done( function ( resp ) {
 					if ( myToken !== activeThreadToken ) {
@@ -1009,10 +1190,12 @@ jQuery( function ( $ ) {
 
 					const msgs =
 						resp && resp.success && resp.data && resp.data.messages ? resp.data.messages : [];
+					const activities =
+						resp && resp.success && resp.data && resp.data.activities ? resp.data.activities : [];
 
 					setComposerEnabledFromResp( resp );
 
-					if ( ! msgs || ! msgs.length ) {
+					if ( ( ! msgs || ! msgs.length ) && ( ! activities || ! activities.length ) ) {
 						return;
 					}
 
@@ -1022,16 +1205,13 @@ jQuery( function ( $ ) {
 					}
 
 					const wasNear = isNearBottom( threadEl, 60 );
-					const frag    = document.createDocumentFragment();
-
-					msgs.forEach( function ( msg ) {
-						const bub = makeBubbleEl( msg );
-						attachBubbleData( $( bub ), msg );
-						U.safeAppend( frag, bub );
-						ctx.state.lastMessageId = msg.id;
-					} );
-
-					U.safeAppend( threadEl, frag );
+					appendTimelineItems( msgs, activities );
+					if ( msgs.length ) {
+						ctx.state.lastMessageId = msgs[ msgs.length - 1 ].id;
+					}
+					if ( activities.length ) {
+						ctx.state.lastActivityId = Number( resp.data.latest_activity_id || activities[ activities.length - 1 ].activity_id ) || ctx.state.lastActivityId;
+					}
 					markCurrentChatRead();
 
 					if ( wasNear ) {
@@ -1082,15 +1262,6 @@ jQuery( function ( $ ) {
 			$chatHeader.find( '.nxtcc-chat-contact-name' ).text( nameText );
 			$chatHeader.find( '.nxtcc-chat-contact-number' ).text( fullPhone );
 			syncProfileButton( selectedId );
-			if ( ctx.api.inbox && ctx.api.inbox.syncAssignment ) {
-				let assignmentTarget = '';
-				if ( activeChat.assignment && 'user' === U.toStr( activeChat.assignment.target_type ) ) {
-					assignmentTarget = 'user:' + U.toStr( activeChat.assignment.assigned_user_id );
-				} else if ( activeChat.assignment && 'role' === U.toStr( activeChat.assignment.target_type ) ) {
-					assignmentTarget = 'role:' + U.toStr( activeChat.assignment.assigned_role );
-				}
-				ctx.api.inbox.syncAssignment( assignmentTarget );
-			}
 			if ( ctx.api.tickets && ctx.api.tickets.renderConversation && activeChat.conversation && ! ctx.$widget.hasClass( 'is-ticket-open' ) ) {
 				ctx.api.tickets.renderConversation( activeChat.conversation );
 			}
@@ -1164,7 +1335,11 @@ jQuery( function ( $ ) {
 		}
 
 		function loadOlderMessages() {
-			if ( ! ctx.state.chatContactId || ! ctx.state.oldestMessageId || ctx.state.loadingOlderMessages ) {
+			if (
+				! ctx.state.chatContactId ||
+				( ! ctx.state.hasOlderMessages && ! ctx.state.hasOlderActivities ) ||
+				ctx.state.loadingOlderMessages
+			) {
 				return;
 			}
 
@@ -1176,42 +1351,57 @@ jQuery( function ( $ ) {
 
 			showThreadTopNotice( 'Loading older messages…' );
 
-			$.post( Chat.cfg.ajaxurl, {
+			const request = {
 				action: 'nxtcc_fetch_chat_thread',
 				contact_id: ctx.state.chatContactId,
 				business_account_id: ctx.businessAccountId,
 				phone_number_id: ctx.phoneNumberId,
 				nonce: ctx.nonce,
-				before_id: ctx.state.oldestMessageId,
-			} )
+				include_messages: ctx.state.hasOlderMessages ? 1 : 0,
+				include_activities: ctx.state.hasOlderActivities ? 1 : 0,
+			};
+
+			if ( ctx.state.hasOlderMessages && ctx.state.oldestMessageId ) {
+				request.before_id = ctx.state.oldestMessageId;
+			}
+			if ( ctx.state.hasOlderActivities && ctx.state.oldestActivityId ) {
+				request.before_activity_id = ctx.state.oldestActivityId;
+			}
+
+			$.post( Chat.cfg.ajaxurl, request )
 				.done( function ( resp ) {
 					removeThreadTopNotice();
 
 					const msgs =
 						resp && resp.success && resp.data && resp.data.messages ? resp.data.messages : [];
+					const activities =
+						resp && resp.success && resp.data && resp.data.activities ? resp.data.activities : [];
 
-					if ( msgs.length ) {
+					if ( resp && resp.success && resp.data ) {
+						if ( ctx.state.hasOlderMessages ) {
+							ctx.state.hasOlderMessages = Boolean( resp.data.message_has_more );
+						}
+						if ( ctx.state.hasOlderActivities ) {
+							ctx.state.hasOlderActivities = Boolean( resp.data.activity_has_more );
+						}
+					}
+
+					if ( msgs.length || activities.length ) {
 						const threadEl = $chatThread.get( 0 );
 
 						if ( threadEl ) {
 							const scrollBefore = threadEl.scrollHeight;
-							const frag         = document.createDocumentFragment();
-
-							msgs.forEach( function ( msg ) {
-								const bub = makeBubbleEl( msg );
-								attachBubbleData( $( bub ), msg );
-								U.safeAppend( frag, bub );
-							} );
-
-							const newNodes = Array.from( frag.childNodes );
-							for ( let i = newNodes.length - 1; i >= 0; i-- ) {
-								U.safeInsertAtStart( threadEl, newNodes[ i ] );
-							}
+							appendTimelineItems( msgs, activities );
 
 							const scrollAfter = threadEl.scrollHeight;
 							$chatThread.scrollTop( scrollAfter - scrollBefore );
 
-							ctx.state.oldestMessageId = msgs[ 0 ].id;
+							if ( msgs.length ) {
+								ctx.state.oldestMessageId = msgs[ 0 ].id;
+							}
+							if ( activities.length ) {
+								ctx.state.oldestActivityId = Number( resp.data.oldest_activity_id || activities[0].activity_id ) || ctx.state.oldestActivityId;
+							}
 						}
 					}
 
@@ -1253,6 +1443,16 @@ jQuery( function ( $ ) {
 		ctx.api.thread.reloadChatThread    = reloadChatThread;
 		ctx.api.thread.stopChatPolling     = stopChatPolling;
 		ctx.api.thread.syncSelectedContact = syncSelectedContactFromInbox;
+		ctx.api.thread.focusActivity       = focusActivity;
+
+		if ( ctx.focusActivityEventHandler ) {
+			document.removeEventListener( 'nxtcc:focus-chat-activity', ctx.focusActivityEventHandler );
+		}
+		ctx.focusActivityEventHandler = function ( event ) {
+			const detail = event && event.detail ? event.detail : {};
+			focusActivity( detail.activityId, detail.contactId );
+		};
+		document.addEventListener( 'nxtcc:focus-chat-activity', ctx.focusActivityEventHandler );
 
 		// Contact selection: load the thread and start polling (namespaced).
 		$chatList.off( 'click' + ns, '.nxtcc-chat-head' );
@@ -1274,9 +1474,6 @@ jQuery( function ( $ ) {
 
 			$chatHeader.find( '.nxtcc-chat-contact-name' ).text( name );
 			$chatHeader.find( '.nxtcc-chat-contact-number' ).text( phone );
-			if ( ctx.api.inbox && ctx.api.inbox.syncAssignment ) {
-				ctx.api.inbox.syncAssignment( U.toStr( $row.attr( 'data-assignment-target' ) || '' ) );
-			}
 			if ( ctx.api.tickets && ctx.api.tickets.load ) {
 				ctx.api.tickets.load( contactId );
 			}

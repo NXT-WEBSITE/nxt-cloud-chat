@@ -254,20 +254,6 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-.nxtcc-chat-assignment-wrap {
-	flex: 0 1 190px;
-	min-width: 120px;
-}
-.nxtcc-chat-assignment {
-	width: 100%;
-	min-height: 32px;
-	border: 1px solid #dcdcde;
-	border-radius: 6px;
-	background: #fff;
-	color: #1d2327;
-	font-size: 12px;
-}
-
 .nxtcc-chat-profile-btn,
 .nxtcc-ticket-toggle {
 	display: inline-flex;
@@ -332,10 +318,22 @@
 	background: #fff;
 }
 
-.nxtcc-ticket-number {
-	display: block;
+.nxtcc-ticket-selector-wrap {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.nxtcc-ticket-selector {
+	width: 100%;
+	max-width: none;
+	min-height: 30px;
+	margin: 0;
+	border: 1px solid #dcdcde;
+	border-radius: 5px;
+	background: #fff;
 	color: #1d2327;
-	font-size: 13px;
+	font-size: 12px;
+	font-weight: 600;
 }
 
 .nxtcc-ticket-updated {
@@ -384,6 +382,10 @@
 	scrollbar-width: thin;
 }
 
+.nxtcc-ticket-panel.is-new-ticket .nxtcc-ticket-watch {
+	visibility: hidden;
+}
+
 .nxtcc-ticket-panel-body::-webkit-scrollbar {
 	width: 5px;
 }
@@ -424,6 +426,7 @@
 
 .nxtcc-ticket-field input,
 .nxtcc-ticket-field select,
+.nxtcc-ticket-field textarea,
 .nxtcc-ticket-section input,
 .nxtcc-ticket-section select,
 .nxtcc-ticket-section textarea {
@@ -438,6 +441,30 @@
 	font-size: 12px;
 }
 
+.nxtcc-ticket-field textarea {
+	width: 100%;
+	max-width: none;
+	min-height: 76px;
+	margin: 0;
+	border: 1px solid #dcdcde;
+	border-radius: 5px;
+	background: #fff;
+	color: #1d2327;
+	font-size: 12px;
+	resize: vertical;
+}
+
+.nxtcc-ticket-manage-categories {
+	display: block;
+	margin: -7px 0 12px auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: #174ea6;
+	font-size: 11px;
+	cursor: pointer;
+}
+
 .nxtcc-ticket-section textarea {
 	min-height: 64px;
 	resize: vertical;
@@ -448,6 +475,7 @@
 }
 
 .nxtcc-ticket-sla {
+	position: relative;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 	gap: 8px;
@@ -456,6 +484,41 @@
 	border: 1px solid #e2e4e7;
 	border-radius: 5px;
 	background: #f6f7f7;
+}
+
+.nxtcc-ticket-sla-edit {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	background: #fff;
+	color: #174ea6;
+	cursor: pointer;
+}
+
+.nxtcc-ticket-sla input {
+	display: none;
+	width: 100%;
+	min-height: 30px;
+	margin-top: 5px;
+	border: 1px solid #dcdcde;
+	border-radius: 4px;
+	font-size: 10px;
+}
+
+.nxtcc-ticket-sla.is-editing input {
+	display: block;
+}
+
+.nxtcc-ticket-sla.is-editing strong {
+	display: none;
 }
 
 .nxtcc-ticket-sla span,
@@ -479,8 +542,7 @@
 }
 
 .nxtcc-ticket-save,
-.nxtcc-ticket-assign,
-.nxtcc-ticket-add-note {
+.nxtcc-ticket-save-send {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -496,10 +558,25 @@
 }
 
 .nxtcc-ticket-save[disabled],
-.nxtcc-ticket-assign[disabled],
-.nxtcc-ticket-add-note[disabled] {
+.nxtcc-ticket-save-send[disabled] {
 	opacity: .5;
 	cursor: not-allowed;
+}
+
+.nxtcc-ticket-save-actions {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 8px;
+	margin: 0 0 12px;
+}
+
+.nxtcc-ticket-save-actions button {
+	width: 100%;
+}
+
+.nxtcc-ticket-save-send {
+	border-color: #15803d;
+	background: #15803d;
 }
 
 .nxtcc-ticket-section {
@@ -519,8 +596,24 @@
 }
 
 .nxtcc-ticket-activity-item {
+	display: block;
+	width: 100%;
 	padding: 7px 0 7px 9px;
+	border: 0;
 	border-left: 2px solid #c3c4c7;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.nxtcc-ticket-activity-item:hover,
+.nxtcc-ticket-activity-item:focus-visible {
+	border-left-color: #1f5bb8;
+	background: #f4f8f6;
+	outline: 0;
 }
 
 .nxtcc-ticket-activity-head {
@@ -544,6 +637,202 @@
 	color: #3c434a;
 	font-size: 11px;
 	white-space: pre-wrap;
+}
+
+.nxtcc-ticket-category-modal[hidden] {
+	display: none;
+}
+
+.nxtcc-ticket-category-modal {
+	position: fixed;
+	z-index: 100100;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+
+.nxtcc-ticket-category-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(29, 35, 39, .55);
+}
+
+.nxtcc-ticket-category-dialog {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: min(620px, 100%);
+	max-height: 88vh;
+	overflow: hidden;
+	border: 1px solid #c3c4c7;
+	border-radius: 7px;
+	background: #fff;
+	box-shadow: 0 16px 40px rgba(0, 0, 0, .2);
+}
+
+.nxtcc-ticket-category-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 14px;
+	border-bottom: 1px solid #e2e4e7;
+}
+
+.nxtcc-ticket-category-header h3 {
+	margin: 0;
+	font-size: 15px;
+}
+
+.nxtcc-ticket-category-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 1px solid #dcdcde;
+	border-radius: 5px;
+	background: #fff;
+	color: #50575e;
+	cursor: pointer;
+}
+
+.nxtcc-ticket-category-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(220px, .8fr);
+	gap: 14px;
+	min-height: 0;
+	padding: 14px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.nxtcc-ticket-category-list {
+	display: grid;
+	align-content: start;
+	gap: 6px;
+	max-height: 52vh;
+	overflow-y: auto;
+	padding-right: 4px;
+	scrollbar-width: thin;
+}
+
+.nxtcc-ticket-category-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px;
+	border: 1px solid #e2e4e7;
+	border-radius: 5px;
+}
+
+.nxtcc-ticket-category-row.is-archived {
+	opacity: .65;
+}
+
+.nxtcc-ticket-category-edit {
+	display: flex;
+	align-items: center;
+	flex: 1 1 auto;
+	gap: 7px;
+	min-width: 0;
+	padding: 2px;
+	border: 0;
+	background: transparent;
+	color: #1d2327;
+	text-align: left;
+	cursor: pointer;
+}
+
+.nxtcc-ticket-category-swatch {
+	flex: 0 0 12px;
+	width: 12px;
+	height: 12px;
+	border-radius: 3px;
+}
+
+.nxtcc-ticket-category-delete {
+	padding: 4px 7px;
+	border: 1px solid #d63638;
+	border-radius: 4px;
+	background: #fff;
+	color: #b32d2e;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.nxtcc-ticket-category-form {
+	display: grid;
+	align-content: start;
+	gap: 9px;
+}
+
+.nxtcc-ticket-category-form label,
+.nxtcc-ticket-category-form label > span {
+	display: block;
+}
+
+.nxtcc-ticket-category-form label > span {
+	margin-bottom: 4px;
+	color: #3c434a;
+	font-size: 11px;
+	font-weight: 600;
+}
+
+.nxtcc-ticket-category-form input {
+	width: 100%;
+	max-width: none;
+	min-height: 34px;
+	margin: 0;
+	border: 1px solid #dcdcde;
+	border-radius: 5px;
+	font-size: 12px;
+}
+
+.nxtcc-ticket-category-form input[type="color"] {
+	padding: 3px;
+}
+
+.nxtcc-ticket-category-form-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 7px;
+}
+
+.nxtcc-ticket-category-form-actions button {
+	min-height: 32px;
+	padding: 5px 10px;
+	border: 1px solid #174ea6;
+	border-radius: 5px;
+	background: #fff;
+	color: #174ea6;
+	font-size: 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.nxtcc-ticket-category-form-actions .nxtcc-ticket-category-save {
+	background: #174ea6;
+	color: #fff;
+}
+
+@media (max-width: 700px) {
+	.nxtcc-ticket-category-body {
+		grid-template-columns: 1fr;
+	}
+}
+
+.nxtcc-profile-activity[data-activity-id] {
+	cursor: pointer;
+}
+
+.nxtcc-profile-activity[data-activity-id]:hover,
+.nxtcc-profile-activity[data-activity-id]:focus-visible {
+	background: #f4f8f6;
+	outline: 2px solid rgba(31, 91, 184, 0.24);
+	outline-offset: 2px;
 }
 
 /* Selection-mode header actions */
@@ -606,6 +895,85 @@
 	text-align: center;
 	padding: 5px;
 	color: #888;
+}
+
+.nxtcc-chat-activity {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: min(88%, 620px);
+	margin: 8px auto;
+	color: #52605a;
+	transition: background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.nxtcc-chat-activity-line {
+	position: absolute;
+	inset: 50% 0 auto;
+	height: 1px;
+	background: #dfe6e2;
+}
+
+.nxtcc-chat-activity-dot {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 7px;
+	height: 7px;
+	border: 2px solid #fff;
+	border-radius: 50%;
+	background: #799087;
+	transform: translate(-50%, -50%);
+	box-shadow: 0 0 0 1px #cad5d0;
+}
+
+.nxtcc-chat-activity-card {
+	position: relative;
+	z-index: 1;
+	max-width: min(82%, 520px);
+	padding: 5px 10px;
+	border: 1px solid #dfe6e2;
+	border-radius: 6px;
+	background: #f8faf9;
+	text-align: center;
+}
+
+.nxtcc-chat-activity-title {
+	display: block;
+	color: #34423c;
+	font-size: 11px;
+	line-height: 1.35;
+}
+
+.nxtcc-chat-activity-summary {
+	margin-top: 2px;
+	color: #4c5b54;
+	font-size: 11px;
+	line-height: 1.4;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.nxtcc-chat-activity-meta {
+	margin-top: 2px;
+	color: #7b8781;
+	font-size: 10px;
+	line-height: 1.3;
+}
+
+.nxtcc-chat-activity.is-private-note .nxtcc-chat-activity-card {
+	border-color: #d8c78c;
+	background: #fff9df;
+}
+
+.nxtcc-chat-activity.is-private-note .nxtcc-chat-activity-dot {
+	background: #a37a13;
+}
+
+.nxtcc-chat-activity.is-activity-focus .nxtcc-chat-activity-card {
+	border-color: #1f5bb8;
+	box-shadow: 0 0 0 3px rgba(31, 91, 184, 0.18);
 }
 
 /* BUBBLES */
@@ -1017,8 +1385,7 @@
 }
 
 .nxtcc-whatsapp-widget.is-view-only .nxtcc-chat-input-wrapper,
-.nxtcc-whatsapp-widget.is-view-only .nxtcc-chat-actions,
-.nxtcc-whatsapp-widget.is-view-only .nxtcc-chat-assignment-wrap {
+.nxtcc-whatsapp-widget.is-view-only .nxtcc-chat-actions {
 	display: none !important;
 }
 

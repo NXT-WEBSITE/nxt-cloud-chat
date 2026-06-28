@@ -110,29 +110,30 @@ final class NXTCC_CRM_Activities {
 	 */
 	public function get_activity_types(): array {
 		$types = array(
-			'contact_created'               => 'Contact created',
-			'contact_updated'               => 'Contact updated',
-			'contact_deleted'               => 'Contact deleted',
-			'contact_tags_added'            => 'Contact tags added',
-			'contact_tags_removed'          => 'Contact tags removed',
-			'subscription_status_changed'   => 'Subscription status changed',
-			'contact_assignment_changed'    => 'Contact assignment changed',
-			'conversation_assigned'         => 'Conversation assigned',
-			'conversation_status_changed'   => 'Conversation status changed',
-			'conversation_priority_changed' => 'Conversation priority changed',
-			'conversation_details_changed'  => 'Conversation details changed',
-			'internal_note_added'           => 'Internal note added',
-			'task_created'                  => 'Task created',
-			'task_updated'                  => 'Task updated',
-			'task_completed'                => 'Task completed',
-			'task_cancelled'                => 'Task cancelled',
-			'lifecycle_stage_changed'       => 'Lifecycle stage changed',
-			'contacts_merged'               => 'Contacts merged',
-			'deal_created'                  => 'Deal created',
-			'deal_updated'                  => 'Deal updated',
-			'deal_stage_changed'            => 'Deal stage changed',
-			'deal_won'                      => 'Deal won',
-			'deal_lost'                     => 'Deal lost',
+			'contact_created'                      => 'Contact created',
+			'contact_updated'                      => 'Contact updated',
+			'contact_deleted'                      => 'Contact deleted',
+			'contact_tags_added'                   => 'Contact tags added',
+			'contact_tags_removed'                 => 'Contact tags removed',
+			'subscription_status_changed'          => 'Subscription status changed',
+			'contact_assignment_changed'           => 'Contact assignment changed',
+			'conversation_assigned'                => 'Ticket assigned',
+			'conversation_status_changed'          => 'Ticket status changed',
+			'conversation_priority_changed'        => 'Ticket priority changed',
+			'conversation_details_changed'         => 'Ticket details changed',
+			'conversation_first_response_recorded' => 'Ticket first response recorded',
+			'internal_note_added'                  => 'Internal note added',
+			'task_created'                         => 'Task created',
+			'task_updated'                         => 'Task updated',
+			'task_completed'                       => 'Task completed',
+			'task_cancelled'                       => 'Task cancelled',
+			'lifecycle_stage_changed'              => 'Lifecycle stage changed',
+			'contacts_merged'                      => 'Contacts merged',
+			'deal_created'                         => 'Deal created',
+			'deal_updated'                         => 'Deal updated',
+			'deal_stage_changed'                   => 'Deal stage changed',
+			'deal_won'                             => 'Deal won',
+			'deal_lost'                            => 'Deal lost',
 		);
 
 		$filtered = apply_filters( 'nxtcc_crm_activity_types', $types );
@@ -234,7 +235,7 @@ final class NXTCC_CRM_Activities {
 	/**
 	 * Read a bounded contact timeline.
 	 *
-	 * Supported args: limit, before_id, activity_types, source.
+	 * Supported args: limit, before_id, after_id, activity_types, source.
 	 *
 	 * @param int                 $contact_id Contact ID.
 	 * @param array<string,mixed> $tenant_args Tenant tuple.
@@ -249,6 +250,7 @@ final class NXTCC_CRM_Activities {
 
 		$limit           = max( 1, min( 200, absint( $args['limit'] ?? 50 ) ) );
 		$before_id       = absint( $args['before_id'] ?? 0 );
+		$after_id        = absint( $args['after_id'] ?? 0 );
 		$source          = isset( $args['source'] ) ? sanitize_key( (string) $args['source'] ) : '';
 		$types_requested = array_key_exists( 'activity_types', $args );
 		$types           = $this->normalize_activity_types( $args['activity_types'] ?? array() );
@@ -264,6 +266,9 @@ final class NXTCC_CRM_Activities {
 		if ( $before_id > 0 ) {
 			$sql    .= ' AND id < %d';
 			$query[] = $before_id;
+		} elseif ( $after_id > 0 ) {
+			$sql    .= ' AND id > %d';
+			$query[] = $after_id;
 		}
 
 		if ( '' !== $source ) {
@@ -277,12 +282,81 @@ final class NXTCC_CRM_Activities {
 			$query        = array_merge( $query, $types );
 		}
 
-		$sql    .= ' ORDER BY id DESC LIMIT %d';
+		$sql    .= $after_id > 0 ? ' ORDER BY id ASC LIMIT %d' : ' ORDER BY id DESC LIMIT %d';
 		$query[] = $limit;
 		$rows    = $this->db->get_results( $this->db->prepare( $sql, ...$query ), ARRAY_A );
 		$rows    = is_array( $rows ) ? $rows : array();
 
 		return $this->decorate_rows( $rows );
+	}
+
+	/**
+	 * Read one tenant-scoped CRM activity.
+	 *
+	 * @param int                 $activity_id Activity ID.
+	 * @param array<string,mixed> $tenant_args Tenant tuple.
+	 * @return array<string,mixed>|null
+	 */
+	public function get( int $activity_id, array $tenant_args ): ?array {
+		$tenant = $this->normalize_tenant( $tenant_args );
+		if ( $activity_id <= 0 || ! $this->tenant_is_complete( $tenant ) ) {
+			return null;
+		}
+
+		$row = $this->db->get_row(
+			$this->db->prepare(
+				'SELECT * FROM ' . $this->quote_table( $this->activities_table ) . '
+				WHERE id = %d AND user_mailid = %s AND business_account_id = %s AND phone_number_id = %s
+				LIMIT 1',
+				$activity_id,
+				$tenant['user_mailid'],
+				$tenant['business_account_id'],
+				$tenant['phone_number_id']
+			),
+			ARRAY_A
+		);
+
+		if ( ! is_array( $row ) ) {
+			return null;
+		}
+
+		$rows = $this->decorate_rows( array( $row ) );
+		return isset( $rows[0] ) && is_array( $rows[0] ) ? $rows[0] : null;
+	}
+
+	/**
+	 * Read a bounded activity window around one activity.
+	 *
+	 * @param int                 $activity_id Activity ID.
+	 * @param array<string,mixed> $tenant_args Tenant tuple.
+	 * @param int                 $radius Rows before and after the target.
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function get_context( int $activity_id, array $tenant_args, int $radius = 10 ): array {
+		$target = $this->get( $activity_id, $tenant_args );
+		if ( ! is_array( $target ) ) {
+			return array();
+		}
+
+		$radius = max( 1, min( 25, absint( $radius ) ) );
+		$before = $this->list_for_contact(
+			absint( $target['contact_id'] ?? 0 ),
+			$tenant_args,
+			array(
+				'limit'     => $radius,
+				'before_id' => $activity_id,
+			)
+		);
+		$after  = $this->list_for_contact(
+			absint( $target['contact_id'] ?? 0 ),
+			$tenant_args,
+			array(
+				'limit'    => $radius,
+				'after_id' => $activity_id,
+			)
+		);
+
+		return array_values( array_merge( array_reverse( $before ), array( $target ), $after ) );
 	}
 
 	/**

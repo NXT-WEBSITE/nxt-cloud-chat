@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -406,6 +406,16 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 
 == Changelog ==
 
+= 1.1.4 =
+* Added multiple conversation tickets per contact with an explicitly selected current ticket.
+* Added tenant-managed ticket categories with safe archive behavior for referenced categories.
+* Redesigned the Chat Window ticket panel for ticket switching and in-panel ticket creation.
+* Added unified ticket saving for details, SLA dates, assignment, handoff notes, and internal notes.
+* Made the ticket panel the single Chat Window assignment surface and require a member or Access Team for manual ticket saves.
+* Linked inbound, direct session, and workflow template messages to their ticket context.
+* Added `{{ticket.message}}` for immutable customer-message use in Ticket Created and Ticket Details Changed workflows.
+* Added public multi-ticket and ticket-category wrappers for external integrations.
+
 = 1.1.3 =
 * Added normalized inbound button, list, and Flow response rendering in the Chat Window.
 * Added sent-template message previews in chat without requiring the Pro plugin at display time.
@@ -513,6 +523,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.1.4 =
+Adds multiple tickets per contact, ticket categories, unified ticket saving, ticket-linked messages, and developer APIs required by Pro ticket-message workflows.
 
 = 1.1.3 =
 Adds inbound interactive responses, standalone template previews, optional COD login verification, and payload hardening.

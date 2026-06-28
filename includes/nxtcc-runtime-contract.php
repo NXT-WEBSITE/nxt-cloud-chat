@@ -84,6 +84,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'crm_access_policy_reader'            => function_exists( 'nxtcc_get_crm_access_policy' ),
 				'crm_contact_access_checker'          => function_exists( 'nxtcc_user_can_view_contact' ),
 				'conversation_reader'                 => function_exists( 'nxtcc_get_conversation' ),
+				'conversation_create_writer'          => function_exists( 'nxtcc_get_or_create_conversation' ),
 				'conversation_writer'                 => function_exists( 'nxtcc_update_conversation' ),
 				'conversation_assignment_writer'      => function_exists( 'nxtcc_assign_conversation' ),
 				'conversation_auto_assignment_writer' => function_exists( 'nxtcc_auto_assign_conversation' ),
@@ -93,9 +94,26 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'conversation_sla_reader'             => function_exists( 'nxtcc_get_conversation_sla_targets' ),
 				'conversation_sla_candidate_reader'   => function_exists( 'nxtcc_list_conversation_sla_candidates' ),
 				'conversation_access_checker'         => function_exists( 'nxtcc_user_can_view_conversation' ),
+				'ticket_reader'                       => function_exists( 'nxtcc_get_ticket' ),
+				'ticket_create_writer'                => function_exists( 'nxtcc_create_or_get_ticket' ),
+				'ticket_list_reader'                  => function_exists( 'nxtcc_list_tickets_for_contact' ),
+				'ticket_explicit_create_writer'       => function_exists( 'nxtcc_create_ticket' ),
+				'ticket_current_writer'               => function_exists( 'nxtcc_set_current_ticket' ),
+				'ticket_category_reader'              => function_exists( 'nxtcc_list_ticket_categories' ),
+				'ticket_category_writer'              => function_exists( 'nxtcc_save_ticket_category' ),
+				'ticket_writer'                       => function_exists( 'nxtcc_update_ticket' ),
+				'ticket_assignment_writer'            => function_exists( 'nxtcc_assign_ticket' ),
+				'ticket_auto_assignment_writer'       => function_exists( 'nxtcc_auto_assign_ticket' ),
+				'ticket_note_writer'                  => function_exists( 'nxtcc_add_ticket_note' ),
+				'ticket_activity_writer'              => function_exists( 'nxtcc_record_ticket_outbound' ),
+				'ticket_explicit_activity_writer'     => function_exists( 'nxtcc_record_ticket_outbound_by_id' ),
+				'ticket_access_checker'               => function_exists( 'nxtcc_user_can_view_ticket' ),
 				'access_teams_reader'                 => function_exists( 'nxtcc_get_access_teams' ),
 				'crm_activity_reader'                 => function_exists( 'nxtcc_get_contact_crm_activities' ),
 				'crm_activity_writer'                 => function_exists( 'nxtcc_record_crm_activity' ),
+				'chat_timeline_reader'                => function_exists( 'nxtcc_get_chat_timeline' ),
+				'token_catalog_reader'                => function_exists( 'nxtcc_get_token_catalog' ),
+				'token_context_builder'               => function_exists( 'nxtcc_build_token_context' ),
 				'lifecycle_stage_reader'              => function_exists( 'nxtcc_list_lifecycle_stages' ),
 				'lifecycle_stage_writer'              => function_exists( 'nxtcc_set_contact_lifecycle_stage' ),
 				'crm_task_reader'                     => function_exists( 'nxtcc_list_contact_crm_tasks' ),
@@ -168,6 +186,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'nxtcc_conversation_internal_note_added',
 				'nxtcc_conversation_watcher_updated',
 				'nxtcc_conversation_reopened',
+				'nxtcc_conversation_first_response_recorded',
 			),
 			'wrappers'         => array(
 				'nxtcc_get_tenant_api_credentials',
@@ -213,10 +232,33 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'nxtcc_list_conversation_sla_candidates',
 				'nxtcc_user_can_view_conversation',
 				'nxtcc_user_can_manage_conversation',
+				'nxtcc_get_ticket',
+				'nxtcc_create_or_get_ticket',
+				'nxtcc_list_tickets_for_contact',
+				'nxtcc_create_ticket',
+				'nxtcc_set_current_ticket',
+				'nxtcc_list_ticket_categories',
+				'nxtcc_save_ticket_category',
+				'nxtcc_delete_ticket_category',
+				'nxtcc_update_ticket',
+				'nxtcc_assign_ticket',
+				'nxtcc_auto_assign_ticket',
+				'nxtcc_add_ticket_note',
+				'nxtcc_record_ticket_outbound',
+				'nxtcc_record_ticket_outbound_by_id',
+				'nxtcc_set_ticket_watcher',
+				'nxtcc_get_ticket_activities',
+				'nxtcc_user_can_view_ticket',
+				'nxtcc_user_can_manage_ticket',
 				'nxtcc_get_access_teams',
 				'nxtcc_get_crm_activity_types',
+				'nxtcc_get_crm_activity',
 				'nxtcc_get_contact_crm_activities',
+				'nxtcc_get_chat_timeline',
+				'nxtcc_get_chat_timeline_context',
 				'nxtcc_record_crm_activity',
+				'nxtcc_get_token_catalog',
+				'nxtcc_build_token_context',
 				'nxtcc_list_lifecycle_stages',
 				'nxtcc_upsert_lifecycle_stage',
 				'nxtcc_get_contact_lifecycle_stage',
@@ -916,6 +958,286 @@ if ( ! function_exists( 'nxtcc_user_can_manage_conversation' ) ) {
 	}
 }
 
+/*
+ * Ticket aliases preserve the existing conversation implementation and machine
+ * identifiers while providing developer-facing CRM terminology.
+ */
+if ( ! function_exists( 'nxtcc_get_ticket' ) ) {
+	/**
+	 * Read one tenant ticket.
+	 *
+	 * @param int   $ticket_id Ticket/conversation ID.
+	 * @param array $tenant Tenant tuple.
+	 * @return array<string,mixed>|null
+	 */
+	function nxtcc_get_ticket( int $ticket_id, array $tenant ): ?array {
+		return nxtcc_get_conversation( $ticket_id, $tenant );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_create_or_get_ticket' ) ) {
+	/**
+	 * Get or create the ticket for a tenant contact.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param array $args Creation arguments.
+	 * @return array<string,mixed>|null
+	 */
+	function nxtcc_create_or_get_ticket( int $contact_id, array $tenant, array $args = array() ): ?array {
+		return nxtcc_get_or_create_conversation( $contact_id, $tenant, $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_list_tickets_for_contact' ) ) {
+	/**
+	 * List tickets for one tenant contact.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param int   $limit Maximum rows.
+	 * @return array<int,array<string,mixed>>
+	 */
+	function nxtcc_list_tickets_for_contact( int $contact_id, array $tenant, int $limit = 50 ): array {
+		return NXTCC_Conversations::instance()->list_for_contact( $contact_id, $tenant, $limit );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_create_ticket' ) ) {
+	/**
+	 * Create a new ticket even when the contact already has tickets.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param array $args Creation arguments.
+	 * @return array<string,mixed>|null
+	 */
+	function nxtcc_create_ticket( int $contact_id, array $tenant, array $args = array() ): ?array {
+		return NXTCC_Conversations::instance()->create_ticket( $contact_id, $tenant, $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_set_current_ticket' ) ) {
+	/**
+	 * Select the current ticket used for inbound and chat message routing.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param int   $ticket_id Ticket ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param int   $actor_id Actor ID.
+	 * @return bool
+	 */
+	function nxtcc_set_current_ticket( int $contact_id, int $ticket_id, array $tenant, int $actor_id = 0 ): bool {
+		return NXTCC_Conversations::instance()->set_current_for_contact( $contact_id, $ticket_id, $tenant, $actor_id );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_list_ticket_categories' ) ) {
+	/**
+	 * List tenant ticket categories.
+	 *
+	 * @param array $tenant Tenant tuple.
+	 * @param bool  $include_archived Include archived categories.
+	 * @return array<int,array<string,mixed>>
+	 */
+	function nxtcc_list_ticket_categories( array $tenant, bool $include_archived = false ): array {
+		return NXTCC_Ticket_Categories::instance()->list_categories( $tenant, $include_archived );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_save_ticket_category' ) ) {
+	/**
+	 * Create or update a ticket category.
+	 *
+	 * @param array $args Category values and tenant tuple.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_save_ticket_category( array $args ): array {
+		return NXTCC_Ticket_Categories::instance()->save( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_delete_ticket_category' ) ) {
+	/**
+	 * Delete an unused ticket category or archive a referenced category.
+	 *
+	 * @param int   $category_id Category ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param int   $actor_id Actor ID.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_delete_ticket_category( int $category_id, array $tenant, int $actor_id = 0 ): array {
+		return NXTCC_Ticket_Categories::instance()->delete_or_archive( $category_id, $tenant, $actor_id );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_update_ticket' ) ) {
+	/**
+	 * Update ticket fields.
+	 *
+	 * @param array $args Update arguments.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_update_ticket( array $args ): array {
+		if ( ! isset( $args['conversation_id'] ) && isset( $args['ticket_id'] ) ) {
+			$args['conversation_id'] = absint( $args['ticket_id'] );
+		}
+		return nxtcc_update_conversation( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_assign_ticket' ) ) {
+	/**
+	 * Assign or hand off a ticket.
+	 *
+	 * @param array $args Assignment arguments.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_assign_ticket( array $args ): array {
+		if ( ! isset( $args['conversation_id'] ) && isset( $args['ticket_id'] ) ) {
+			$args['conversation_id'] = absint( $args['ticket_id'] );
+		}
+		return nxtcc_assign_conversation( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_auto_assign_ticket' ) ) {
+	/**
+	 * Automatically assign a ticket.
+	 *
+	 * @param array $args Routing arguments.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_auto_assign_ticket( array $args ): array {
+		if ( ! isset( $args['conversation_id'] ) && isset( $args['ticket_id'] ) ) {
+			$args['conversation_id'] = absint( $args['ticket_id'] );
+		}
+		return nxtcc_auto_assign_conversation( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_add_ticket_note' ) ) {
+	/**
+	 * Add a private internal ticket note.
+	 *
+	 * @param array $args Note arguments.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_add_ticket_note( array $args ): array {
+		if ( ! isset( $args['conversation_id'] ) && isset( $args['ticket_id'] ) ) {
+			$args['conversation_id'] = absint( $args['ticket_id'] );
+		}
+		return nxtcc_add_conversation_note( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_record_ticket_outbound' ) ) {
+	/**
+	 * Record an outbound message against an existing ticket.
+	 *
+	 * This wrapper does not create a ticket unless explicitly requested.
+	 *
+	 * @param int         $contact_id Contact ID.
+	 * @param array       $tenant Tenant tuple.
+	 * @param string|null $sent_at UTC timestamp.
+	 * @param string      $source Change source.
+	 * @param bool        $create_if_missing Whether a ticket may be created.
+	 * @return bool
+	 */
+	function nxtcc_record_ticket_outbound(
+		int $contact_id,
+		array $tenant,
+		?string $sent_at = null,
+		string $source = 'integration',
+		bool $create_if_missing = false
+	): bool {
+		$service = NXTCC_Conversations::instance();
+		$ticket  = $service->get_for_contact( $contact_id, $tenant );
+		if ( ! is_array( $ticket ) && ! $create_if_missing ) {
+			return false;
+		}
+
+		return $service->touch_outbound( $contact_id, $tenant, $sent_at, $source );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_record_ticket_outbound_by_id' ) ) {
+	/**
+	 * Record an outbound message against an explicit ticket.
+	 *
+	 * @param int         $ticket_id Ticket ID.
+	 * @param array       $tenant Tenant tuple.
+	 * @param string|null $sent_at UTC timestamp.
+	 * @param string      $source Change source.
+	 * @return bool
+	 */
+	function nxtcc_record_ticket_outbound_by_id(
+		int $ticket_id,
+		array $tenant,
+		?string $sent_at = null,
+		string $source = 'integration'
+	): bool {
+		return NXTCC_Conversations::instance()->touch_outbound_for_ticket( $ticket_id, $tenant, $sent_at, $source );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_set_ticket_watcher' ) ) {
+	/**
+	 * Add or remove a ticket watcher.
+	 *
+	 * @param array $args Watcher arguments.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_set_ticket_watcher( array $args ): array {
+		if ( ! isset( $args['conversation_id'] ) && isset( $args['ticket_id'] ) ) {
+			$args['conversation_id'] = absint( $args['ticket_id'] );
+		}
+		return nxtcc_set_conversation_watcher( $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_ticket_activities' ) ) {
+	/**
+	 * Read a bounded ticket activity timeline.
+	 *
+	 * @param int   $ticket_id Ticket/conversation ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param int   $limit Result limit.
+	 * @return array<int,array<string,mixed>>
+	 */
+	function nxtcc_get_ticket_activities( int $ticket_id, array $tenant, int $limit = 100 ): array {
+		return nxtcc_get_conversation_activities( $ticket_id, $tenant, $limit );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_user_can_view_ticket' ) ) {
+	/**
+	 * Check whether a user may view a ticket.
+	 *
+	 * @param int   $ticket_id Ticket/conversation ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param int   $user_id WordPress user ID.
+	 * @return bool
+	 */
+	function nxtcc_user_can_view_ticket( int $ticket_id, array $tenant = array(), int $user_id = 0 ): bool {
+		return nxtcc_user_can_view_conversation( $ticket_id, $tenant, $user_id );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_user_can_manage_ticket' ) ) {
+	/**
+	 * Check whether a user may manage a ticket.
+	 *
+	 * @param int   $ticket_id Ticket/conversation ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param int   $user_id WordPress user ID.
+	 * @return bool
+	 */
+	function nxtcc_user_can_manage_ticket( int $ticket_id, array $tenant = array(), int $user_id = 0 ): bool {
+		return nxtcc_user_can_manage_conversation( $ticket_id, $tenant, $user_id );
+	}
+}
+
 if ( ! function_exists( 'nxtcc_get_crm_activity_types' ) ) {
 	/**
 	 * Return registered CRM activity types.
@@ -924,6 +1246,19 @@ if ( ! function_exists( 'nxtcc_get_crm_activity_types' ) ) {
 	 */
 	function nxtcc_get_crm_activity_types(): array {
 		return NXTCC_CRM_Activities::instance()->get_activity_types();
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_crm_activity' ) ) {
+	/**
+	 * Read one tenant-scoped CRM activity.
+	 *
+	 * @param int   $activity_id Activity ID.
+	 * @param array $tenant Tenant tuple.
+	 * @return array<string,mixed>|null
+	 */
+	function nxtcc_get_crm_activity( int $activity_id, array $tenant ): ?array {
+		return NXTCC_CRM_Activities::instance()->get( $activity_id, $tenant );
 	}
 }
 
@@ -940,6 +1275,34 @@ if ( ! function_exists( 'nxtcc_get_contact_crm_activities' ) ) {
 	 */
 	function nxtcc_get_contact_crm_activities( int $contact_id, array $tenant, array $args = array() ): array {
 		return NXTCC_CRM_Activities::instance()->list_for_contact( $contact_id, $tenant, $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_chat_timeline' ) ) {
+	/**
+	 * Read a bounded unified chat activity page.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param array $args Cursor arguments.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_get_chat_timeline( int $contact_id, array $tenant, array $args = array() ): array {
+		return NXTCC_Chat_Timeline::get( $contact_id, $tenant, $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_chat_timeline_context' ) ) {
+	/**
+	 * Read a bounded timeline window around an exact activity.
+	 *
+	 * @param int   $activity_id Activity ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param int   $radius Rows on each side.
+	 * @return array<string,mixed>
+	 */
+	function nxtcc_get_chat_timeline_context( int $activity_id, array $tenant, int $radius = 10 ): array {
+		return NXTCC_Chat_Timeline::get_context( $activity_id, $tenant, $radius );
 	}
 }
 

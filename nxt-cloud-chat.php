@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat - CRM, Inbox & OTP Login
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       WhatsApp CRM for WordPress with real-time messaging, customer communication, contact management, sales pipelines, team management, automated notifications, and WhatsApp OTP login.
- * Version:           1.1.3
+ * Version:           1.1.4
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.1.3' );
+	define( 'NXTCC_VERSION', '1.1.4' );
 }
 
 /**
@@ -259,6 +259,7 @@ require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-access-teams.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-access-control.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-data-cleanup.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-activities.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-chat-timeline.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-lifecycle-stages.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-tasks.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-saved-views.php';
@@ -269,6 +270,7 @@ require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-tags.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-contact-assignments.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-contact-query.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-access-policy.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-ticket-categories.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-conversations.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-analytics.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-interactive-messages.php';
@@ -287,6 +289,7 @@ require_once NXTCC_PLUGIN_DIR . 'admin/model/nxtcc-auth-handler.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/routes.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-send-message.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-meta-health-status.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/token-sources.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-runtime-contract.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-message-history-repo.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-unread.php';

@@ -357,6 +357,7 @@ jQuery( function ( $ ) {
 					business_account_id: ctx.businessAccountId,
 					phone_number_id: ctx.phoneNumberId,
 					contact_id: ctx.state.chatContactId,
+					conversation_id: ctx.state.conversation ? ctx.state.conversation.id : 0,
 					message_content: message,
 					reply_to_message_id: replyTo ? U.toStr( replyTo.meta_id ) : '',
 					reply_to_history_id: replyTo ? Number( replyTo.history_id || 0 ) : 0,
@@ -401,6 +402,7 @@ jQuery( function ( $ ) {
 			U.setFormField( fd, 'business_account_id', ctx.businessAccountId );
 			U.setFormField( fd, 'phone_number_id', ctx.phoneNumberId );
 			U.setFormField( fd, 'contact_id', String( ctx.state.chatContactId ) );
+			U.setFormField( fd, 'conversation_id', String( ctx.state.conversation ? ctx.state.conversation.id : 0 ) );
 			U.setFormField( fd, 'caption', caption || '' );
 			U.setFormField( fd, 'reply_to_message_id', replyTo ? U.toStr( replyTo.meta_id ) : '' );
 			U.setFormField(
@@ -479,6 +481,7 @@ jQuery( function ( $ ) {
 					business_account_id: ctx.businessAccountId,
 					phone_number_id: ctx.phoneNumberId,
 					contact_id: ctx.state.chatContactId,
+					conversation_id: ctx.state.conversation ? ctx.state.conversation.id : 0,
 					kind: kind,
 					media_url: url,
 					filename: filename || '',

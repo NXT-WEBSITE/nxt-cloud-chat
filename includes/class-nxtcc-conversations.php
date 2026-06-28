@@ -55,6 +55,20 @@ final class NXTCC_Conversations {
 	private string $routing_table;
 
 	/**
+	 * Current ticket state table.
+	 *
+	 * @var string
+	 */
+	private string $state_table;
+
+	/**
+	 * Message history table.
+	 *
+	 * @var string
+	 */
+	private string $message_history_table;
+
+	/**
 	 * Contacts table.
 	 *
 	 * @var string
@@ -80,12 +94,14 @@ final class NXTCC_Conversations {
 	private function __construct() {
 		global $wpdb;
 
-		$this->db                  = $wpdb;
-		$this->conversations_table = $wpdb->prefix . 'nxtcc_conversations';
-		$this->history_table       = $wpdb->prefix . 'nxtcc_conversation_assignment_history';
-		$this->watchers_table      = $wpdb->prefix . 'nxtcc_conversation_watchers';
-		$this->routing_table       = $wpdb->prefix . 'nxtcc_assignment_routing_state';
-		$this->contacts_table      = $wpdb->prefix . 'nxtcc_contacts';
+		$this->db                    = $wpdb;
+		$this->conversations_table   = $wpdb->prefix . 'nxtcc_conversations';
+		$this->history_table         = $wpdb->prefix . 'nxtcc_conversation_assignment_history';
+		$this->watchers_table        = $wpdb->prefix . 'nxtcc_conversation_watchers';
+		$this->routing_table         = $wpdb->prefix . 'nxtcc_assignment_routing_state';
+		$this->state_table           = $wpdb->prefix . 'nxtcc_contact_ticket_state';
+		$this->message_history_table = $wpdb->prefix . 'nxtcc_message_history';
+		$this->contacts_table        = $wpdb->prefix . 'nxtcc_contacts';
 	}
 
 	/**
@@ -201,31 +217,63 @@ final class NXTCC_Conversations {
 	 * @return array<string,mixed>|null
 	 */
 	public function get_or_create_for_contact( int $contact_id, array $tenant_args, array $args = array() ): ?array {
+		$tenant   = $this->normalize_tenant( $tenant_args );
+		$existing = $this->get_for_contact( $contact_id, $tenant );
+		if ( null !== $existing ) {
+			return $existing;
+		}
+
+		return $this->create_ticket( $contact_id, $tenant, $args );
+	}
+
+	/**
+	 * Create a new ticket for a contact.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $tenant_args Tenant tuple.
+	 * @param array $args Creation arguments.
+	 * @return array<string,mixed>|null
+	 */
+	public function create_ticket( int $contact_id, array $tenant_args, array $args = array() ): ?array {
 		$tenant  = $this->normalize_tenant( $tenant_args );
 		$contact = $this->get_contact( $contact_id, $tenant );
 		if ( null === $contact ) {
 			return null;
 		}
 
-		$existing = $this->get_for_contact( $contact_id, $tenant );
-		if ( null !== $existing ) {
-			return $existing;
-		}
-
-		$assignment       = class_exists( 'NXTCC_Contact_Assignments' ) ? NXTCC_Contact_Assignments::instance()->get_assignment( $contact_id, $tenant ) : null;
-		$assigned_user_id = is_array( $assignment ) && 'user' === (string) ( $assignment['target_type'] ?? '' )
+		$inherit_assignment = ! isset( $args['inherit_assignment'] ) || ! empty( $args['inherit_assignment'] );
+		$assignment         = $inherit_assignment && class_exists( 'NXTCC_Contact_Assignments' ) ? NXTCC_Contact_Assignments::instance()->get_assignment( $contact_id, $tenant ) : null;
+		$assigned_user_id   = is_array( $assignment ) && 'user' === (string) ( $assignment['target_type'] ?? '' )
 			? absint( $assignment['assigned_user_id'] ?? 0 )
 			: 0;
-		$assigned_role    = is_array( $assignment ) && 'role' === (string) ( $assignment['target_type'] ?? '' )
+		$assigned_role      = is_array( $assignment ) && 'role' === (string) ( $assignment['target_type'] ?? '' )
 			? sanitize_key( (string) ( $assignment['assigned_role'] ?? '' ) )
 			: '';
-		$opened_at        = $this->normalize_datetime( $args['opened_at'] ?? current_time( 'mysql', true ) ) ?? current_time( 'mysql', true );
-		$status           = $assigned_user_id > 0 || '' !== $assigned_role ? 'open' : 'unassigned';
-		$priority         = $this->normalize_priority( (string) ( $args['priority'] ?? 'normal' ) );
-		$sla              = $this->calculate_sla_deadlines( $opened_at, $priority );
-		$ticket_number    = 'NXT-' . strtoupper( substr( str_replace( '-', '', wp_generate_uuid4() ), 0, 12 ) );
-		$actor_id         = absint( $args['actor_id'] ?? 0 );
-		$now              = current_time( 'mysql', true );
+		$requested_target   = sanitize_text_field( (string) ( $args['assignment_target'] ?? '' ) );
+		if ( '' !== $requested_target ) {
+			$target = $this->normalize_target( $requested_target, $tenant );
+			if ( isset( $target['error'] ) ) {
+				return null;
+			}
+			$assigned_user_id = absint( $target['assigned_user_id'] ?? 0 );
+			$assigned_role    = sanitize_key( (string) ( $target['assigned_role'] ?? '' ) );
+		}
+		$opened_at     = $this->normalize_datetime( $args['opened_at'] ?? current_time( 'mysql', true ) ) ?? current_time( 'mysql', true );
+		$status        = $assigned_user_id > 0 || '' !== $assigned_role ? 'open' : 'unassigned';
+		$priority      = $this->normalize_priority( (string) ( $args['priority'] ?? 'normal' ) );
+		$sla           = $this->calculate_sla_deadlines( $opened_at, $priority );
+		$ticket_number = 'NXT-' . strtoupper( substr( str_replace( '-', '', wp_generate_uuid4() ), 0, 12 ) );
+		$actor_id      = absint( $args['actor_id'] ?? 0 );
+		$now           = current_time( 'mysql', true );
+		$category_id   = absint( $args['category_id'] ?? 0 );
+		$category_name = $this->limit_text( $args['category'] ?? '', 100 );
+		if ( $category_id > 0 && class_exists( 'NXTCC_Ticket_Categories' ) ) {
+			$category = NXTCC_Ticket_Categories::instance()->get( $category_id, $tenant );
+			if ( ! is_array( $category ) || empty( $category['is_active'] ) ) {
+				return null;
+			}
+			$category_name = $this->limit_text( $category['category_name'] ?? '', 100 );
+		}
 
 		$inserted = $this->db->insert(
 			$this->conversations_table,
@@ -236,13 +284,15 @@ final class NXTCC_Conversations {
 				'contact_id'            => $contact_id,
 				'ticket_number'         => $ticket_number,
 				'subject'               => $this->limit_text( $args['subject'] ?? '', 191 ),
-				'category'              => $this->limit_text( $args['category'] ?? '', 100 ),
+				'category_id'           => $category_id > 0 ? $category_id : null,
+				'category'              => $category_name,
 				'channel'               => 'whatsapp',
+				'origin_source'         => $this->normalize_source( (string) ( $args['source'] ?? 'system' ) ),
 				'status'                => $status,
 				'priority'              => $priority,
 				'assigned_user_id'      => $assigned_user_id > 0 ? $assigned_user_id : null,
 				'assigned_role'         => '' !== $assigned_role ? $assigned_role : null,
-				'assignment_source'     => 'system',
+				'assignment_source'     => '' !== $requested_target ? $this->normalize_source( (string) ( $args['source'] ?? 'manual' ) ) : 'system',
 				'opened_at'             => $opened_at,
 				'first_response_due_at' => $sla['first_response_due_at'],
 				'resolution_due_at'     => $sla['resolution_due_at'],
@@ -256,11 +306,12 @@ final class NXTCC_Conversations {
 		);
 
 		if ( ! $inserted ) {
-			return $this->get_for_contact( $contact_id, $tenant );
+			return null;
 		}
 
 		$conversation = $this->get( absint( $this->db->insert_id ), $tenant );
 		if ( is_array( $conversation ) ) {
+			$this->set_current_for_contact( $contact_id, absint( $conversation['id'] ), $tenant, $actor_id );
 			$this->record_activity(
 				$conversation,
 				'conversation_status_changed',
@@ -275,6 +326,78 @@ final class NXTCC_Conversations {
 		}
 
 		return $conversation;
+	}
+
+	/**
+	 * List tickets for one contact, newest first.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $tenant_args Tenant tuple.
+	 * @param int   $limit Maximum rows.
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function list_for_contact( int $contact_id, array $tenant_args, int $limit = 50 ): array {
+		$tenant = $this->normalize_tenant( $tenant_args );
+		$limit  = max( 1, min( 100, $limit ) );
+		if ( $contact_id <= 0 || ! $this->tenant_is_complete( $tenant ) ) {
+			return array();
+		}
+
+		$rows        = $this->db->get_results(
+			$this->db->prepare(
+				'SELECT * FROM ' . $this->quote_table( $this->conversations_table ) . '
+				WHERE contact_id = %d AND channel = %s AND user_mailid = %s
+				AND business_account_id = %s AND phone_number_id = %s
+				ORDER BY updated_at DESC, id DESC LIMIT %d',
+				$contact_id,
+				'whatsapp',
+				$tenant['user_mailid'],
+				$tenant['business_account_id'],
+				$tenant['phone_number_id'],
+				$limit
+			),
+			ARRAY_A
+		);
+		$rows        = is_array( $rows ) ? $rows : array();
+		$watcher_map = $this->list_watchers_for_conversations( array_map( 'absint', wp_list_pluck( $rows, 'id' ) ), $tenant );
+
+		return array_map(
+			function ( array $row ) use ( $watcher_map ): array {
+				return $this->decorate( $row, $watcher_map[ absint( $row['id'] ?? 0 ) ] ?? array() );
+			},
+			$rows
+		);
+	}
+
+	/**
+	 * Set the selected ticket for a contact and inbound routing.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param int   $conversation_id Conversation ID.
+	 * @param array $tenant_args Tenant tuple.
+	 * @param int   $actor_id Actor ID.
+	 * @return bool
+	 */
+	public function set_current_for_contact( int $contact_id, int $conversation_id, array $tenant_args, int $actor_id = 0 ): bool {
+		$tenant       = $this->normalize_tenant( $tenant_args );
+		$conversation = $this->get( $conversation_id, $tenant );
+		if ( null === $conversation || absint( $conversation['contact_id'] ?? 0 ) !== $contact_id ) {
+			return false;
+		}
+
+		return false !== $this->db->replace(
+			$this->state_table,
+			array(
+				'user_mailid'             => $tenant['user_mailid'],
+				'business_account_id'     => $tenant['business_account_id'],
+				'phone_number_id'         => $tenant['phone_number_id'],
+				'contact_id'              => $contact_id,
+				'channel'                 => 'whatsapp',
+				'current_conversation_id' => $conversation_id,
+				'updated_by'              => $actor_id > 0 ? $actor_id : null,
+				'updated_at'              => current_time( 'mysql', true ),
+			)
+		);
 	}
 
 	/**
@@ -320,8 +443,17 @@ final class NXTCC_Conversations {
 
 		$row = $this->db->get_row(
 			$this->db->prepare(
-				'SELECT * FROM ' . $this->quote_table( $this->conversations_table ) . '
-				WHERE contact_id = %d AND channel = %s AND user_mailid = %s AND business_account_id = %s AND phone_number_id = %s LIMIT 1',
+				'SELECT c.*, s.current_conversation_id AS selected_conversation_id FROM ' . $this->quote_table( $this->conversations_table ) . ' c
+				LEFT JOIN ' . $this->quote_table( $this->state_table ) . ' s
+					ON s.current_conversation_id = c.id
+					AND s.user_mailid = c.user_mailid
+					AND s.business_account_id = c.business_account_id
+					AND s.phone_number_id = c.phone_number_id
+					AND s.contact_id = c.contact_id
+					AND s.channel = c.channel
+				WHERE c.contact_id = %d AND c.channel = %s AND c.user_mailid = %s
+				AND c.business_account_id = %s AND c.phone_number_id = %s
+				ORDER BY (s.current_conversation_id = c.id) DESC, c.updated_at DESC, c.id DESC LIMIT 1',
 				$contact_id,
 				'whatsapp',
 				$tenant['user_mailid'],
@@ -331,7 +463,15 @@ final class NXTCC_Conversations {
 			ARRAY_A
 		);
 
-		return is_array( $row ) ? $this->decorate( $row ) : null;
+		if ( ! is_array( $row ) ) {
+			return null;
+		}
+
+		if ( absint( $row['selected_conversation_id'] ?? 0 ) <= 0 ) {
+			$this->set_current_for_contact( $contact_id, absint( $row['id'] ?? 0 ), $tenant );
+		}
+		unset( $row['selected_conversation_id'] );
+		return $this->decorate( $row );
 	}
 
 	/**
@@ -360,9 +500,32 @@ final class NXTCC_Conversations {
 		);
 		$rows         = $this->db->get_results(
 			$this->db->prepare(
-				'SELECT * FROM ' . $this->quote_table( $this->conversations_table ) . '
-				WHERE contact_id IN (' . $placeholders . ') AND channel = %s
-				AND user_mailid = %s AND business_account_id = %s AND phone_number_id = %s',
+				'SELECT c.* FROM ' . $this->quote_table( $this->conversations_table ) . ' c
+				LEFT JOIN ' . $this->quote_table( $this->state_table ) . ' s
+					ON s.current_conversation_id = c.id
+					AND s.user_mailid = c.user_mailid
+					AND s.business_account_id = c.business_account_id
+					AND s.phone_number_id = c.phone_number_id
+					AND s.contact_id = c.contact_id
+					AND s.channel = c.channel
+				WHERE c.contact_id IN (' . $placeholders . ') AND c.channel = %s
+				AND c.user_mailid = %s AND c.business_account_id = %s AND c.phone_number_id = %s
+				AND (
+					s.current_conversation_id = c.id
+					OR (
+						s.current_conversation_id IS NULL
+						AND c.id = (
+							SELECT c2.id FROM ' . $this->quote_table( $this->conversations_table ) . ' c2
+							WHERE c2.user_mailid = c.user_mailid
+							AND c2.business_account_id = c.business_account_id
+							AND c2.phone_number_id = c.phone_number_id
+							AND c2.contact_id = c.contact_id
+							AND c2.channel = c.channel
+							ORDER BY c2.updated_at DESC, c2.id DESC LIMIT 1
+						)
+					)
+				)
+				ORDER BY (s.current_conversation_id = c.id) DESC, c.updated_at DESC, c.id DESC',
 				...$query_args
 			),
 			ARRAY_A
@@ -372,7 +535,7 @@ final class NXTCC_Conversations {
 		$map          = array();
 		foreach ( $rows as $row ) {
 			$contact_id = absint( $row['contact_id'] ?? 0 );
-			if ( $contact_id > 0 ) {
+			if ( $contact_id > 0 && ! isset( $map[ $contact_id ] ) ) {
 				$map[ $contact_id ] = $this->decorate( $row, $watcher_map[ absint( $row['id'] ?? 0 ) ] ?? array() );
 			}
 		}
@@ -455,6 +618,9 @@ final class NXTCC_Conversations {
 		$details_metadata = array(
 			'changed_fields' => array(),
 		);
+		if ( ! empty( $args['customer_message'] ) ) {
+			$details_metadata['changed_fields'][] = 'message';
+		}
 		if ( array_key_exists( 'subject', $args ) ) {
 			$data['subject'] = $this->limit_text( $args['subject'], 191 );
 			if ( (string) $data['subject'] !== (string) $conversation['subject'] ) {
@@ -467,6 +633,21 @@ final class NXTCC_Conversations {
 				$details_metadata['changed_fields'][] = 'category';
 			}
 		}
+		if ( array_key_exists( 'category_id', $args ) ) {
+			$category_id        = absint( $args['category_id'] );
+			$category           = $category_id > 0 && class_exists( 'NXTCC_Ticket_Categories' )
+				? NXTCC_Ticket_Categories::instance()->get( $category_id, $tenant )
+				: null;
+			$keeps_old_category = absint( $conversation['category_id'] ?? 0 ) === $category_id;
+			if ( ! is_array( $category ) || ( empty( $category['is_active'] ) && ! $keeps_old_category ) ) {
+				return $this->error( 'invalid_ticket_category', __( 'Choose an active ticket category.', 'nxt-cloud-chat' ) );
+			}
+			$data['category_id'] = $category_id;
+			$data['category']    = $this->limit_text( $category['category_name'] ?? '', 100 );
+			if ( absint( $conversation['category_id'] ?? 0 ) !== $category_id ) {
+				$details_metadata['changed_fields'][] = 'category';
+			}
+		}
 		if ( array_key_exists( 'priority', $args ) ) {
 			$data['priority']              = $this->normalize_priority( (string) $args['priority'] );
 			$sla                           = $this->calculate_sla_deadlines( (string) $conversation['opened_at'], $data['priority'] );
@@ -476,20 +657,44 @@ final class NXTCC_Conversations {
 			$metadata['priority']          = $data['priority'];
 		}
 		if ( array_key_exists( 'status', $args ) ) {
-			$status = $this->normalize_status( (string) $args['status'] );
+			$requested_status = sanitize_key( (string) $args['status'] );
+			$is_reopen        = 'reopened' === $requested_status;
+			$status           = $is_reopen ? 'open' : $this->normalize_status( $requested_status );
+			if ( $is_reopen && ! in_array( $conversation['status'], array( 'snoozed', 'resolved', 'closed' ), true ) ) {
+				return $this->error( 'conversation_not_reopenable' );
+			}
 			if ( 'snoozed' === $status && null === $this->normalize_datetime( $args['snoozed_until'] ?? null ) ) {
 				return $this->error( 'snooze_time_required' );
 			}
-			$data['status']              = $status;
-			$data['snoozed_until']       = 'snoozed' === $status ? $this->normalize_datetime( $args['snoozed_until'] ) : null;
-			$data['resolved_at']         = 'resolved' === $status
+			$data['status']        = $status;
+			$data['snoozed_until'] = 'snoozed' === $status ? $this->normalize_datetime( $args['snoozed_until'] ) : null;
+			$data['resolved_at']   = 'resolved' === $status
 				? ( ! empty( $conversation['resolved_at'] ) ? $conversation['resolved_at'] : current_time( 'mysql', true ) )
 				: ( 'closed' === $status ? $conversation['resolved_at'] : null );
-			$data['closed_at']           = 'closed' === $status
+			$data['closed_at']     = 'closed' === $status
 				? ( ! empty( $conversation['closed_at'] ) ? $conversation['closed_at'] : current_time( 'mysql', true ) )
 				: null;
+			if ( $is_reopen ) {
+				$sla                       = $this->calculate_sla_deadlines( current_time( 'mysql', true ), (string) $conversation['priority'] );
+				$data['reopen_count']      = absint( $conversation['reopen_count'] ?? 0 ) + 1;
+				$data['resolution_due_at'] = $sla['resolution_due_at'];
+				$metadata['reopened']      = true;
+			}
 			$metadata['previous_status'] = $conversation['status'];
 			$metadata['status']          = $status;
+		}
+		foreach ( array( 'first_response_due_at', 'resolution_due_at' ) as $deadline_field ) {
+			if ( ! array_key_exists( $deadline_field, $args ) ) {
+				continue;
+			}
+			$deadline = $this->normalize_datetime( $args[ $deadline_field ] );
+			if ( null === $deadline ) {
+				return $this->error( 'invalid_ticket_deadline', __( 'Enter a valid ticket SLA date and time.', 'nxt-cloud-chat' ) );
+			}
+			$data[ $deadline_field ] = $deadline;
+			if ( (string) ( $conversation[ $deadline_field ] ?? '' ) !== (string) $deadline ) {
+				$details_metadata['changed_fields'][] = $deadline_field;
+			}
 		}
 
 		if ( empty( $data ) ) {
@@ -506,7 +711,11 @@ final class NXTCC_Conversations {
 		$current = $this->get( $conversation_id, $tenant );
 		if ( isset( $metadata['status'] ) && $metadata['status'] !== $metadata['previous_status'] ) {
 			$this->record_activity( $current, 'conversation_status_changed', $actor_id, $source, $metadata );
-			do_action( 'nxtcc_conversation_status_changed', $current, $conversation, $args );
+			if ( ! empty( $metadata['reopened'] ) ) {
+				do_action( 'nxtcc_conversation_reopened', $current, $conversation, $args );
+			} else {
+				do_action( 'nxtcc_conversation_status_changed', $current, $conversation, $args );
+			}
 		}
 		if ( isset( $metadata['priority'] ) && $metadata['priority'] !== $metadata['previous_priority'] ) {
 			$this->record_activity( $current, 'conversation_priority_changed', $actor_id, $source, $metadata );
@@ -518,6 +727,144 @@ final class NXTCC_Conversations {
 		}
 
 		return $this->success( $current, true );
+	}
+
+	/**
+	 * Save all editable ticket panel fields in one request.
+	 *
+	 * @param array $args Ticket values and tenant tuple.
+	 * @return array<string,mixed>
+	 */
+	public function save_ticket( array $args ): array {
+		$tenant            = $this->normalize_tenant( $args );
+		$conversation_id   = absint( $args['conversation_id'] ?? 0 );
+		$contact_id        = absint( $args['contact_id'] ?? 0 );
+		$actor_id          = absint( $args['actor_id'] ?? get_current_user_id() );
+		$assignment_target = sanitize_text_field( (string) ( $args['assignment_target'] ?? '' ) );
+		$subject           = $this->limit_text( $args['subject'] ?? '', 191 );
+		$category_id       = absint( $args['category_id'] ?? 0 );
+		$internal_note     = $this->limit_note( $args['internal_note'] ?? '' );
+		$handoff_note      = $this->limit_note( $args['handoff_note'] ?? '' );
+		$customer_message  = sanitize_textarea_field( (string) ( $args['customer_message'] ?? '' ) );
+		$customer_message  = function_exists( 'mb_substr' ) ? mb_substr( $customer_message, 0, 4096 ) : substr( $customer_message, 0, 4096 );
+		$requested_status  = sanitize_key( (string) ( $args['status'] ?? 'open' ) );
+		$is_new            = $conversation_id <= 0;
+
+		if ( ! $this->tenant_is_complete( $tenant ) || $contact_id <= 0 ) {
+			return $this->error( 'invalid_ticket_context', __( 'Choose a valid contact before saving the ticket.', 'nxt-cloud-chat' ) );
+		}
+		if ( '' === $subject || $category_id <= 0 ) {
+			return $this->error( 'ticket_required_fields', __( 'Subject and category are required.', 'nxt-cloud-chat' ) );
+		}
+		if ( '' === $assignment_target ) {
+			return $this->error( 'ticket_assignment_required', __( 'Assign the ticket to a member or access team.', 'nxt-cloud-chat' ) );
+		}
+		if ( 'unassigned' === $requested_status ) {
+			return $this->error( 'assigned_ticket_status_required', __( 'Assigned tickets cannot use the Unassigned status.', 'nxt-cloud-chat' ) );
+		}
+		$normalized_target = $this->normalize_target( $assignment_target, $tenant );
+		if ( isset( $normalized_target['error'] ) ) {
+			return $normalized_target;
+		}
+
+		$conversation = $is_new ? null : $this->get( $conversation_id, $tenant );
+		if ( ! $is_new && ( ! is_array( $conversation ) || absint( $conversation['contact_id'] ?? 0 ) !== $contact_id ) ) {
+			return $this->error( 'conversation_not_found' );
+		}
+
+		$category           = class_exists( 'NXTCC_Ticket_Categories' ) ? NXTCC_Ticket_Categories::instance()->get( $category_id, $tenant ) : null;
+		$keeps_old_category = ! $is_new && absint( $conversation['category_id'] ?? 0 ) === $category_id;
+		if ( ! is_array( $category ) || ( empty( $category['is_active'] ) && ! $keeps_old_category ) ) {
+			return $this->error( 'invalid_ticket_category', __( 'Choose an active ticket category.', 'nxt-cloud-chat' ) );
+		}
+
+		if ( $is_new ) {
+			$conversation = $this->create_ticket(
+				$contact_id,
+				$tenant,
+				array(
+					'subject'            => $subject,
+					'category_id'        => $category_id,
+					'priority'           => (string) ( $args['priority'] ?? 'normal' ),
+					'assignment_target'  => $assignment_target,
+					'customer_message'   => $customer_message,
+					'source'             => 'manual',
+					'actor_id'           => $actor_id,
+					'inherit_assignment' => false,
+				)
+			);
+			if ( ! is_array( $conversation ) ) {
+				return $this->error( 'ticket_create_failed', __( 'Unable to create the ticket.', 'nxt-cloud-chat' ) );
+			}
+			$conversation_id = absint( $conversation['id'] ?? 0 );
+		}
+
+		$assignment = $this->assign(
+			array_merge(
+				$tenant,
+				array(
+					'conversation_id'   => $conversation_id,
+					'assignment_target' => $assignment_target,
+					'note'              => $handoff_note,
+					'reason'            => $this->limit_text( $args['handoff_reason'] ?? '', 191 ),
+					'customer_message'  => $customer_message,
+					'actor_id'          => $actor_id,
+					'source'            => 'manual',
+				)
+			)
+		);
+		if ( empty( $assignment['success'] ) ) {
+			return $assignment;
+		}
+
+		$update_args = array_merge(
+			$tenant,
+			array(
+				'conversation_id'  => $conversation_id,
+				'subject'          => $subject,
+				'category_id'      => $category_id,
+				'status'           => $requested_status,
+				'priority'         => (string) ( $args['priority'] ?? 'normal' ),
+				'customer_message' => $customer_message,
+				'actor_id'         => $actor_id,
+				'source'           => 'manual',
+			)
+		);
+		foreach ( array( 'snoozed_until', 'first_response_due_at', 'resolution_due_at' ) as $date_field ) {
+			if ( ! empty( $args[ $date_field ] ) ) {
+				$update_args[ $date_field ] = $args[ $date_field ];
+			}
+		}
+
+		$updated = $this->update( $update_args );
+		if ( empty( $updated['success'] ) ) {
+			return $updated;
+		}
+
+		if ( '' !== $internal_note ) {
+			$note_result = $this->add_note(
+				array_merge(
+					$tenant,
+					array(
+						'conversation_id' => $conversation_id,
+						'note'            => $internal_note,
+						'actor_id'        => $actor_id,
+						'source'          => 'manual',
+					)
+				)
+			);
+			if ( empty( $note_result['success'] ) ) {
+				return $note_result;
+			}
+		}
+
+		$this->set_current_for_contact( $contact_id, $conversation_id, $tenant, $actor_id );
+		return array(
+			'success'      => true,
+			'created'      => $is_new,
+			'changed'      => ! empty( $assignment['changed'] ) || ! empty( $updated['changed'] ) || '' !== $internal_note,
+			'conversation' => $this->get( $conversation_id, $tenant ),
+		);
 	}
 
 	/**
@@ -952,6 +1299,8 @@ final class NXTCC_Conversations {
 		}
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Controlled table identifier and integer-only placeholders.
+		$this->db->query( $this->db->prepare( 'DELETE FROM ' . $this->quote_table( $this->state_table ) . ' WHERE contact_id IN (' . $placeholders . ')', ...$contact_ids ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.PreparedSQL.NotPrepared,WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- Controlled table identifier and integer-only placeholders.
 		$this->db->query( $this->db->prepare( 'DELETE FROM ' . $this->quote_table( $this->conversations_table ) . ' WHERE contact_id IN (' . $placeholders . ')', ...$contact_ids ) );
 	}
 
@@ -972,10 +1321,25 @@ final class NXTCC_Conversations {
 				'opened_at'       => $received_at,
 				'last_inbound_at' => $received_at,
 				'last_message_at' => $received_at,
+				'source'          => 'webhook',
 			)
 		);
 		if ( null === $conversation ) {
 			return;
+		}
+
+		$history_id = absint( $event['history_id'] ?? 0 );
+		if ( $history_id > 0 ) {
+			$service->db->update(
+				$service->message_history_table,
+				array( 'conversation_id' => absint( $conversation['id'] ) ),
+				array(
+					'id'                  => $history_id,
+					'user_mailid'         => sanitize_email( (string) ( $event['user_mailid'] ?? '' ) ),
+					'business_account_id' => sanitize_text_field( (string) ( $event['business_account_id'] ?? '' ) ),
+					'phone_number_id'     => sanitize_text_field( (string) ( $event['phone_number_id'] ?? '' ) ),
+				)
+			);
 		}
 
 		$data = array(
@@ -1016,24 +1380,84 @@ final class NXTCC_Conversations {
 	 * @param int         $contact_id Contact ID.
 	 * @param array       $tenant Tenant tuple.
 	 * @param string|null $sent_at UTC timestamp.
-	 * @return void
+	 * @param string      $source Change source.
+	 * @return bool Whether the ticket timestamp update succeeded.
 	 */
-	public function touch_outbound( int $contact_id, array $tenant, ?string $sent_at = null ): void {
+	public function touch_outbound( int $contact_id, array $tenant, ?string $sent_at = null, string $source = 'manual' ): bool {
 		$conversation = $this->get_or_create_for_contact( $contact_id, $tenant );
 		if ( null === $conversation ) {
-			return;
+			return false;
 		}
 
+		return $this->touch_outbound_for_ticket( absint( $conversation['id'] ), $tenant, $sent_at, $source );
+	}
+
+	/**
+	 * Mark an outbound reply against an explicit ticket.
+	 *
+	 * @param int         $conversation_id Conversation ID.
+	 * @param array       $tenant Tenant tuple.
+	 * @param string|null $sent_at UTC timestamp.
+	 * @param string      $source Change source.
+	 * @return bool
+	 */
+	public function touch_outbound_for_ticket( int $conversation_id, array $tenant, ?string $sent_at = null, string $source = 'manual' ): bool {
+		$conversation = $this->get( $conversation_id, $tenant );
+		if ( null === $conversation ) {
+			return false;
+		}
+
+		$source  = $this->normalize_source( $source );
 		$sent_at = $this->normalize_datetime( $sent_at ) ?? current_time( 'mysql', true );
 		$data    = array(
 			'last_outbound_at' => $sent_at,
 			'last_message_at'  => $sent_at,
 			'updated_at'       => current_time( 'mysql', true ),
 		);
-		if ( empty( $conversation['first_response_at'] ) ) {
-			$data['first_response_at'] = $sent_at;
+		$updated = $this->db->update( $this->conversations_table, $data, array( 'id' => absint( $conversation['id'] ) ) );
+		if ( false === $updated ) {
+			return false;
 		}
-		$this->db->update( $this->conversations_table, $data, array( 'id' => absint( $conversation['id'] ) ) );
+
+		$first_response_updated = false;
+		if ( empty( $conversation['first_response_at'] ) ) {
+			$first_response_updated = 1 === $this->db->update(
+				$this->conversations_table,
+				array( 'first_response_at' => $sent_at ),
+				array(
+					'id'                => absint( $conversation['id'] ),
+					'first_response_at' => null,
+				),
+				array( '%s' ),
+				array( '%d', '%s' )
+			);
+		}
+		if ( $first_response_updated ) {
+			$current = $this->get( absint( $conversation['id'] ), $tenant );
+			$this->record_activity(
+				$current,
+				'conversation_first_response_recorded',
+				get_current_user_id(),
+				$source,
+				array(
+					'first_response_at' => $sent_at,
+				)
+			);
+			do_action(
+				'nxtcc_conversation_first_response_recorded',
+				$current,
+				$conversation,
+				array_merge(
+					$tenant,
+					array(
+						'source' => $source,
+					)
+				)
+			);
+		}
+
+		$this->set_current_for_contact( absint( $conversation['contact_id'] ), $conversation_id, $tenant, get_current_user_id() );
+		return true;
 	}
 
 	/**
@@ -1238,10 +1662,11 @@ final class NXTCC_Conversations {
 	 * @return array<string,mixed>
 	 */
 	private function decorate( array $row, ?array $watchers = null ): array {
-		foreach ( array( 'id', 'contact_id', 'assigned_user_id', 'reopen_count' ) as $field ) {
+		foreach ( array( 'id', 'contact_id', 'category_id', 'assigned_user_id', 'reopen_count' ) as $field ) {
 			$row[ $field ] = absint( $row[ $field ] ?? 0 );
 		}
 		$row['assigned_role']     = sanitize_key( (string) ( $row['assigned_role'] ?? '' ) );
+		$row['origin_source']     = $this->normalize_source( (string) ( $row['origin_source'] ?? 'system' ) );
 		$row['status']            = $this->normalize_status( (string) ( $row['status'] ?? '' ) );
 		$row['priority']          = $this->normalize_priority( (string) ( $row['priority'] ?? '' ) );
 		$row['assignment_label']  = __( 'Unassigned', 'nxt-cloud-chat' );
@@ -1271,12 +1696,18 @@ final class NXTCC_Conversations {
 				? get_date_from_gmt( (string) $row[ $date_field ], get_option( 'date_format' ) . ' ' . get_option( 'time_format' ) )
 				: '';
 		}
-		$row['snoozed_until_local_input'] = ! empty( $row['snoozed_until'] )
+		$row['snoozed_until_local_input']         = ! empty( $row['snoozed_until'] )
 			? get_date_from_gmt( (string) $row['snoozed_until'], 'Y-m-d\TH:i' )
 			: '';
-		$now                              = current_time( 'mysql', true );
-		$row['first_response_overdue']    = empty( $row['first_response_at'] ) && ! empty( $row['first_response_due_at'] ) && (string) $row['first_response_due_at'] < $now;
-		$row['resolution_overdue']        = ! in_array( $row['status'], array( 'resolved', 'closed' ), true ) && ! empty( $row['resolution_due_at'] ) && (string) $row['resolution_due_at'] < $now;
+		$row['first_response_due_at_local_input'] = ! empty( $row['first_response_due_at'] )
+			? get_date_from_gmt( (string) $row['first_response_due_at'], 'Y-m-d\TH:i' )
+			: '';
+		$row['resolution_due_at_local_input']     = ! empty( $row['resolution_due_at'] )
+			? get_date_from_gmt( (string) $row['resolution_due_at'], 'Y-m-d\TH:i' )
+			: '';
+		$now                                      = current_time( 'mysql', true );
+		$row['first_response_overdue']            = empty( $row['first_response_at'] ) && ! empty( $row['first_response_due_at'] ) && (string) $row['first_response_due_at'] < $now;
+		$row['resolution_overdue']                = ! in_array( $row['status'], array( 'resolved', 'closed' ), true ) && ! empty( $row['resolution_due_at'] ) && (string) $row['resolution_due_at'] < $now;
 
 		return $row;
 	}

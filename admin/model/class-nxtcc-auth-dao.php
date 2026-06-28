@@ -365,6 +365,7 @@ final class NXTCC_Auth_DAO {
 			'user_mailid'         => '%s',
 			'business_account_id' => '%s',
 			'phone_number_id'     => '%s',
+			'conversation_id'     => '%d',
 			'template_name'       => '%s',
 			'template_type'       => '%s',
 			'template_data'       => '%s',

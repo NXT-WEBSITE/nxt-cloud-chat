@@ -382,6 +382,8 @@ if ( ! function_exists( 'nxtcc__wipe_site_data' ) ) {
 			$site_prefix . 'nxtcc_message_history',
 			$site_prefix . 'nxtcc_conversation_watchers',
 			$site_prefix . 'nxtcc_conversation_assignment_history',
+			$site_prefix . 'nxtcc_contact_ticket_state',
+			$site_prefix . 'nxtcc_ticket_categories',
 			$site_prefix . 'nxtcc_conversations',
 			$site_prefix . 'nxtcc_crm_deal_stage_history',
 			$site_prefix . 'nxtcc_crm_deal_products',
