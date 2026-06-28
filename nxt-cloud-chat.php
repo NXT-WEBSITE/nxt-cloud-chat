@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat - CRM, Inbox & OTP Login
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       WhatsApp CRM for WordPress with real-time messaging, customer communication, contact management, sales pipelines, team management, automated notifications, and WhatsApp OTP login.
- * Version:           1.1.4
+ * Version:           1.1.5
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.1.4' );
+	define( 'NXTCC_VERSION', '1.1.5' );
 }
 
 /**
@@ -480,6 +480,15 @@ function nxtcc_support_badge_source_domain(): string {
 }
 
 /**
+ * Check whether the floating support badge is enabled.
+ *
+ * @return bool
+ */
+function nxtcc_support_badge_is_enabled(): bool {
+	return 1 === (int) get_option( 'nxtcc_support_badge_enabled', 1 );
+}
+
+/**
  * Determine support badge context for the current admin page.
  *
  * @param string $hook Current admin page hook suffix.
@@ -552,7 +561,7 @@ function nxtcc_support_badge_context( string $hook = '' ): ?array {
 		return null;
 	}
 
-	$enabled = apply_filters( 'nxtcc_support_badge_enabled', true, $context, $hook, $page );
+	$enabled = apply_filters( 'nxtcc_support_badge_enabled', nxtcc_support_badge_is_enabled(), $context, $hook, $page );
 
 	return $enabled ? $context : null;
 }
@@ -1152,7 +1161,8 @@ add_action(
 			'nxtcc-chat-runtime',
 			'NXTCC_ReceivedMessages',
 			array(
-				'ajaxurl' => admin_url( 'admin-ajax.php' ),
+				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
+				'settingsUrl' => admin_url( 'admin.php?page=nxtcc-settings' ),
 			)
 		);
 

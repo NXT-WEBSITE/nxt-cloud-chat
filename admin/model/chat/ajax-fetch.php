@@ -114,7 +114,14 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 	list( $user_mailid, $phone_number_id ) = nxtcc_chat_resolve_user_and_pnid( $requested_pnid );
 
 	if ( '' === $user_mailid || '' === $phone_number_id ) {
-		wp_send_json_error( array( 'message' => 'Phone number id not found for user.' ), 400 );
+		wp_send_json_error(
+			array(
+				'code'         => 'invalid_connection',
+				'message'      => __( 'Invalid connection. Set up the connection in Settings.', 'nxt-cloud-chat' ),
+				'settings_url' => esc_url_raw( admin_url( 'admin.php?page=nxtcc-settings' ) ),
+			),
+			400
+		);
 	}
 
 	$repo                  = nxtcc_chat_repo();
