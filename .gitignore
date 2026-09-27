@@ -1,46 +1,61 @@
-# =========================
-# OS Files
-# =========================
+# OS metadata.
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# =========================
-# Editor / IDE
-# =========================
+# Local editor and agent state.
 .vscode/
 .idea/
+.agents/
+.codex/
+.codex-wp/
+*.swp
+*.swo
+*~
 
-# =========================
-# Logs & Temp Files
-# =========================
+# Local credentials. Keep example configuration trackable.
+.env
+.env.*
+!.env.example
+!.env.dist
+/secrets/
+/private-keys/
+/id_rsa
+/id_ed25519
+
+# Logs, temporary files, and generated quality reports.
 *.log
 tmp_*.php
 *.tmp
+*.bak
+.phpunit.result.cache
+.phpunit.cache/
+.phpcs-cache
+.phpcs-cache.*
+/coverage/
+/phpcs-*.csv
+/phpcs-*.txt
+/phpcs-*.json
+/phpcs*.xml
+/phpunit-results.xml
+/junit.xml
 
-# =========================
-# Local Dev Files (ROOT)
-# =========================
-phpcs-*.csv
-
-# =========================
-# Local WordPress Environments
-# =========================
-sites/
-
-# =========================
-# Node / Build (future safe)
-# =========================
+# Dependencies and root-only local build/environment output.
+# Do not ignore runtime vendor assets or nested block/asset build directories.
 node_modules/
-dist/
-build/
+/sites/
+/build/
+/dist/
+/build-artifacts/
+/.cache/
 
-# =========================
-# Misc
-# =========================
+# Release archives and local planning/website drafts.
 *.zip
 *.tar.gz
-plan.txt
-phpcs.xml
-home_page.txt
-new_home_page.txt
+*.tgz
+*.7z
+/plan.txt
+/home_page.txt
+/new_home_page.txt
+
+# Keep developer docs, readme.txt, and runtime assets in Git.

@@ -14,26 +14,6 @@ if ( ! defined( 'NXTCC_PRO_PUBLIC_KEY' ) ) {
 	define( 'NXTCC_PRO_PUBLIC_KEY', 'a0S0iJVxz0s6d/EbZgv5AB1LMZ9cnBF8EFcB4rZSxTQ=' );
 }
 
-/**
- * Development-only integrity bypass.
- *
- * Keep this disabled in production releases. Enable it only in local
- * development while testing unsigned Pro package changes.
- */
-if ( ! defined( 'NXTCC_FREE_DEV_BYPASS_PRO_INTEGRITY_CHECK' ) ) {
-	define( 'NXTCC_FREE_DEV_BYPASS_PRO_INTEGRITY_CHECK', true );
-}
-
-/**
- * Freeze the bypass state as soon as Free loads.
- */
-if ( ! defined( 'NXTCC_PRO_INTEGRITY_BYPASS_ACTIVE' ) ) {
-	define(
-		'NXTCC_PRO_INTEGRITY_BYPASS_ACTIVE',
-		true === NXTCC_FREE_DEV_BYPASS_PRO_INTEGRITY_CHECK
-	);
-}
-
 if ( ! function_exists( 'nxtcc_pro_should_bypass_integrity_check' ) ) {
 	/**
 	 * Whether the Free-owned Pro integrity guard is bypassed.

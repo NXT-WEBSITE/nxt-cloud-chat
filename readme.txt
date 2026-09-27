@@ -2,9 +2,9 @@
 Contributors: nxtwebsite
 Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
-Tested up to: 7.0
+Tested up to: 7.1.2
 Requires PHP: 7.4
-Stable tag: 1.1.5
+Stable tag: 1.1.6
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,7 +26,7 @@ Everything runs from the familiar WordPress admin area, so your team can manage 
 * Access Teams with module permissions and assigned, team, or all-record scopes.
 * WhatsApp OTP login for WordPress and WooCommerce My Account.
 * Message history, delivery status, incoming webhooks, connection health, and secure media access.
-* Stable PHP wrappers, hooks, runtime capability discovery, and developer documentation for integrations.
+* Stable PHP wrappers, hooks, and runtime capability discovery for integrations.
 
 = Pro Add-on =
 
@@ -176,8 +176,8 @@ NXT Cloud Chat can help WooCommerce stores verify COD customers and reduce avoid
 
 * Use WhatsApp OTP login so customers verify their WhatsApp number before account access or checkout flows.
 * Sync verified WordPress users into CRM Contacts.
-* Use tags, lifecycle stages, or groups to identify verified COD customers.
-* Use Pro workflows to send COD confirmation templates after order placement.
+* Use the Pro Contact is Verified workflow condition to check the current authentication state directly.
+* Branch by Cash on Delivery or Non-COD Payment and update the order to a registered WooCommerce status.
 * Add follow-up tasks for unconfirmed or high-risk COD orders.
 * Help reduce fake orders, unreachable customers, failed delivery attempts, and return-to-origin losses.
 
@@ -264,7 +264,7 @@ NXT Cloud Chat is designed for everyday WordPress users, business teams, agencie
 
 * Free plugin and Pro add-on are separate and extensible.
 * Database schema, DAO helpers, filters, actions, runtime discovery, and stable wrappers for compatible integrations.
-* Documented integration contracts for extension development.
+* Shared integration contracts for compatible extensions.
 
 == Installation ==
 
@@ -402,9 +402,14 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 14. **Authentication** – WhatsApp OTP login settings with OTP length, cooldown, allowed countries, force-migration URL, and login button appearance.
 15. **WhatsApp login widget** – WhatsApp login widget embedded on a WordPress page.
 16. **WhatsApp login buttons** – WhatsApp login buttons for the default WordPress login page and WooCommerce My Account login page.
-17. **Settings** – WhatsApp Cloud API credentials, connection diagnostics, webhook URL, verify token, team access, and retention tools.
+17. **Settings** – WhatsApp Cloud API credentials, connection diagnostics, webhook URL, verify token, team access, retention tools, and support badge preferences.
 
 == Changelog ==
+
+= 1.1.6 =
+* Tested compatibility with WordPress 7.1.2.
+* Clarified COD workflow guidance for authentication verification, payment methods, and WooCommerce order statuses.
+* Removed legacy authentication policy files; settings continue to use the existing shared authentication handler.
 
 = 1.1.5 =
 * Added a Support settings tab with a tenant-owner toggle for showing or hiding the admin support badge.
@@ -467,7 +472,7 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * Added stable CRM access-policy wrappers and Access Teams discovery for Pro modules and external plugin integrations.
 * Added independent conversation ticket management with saved Inbox views, status, priority, subject, category, snoozing, followers, internal notes, and required-note handoffs.
 * Added tenant-scoped conversation, assignment-history, and watcher tables with bulk Inbox loading and permanent-contact cleanup.
-* Added stable conversation ticket wrappers, activity readers, access checks, lifecycle hooks, and detailed secure integration documentation.
+* Added stable conversation ticket wrappers, activity readers, access checks, and lifecycle hooks.
 * Added a stable conversation auto-assignment wrapper with tenant-safe round-robin and least-busy routing through existing assignment pools.
 * Added a bounded tenant-scoped SLA candidate reader for efficient Pro deadline catch-up scheduling.
 * Added priority-based first-response and resolution SLA targets with WordPress-timezone due dates, overdue Inbox filtering, and a developer customization filter.
@@ -528,6 +533,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.1.6 =
+Tested with WordPress 7.1.2. Clarifies COD workflow guidance and removes unused authentication policy files. Existing authentication settings are preserved.
 
 = 1.1.5 =
 Adds the Support settings tab, clearer invalid-connection guidance in Chat Window, and public auth verification wrappers for integrations.

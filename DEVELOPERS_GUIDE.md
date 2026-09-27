@@ -2139,7 +2139,7 @@ Pro exposes these advanced extension filters:
 | `nxtcc_pro_runtime_contract` | Add compatible metadata to the licensed Pro contract. |
 | `nxtcc_pro_segment_max_resolved_contacts` | Adjust the segment resolution ceiling within the hard 500-100,000 bounds. |
 | `nxtcc_pro_abandoned_cart_recovery_tenant` | Resolve the tenant used by abandoned-cart recovery. |
-| `nxtcc_pro_workflow_cod_payment_methods` | Add normalized COD payment method IDs for workflow events. |
+| `nxtcc_pro_workflow_cod_payment_methods` | Add normalized COD gateway IDs used by workflow payment-method conditions and paid-order event handling. |
 | `nxtcc_pro_worker_kick_cooldown_seconds` | Adjust the bounded broadcast worker kick cooldown. |
 | `nxtcc_pro_worker_kick_sslverify` | Control SSL verification only for a reviewed local environment; production should verify TLS. |
 
@@ -2219,6 +2219,64 @@ range. Keep custom providers selective and indexed.
 `refresh_counts` evaluates every segment returned on that page and writes a new
 count snapshot. Leave it false for ordinary list requests; use it deliberately
 on small pages or in a background refresh.
+
+## Product Type Workflow Condition
+
+The Pro condition `product_type_is` evaluates products in the current order or
+cart snapshot. Its configuration is:
+
+```json
+{
+  "product_types": ["simple", "variable"],
+  "virtual": "yes",
+  "downloadable": "any",
+  "item_match": "all"
+}
+```
+
+- `product_types`: 1 to 100 WooCommerce type slugs. Types are ORed within an item.
+- `virtual` and `downloadable`: `any`, `yes`, or `no`; both default to `any`.
+- `item_match`: `any` (default) or `all`. There is no `none` mode; the `no` branch
+  of `any` represents no matching items.
+- The type and selected properties must all match the same item.
+- Purchased variations use their parent catalog type and their own Virtual and
+  Downloadable flags, including variation subclasses supplied by extensions.
+
+The authenticated workflow catalog includes `product_types` entries with
+`value`, `label`, and `supports_properties`. Options come from WooCommerce's
+`wc_get_product_types()` and its `product_type_selector` filter. The selector
+does not enumerate products. Core Grouped/External types do not offer property
+refinements. Extension types use the WooCommerce product property methods; an
+extension can disable these refinements for its type:
+
+```php
+add_filter(
+    'nxtcc_pro_workflow_product_type_supports_properties',
+    function ( $supported, $type ) {
+        return 'my_catalog_container' === $type ? false : $supported;
+    },
+    10,
+    2
+);
+```
+
+Refinements require support from every selected type. Changing to an unsupported
+selection resets both properties to `any`; validation also rejects incompatible
+configurations submitted through the API. Grouped purchases are evaluated by
+their actual child line items; external products normally have no local items.
+
+Order/cart item snapshots include `product_type_snapshot_version` (currently 1),
+`product_type`, `parent_product_type`, `is_variation`, `is_virtual`, and
+`is_downloadable`. These are properties inside existing JSON columns, not new
+database columns. Newly captured snapshots remain authoritative after Wait nodes
+and product edits or deletion. Legacy items are enriched through WooCommerce
+CRUD on first evaluation and retained in the run context; their historic product
+properties cannot be reconstructed.
+
+An empty item collection or unresolved product/variation parent fails the step
+with an explicit error instead of choosing either branch. Valid evaluations use
+the existing `yes` and `no` branches. Publish validation requires order or cart
+context along the workflow path and currently registered product types.
 
 ## Pro Workflow Events
 
