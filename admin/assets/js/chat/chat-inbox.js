@@ -127,10 +127,11 @@ jQuery( function ( $ ) {
 				initial ? initial.toUpperCase() : '?'
 			);
 
-			const previewText = U.formatPreviewText(
+			const preview = U.el( 'div', { class: 'nxtcc-chat-head-preview' } );
+			U.safeAppend( preview, U.formatPreviewFragment(
 				U.toStr( chat && chat.message_preview ? chat.message_preview : '' ),
 				40
-			);
+			) );
 
 			const row = U.el( 'div', {
 				class: 'nxtcc-chat-head',
@@ -158,7 +159,7 @@ jQuery( function ( $ ) {
 
 			const main = U.el( 'div', { class: 'nxtcc-chat-head-main' } );
 			U.safeAppend( main, U.el( 'div', { class: 'nxtcc-chat-head-name' }, nameText ) );
-			U.safeAppend( main, U.el( 'div', { class: 'nxtcc-chat-head-preview' }, previewText ) );
+			U.safeAppend( main, preview );
 			U.safeAppend( main, U.el( 'div', { class: 'nxtcc-chat-head-assignment' }, assignment && assignment.label ? U.toStr( assignment.label ) : 'Unassigned' ) );
 			if ( conversation ) {
 				const ticketMeta = U.el( 'div', { class: 'nxtcc-chat-head-ticket-meta' } );

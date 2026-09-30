@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat - CRM, Inbox & OTP Login
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       WhatsApp CRM for WordPress with real-time messaging, customer communication, contact management, sales pipelines, team management, automated notifications, and WhatsApp OTP login.
- * Version:           1.1.6
+ * Version:           1.1.7
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.1.6' );
+	define( 'NXTCC_VERSION', '1.1.7' );
 }
 
 /**
@@ -1148,11 +1148,18 @@ add_action(
 		}
 
 		// 1) Runtime FIRST.
+		$chat_runtime_path = NXTCC_PLUGIN_DIR . 'admin/assets/js/chat/chat-runtime.js';
+		$chat_thread_path  = NXTCC_PLUGIN_DIR . 'admin/assets/js/chat/chat-thread.js';
+		$chat_inbox_path   = NXTCC_PLUGIN_DIR . 'admin/assets/js/chat/chat-inbox.js';
+		$chat_runtime_ver  = file_exists( $chat_runtime_path ) ? (string) filemtime( $chat_runtime_path ) : NXTCC_VERSION;
+		$chat_thread_ver   = file_exists( $chat_thread_path ) ? (string) filemtime( $chat_thread_path ) : NXTCC_VERSION;
+		$chat_inbox_ver    = file_exists( $chat_inbox_path ) ? (string) filemtime( $chat_inbox_path ) : NXTCC_VERSION;
+
 		wp_enqueue_script(
 			'nxtcc-chat-runtime',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-runtime.js',
 			array( 'jquery' ),
-			NXTCC_VERSION,
+			$chat_runtime_ver,
 			true
 		);
 
@@ -1180,7 +1187,7 @@ add_action(
 			'nxtcc-chat-inbox',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-inbox.js',
 			array( 'jquery', 'nxtcc-chat-runtime' ),
-			NXTCC_VERSION,
+			$chat_inbox_ver,
 			true
 		);
 
@@ -1189,7 +1196,7 @@ add_action(
 			'nxtcc-chat-thread',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-thread.js',
 			array( 'jquery', 'nxtcc-chat-runtime', 'nxtcc-chat-actions' ),
-			NXTCC_VERSION,
+			$chat_thread_ver,
 			true
 		);
 

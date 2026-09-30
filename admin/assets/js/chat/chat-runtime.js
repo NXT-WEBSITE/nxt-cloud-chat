@@ -9,7 +9,7 @@
  * - DOM-safe helpers (`el`, `safeAppend`, `safeEmpty`, `safeInsertAtStart`) to
  *   avoid HTML-string insertion and VIP/PHPCS flagged jQuery patterns.
  * - Message formatting helpers that build DOM nodes (no `.html()` / string templates).
- * - Small text helpers (`toStr`, `truncatePreview`, `formatPreviewText`).
+ * - Small text helpers (`toStr`, `truncatePreview`, `formatPreviewFragment`).
  * - `setFormField()` wrapper for FormData fields without using `.append(` token.
  *
  * @package NXTCC
@@ -163,32 +163,48 @@
 	};
 
 	/**
-	 * Append text while preserving line breaks using <br> nodes.
+	 * Format inline message/template text using DOM nodes, never HTML strings.
 	 *
-	 * @param {Element} parent Parent element.
-	 * @param {string}  text   Text.
-	 * @return {void}
+	 * @param {string} text Text with WhatsApp formatting markers.
+	 * @return {DocumentFragment} Formatted fragment.
 	 */
-	U.appendTextWithBreaks = function ( parent, text ) {
-		if ( ! parent ) {
-			return;
-		}
+	U.formatInlineFragment = function ( text ) {
+		const frag         = document.createDocumentFragment();
+		const lines        = U.toStr( text ).split( /\r?\n/ );
+		const tokenPattern = /(\*[^*]+\*|_[^_]+_|~[^~]+~|`[^`]+`)/g;
 
-		const lines = U.toStr( text ).split( /\r?\n/ );
-		const len   = lines.length;
+		lines.forEach( function ( line, lineIndex ) {
+			line.split( tokenPattern ).forEach( function ( token ) {
+				if ( ! token ) {
+					return;
+				}
 
-		for ( let i = 0; i < len; i++ ) {
-			if ( 0 !== i ) {
-				U.safeAppend( parent, document.createElement( 'br' ) );
+				let node = null;
+				if ( /^\*[^*]+\*$/.test( token ) ) {
+					node = U.el( 'strong', {}, token.slice( 1, -1 ) );
+				} else if ( /^_[^_]+_$/.test( token ) ) {
+					node = U.el( 'em', {}, token.slice( 1, -1 ) );
+				} else if ( /^~[^~]+~$/.test( token ) ) {
+					node = U.el( 'del', {}, token.slice( 1, -1 ) );
+				} else if ( /^`[^`]+`$/.test( token ) ) {
+					node = U.el( 'code', { class: 'nxtcc-template-preview-code' }, token.slice( 1, -1 ) );
+				} else {
+					node = document.createTextNode( token );
+				}
+				U.safeAppend( frag, node );
+			} );
+			if ( lineIndex < lines.length - 1 ) {
+				U.safeAppend( frag, document.createElement( 'br' ) );
 			}
-			U.safeAppend( parent, document.createTextNode( lines[ i ] ) );
-		}
+		} );
+		return frag;
 	};
 
 	/**
 	 * Convert WhatsApp-style text into DOM nodes (no HTML strings).
 	 *
 	 * Supports:
+	 * - Inline bold, italic, strikethrough, and code
 	 * - ``` fenced blocks -> <pre><code> segments
 	 * - Unordered lists   -> <ul><li> from lines starting with `*` or `-`
 	 * - Quotes            -> <blockquote> from lines starting with `>`
@@ -239,8 +255,8 @@
 					const l  = currentList.length;
 
 					for ( let j = 0; j < l; j++ ) {
-						const li       = document.createElement( 'li' );
-						li.textContent = currentList[ j ];
+						const li = document.createElement( 'li' );
+						U.safeAppend( li, U.formatInlineFragment( currentList[ j ] ) );
 						U.safeAppend( ul, li );
 					}
 
@@ -252,7 +268,7 @@
 			function flushQuote() {
 				if ( currentQuote && currentQuote.length ) {
 					const bq = U.el( 'blockquote', { class: 'nxtcc-quote' } );
-					U.appendTextWithBreaks( bq, currentQuote.join( '\n' ) );
+					U.safeAppend( bq, U.formatInlineFragment( currentQuote.join( '\n' ) ) );
 					U.safeAppend( frag, bq );
 				}
 				currentQuote = null;
@@ -261,7 +277,7 @@
 			function flushPara() {
 				if ( currentPara && currentPara.length ) {
 					const div = document.createElement( 'div' );
-					U.appendTextWithBreaks( div, currentPara.join( '\n' ) );
+					U.safeAppend( div, U.formatInlineFragment( currentPara.join( '\n' ) ) );
 					U.safeAppend( frag, div );
 				}
 				currentPara = null;
@@ -312,22 +328,40 @@
 	};
 
 	/**
-	 * Plain-text preview builder for inbox rows.
+	 * Build a single-line formatted inbox preview, limiting visible characters.
 	 *
 	 * @param {string} text  Text.
 	 * @param {number} limit Limit.
-	 * @return {string} Preview.
+	 * @return {DocumentFragment} Preview.
 	 */
-	U.formatPreviewText = function ( text, limit ) {
-		if ( ! text ) {
-			return '';
+	U.formatPreviewFragment = function ( text, limit ) {
+		const plain = U.toStr( text ).replace( /\s+/g, ' ' ).trim();
+		const lim   = Number.isFinite( Number( limit ) ) ? Math.max( 0, Math.floor( Number( limit ) ) ) : 40;
+		const frag  = U.formatInlineFragment( plain );
+
+		if ( Array.from( frag.textContent ).length <= lim ) {
+			return frag;
 		}
 
-		const plain = U.toStr( text ).replace( /\s+/g, ' ' ).trim();
-		const lim   = Number.isFinite( Number( limit ) ) ? Number( limit ) : 40;
-		const arr   = Array.from( plain );
+		// Trim text nodes after formatting so markers and Unicode pairs stay intact.
+		const walker = document.createTreeWalker( frag, NodeFilter.SHOW_TEXT );
+		let remaining = lim;
+		let node = walker.nextNode();
+		while ( node ) {
+			const characters = Array.from( node.nodeValue );
+			if ( characters.length >= remaining ) {
+				const range = document.createRange();
+				range.setStart( node, characters.slice( 0, remaining ).join( '' ).length );
+				range.setEnd( frag, frag.childNodes.length );
+				range.deleteContents();
+				break;
+			}
+			remaining -= characters.length;
+			node = walker.nextNode();
+		}
 
-		return arr.length > lim ? arr.slice( 0, lim ).join( '' ) + '…' : plain;
+		U.safeAppend( frag, document.createTextNode( '\u2026' ) );
+		return frag;
 	};
 
 	/**

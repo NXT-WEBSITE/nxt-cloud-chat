@@ -2,9 +2,9 @@
 Contributors: nxtwebsite
 Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
-Tested up to: 7.1.2
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.6
+Stable tag: 1.1.7
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -406,6 +406,12 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 
 == Changelog ==
 
+= 1.1.7 =
+* Fixed bold, italic, strikethrough, and inline code formatting in chat messages and media captions using the shared safe text renderer.
+* Added formatting to chat-list previews while preserving the 40-character visible-text limit and Unicode characters.
+* Improved chat script cache refresh so updated rendering loads without waiting for a plugin version change.
+* Removed duplicate formatting helpers and unreachable message-rendering code.
+
 = 1.1.6 =
 * Tested compatibility with WordPress 7.1.2.
 * Clarified COD workflow guidance for authentication verification, payment methods, and WooCommerce order statuses.
@@ -533,6 +539,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.1.7 =
+Fixes chat message and caption formatting, adds formatted chat-list previews, and improves chat script cache refresh. Existing messages do not need to be resent.
 
 = 1.1.6 =
 Tested with WordPress 7.1.2. Clarifies COD workflow guidance and removes unused authentication policy files. Existing authentication settings are preserved.

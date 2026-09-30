@@ -134,7 +134,8 @@ jQuery( function ( $ ) {
 			let captionEl = null;
 
 			if ( caption ) {
-				captionEl = U.el( 'div', { class: 'nxtcc-msg-caption' }, caption );
+				captionEl = U.el( 'div', { class: 'nxtcc-msg-caption' } );
+				U.safeAppend( captionEl, U.formatMessageFragment( caption ) );
 			}
 
 			function appendCaptionIfAny() {
@@ -260,39 +261,13 @@ jQuery( function ( $ ) {
 			}
 
 			if ( 'object' === typeof content ) {
+				if ( 'text' === content.kind && 'string' === typeof content.text ) {
+					return U.formatMessageFragment( content.text );
+				}
 				return renderMediaFragment( content );
 			}
 
-			const s = String( content );
-
-			if ( /\.(jpg|jpeg|png|gif|webp)$/i.test( s ) ) {
-				U.safeAppend( frag, U.el( 'img', { class: 'nxtcc-msg-media', src: s, alt: 'image' } ) );
-				return frag;
-			}
-
-			if ( /\.(mp3|wav|ogg)$/i.test( s ) ) {
-				const aud = U.el( 'audio', { class: 'nxtcc-msg-media', controls: 'controls' } );
-				aud.src   = s;
-				U.safeAppend( frag, aud );
-				return frag;
-			}
-
-			if ( /\.(mp4|webm|mov)$/i.test( s ) ) {
-				const vid = U.el( 'video', { class: 'nxtcc-msg-media', controls: 'controls' } );
-				vid.src   = s;
-				U.safeAppend( frag, vid );
-				return frag;
-			}
-
-			if ( /^https?:\/\//i.test( s ) ) {
-				U.safeAppend(
-					frag,
-					U.el( 'a', { class: 'nxtcc-msg-media', href: s, target: '_blank' }, 'View Link' )
-				);
-				return frag;
-			}
-
-			return U.formatMessageFragment( s );
+			return U.formatMessageFragment( String( content ) );
 		}
 
 		/**
@@ -393,47 +368,6 @@ jQuery( function ( $ ) {
 		}
 
 		/**
-		 * Render WhatsApp-style inline formatting without HTML injection.
-		 *
-		 * @param {string} text Template text.
-		 * @return {DocumentFragment} Formatted fragment.
-		 */
-		function renderTemplateTextFragment( text ) {
-			const frag         = document.createDocumentFragment();
-			const lines        = U.toStr( text || '' ).split( '\n' );
-			const tokenPattern = /(\*[^*]+\*|_[^_]+_|~[^~]+~|`[^`]+`)/g;
-
-			lines.forEach( function ( line, lineIndex ) {
-				line.split( tokenPattern ).forEach( function ( token ) {
-					if ( ! token ) {
-						return;
-					}
-
-					let node = null;
-					if ( /^\*[^*]+\*$/.test( token ) ) {
-						node = U.el( 'strong', {}, token.slice( 1, -1 ) );
-					} else if ( /^_[^_]+_$/.test( token ) ) {
-						node = U.el( 'em', {}, token.slice( 1, -1 ) );
-					} else if ( /^~[^~]+~$/.test( token ) ) {
-						node = U.el( 'del', {}, token.slice( 1, -1 ) );
-					} else if ( /^`[^`]+`$/.test( token ) ) {
-						node = U.el( 'code', { class: 'nxtcc-template-preview-code' }, token.slice( 1, -1 ) );
-					} else {
-						node = document.createTextNode( token );
-					}
-
-					U.safeAppend( frag, node );
-				} );
-
-				if ( lineIndex < lines.length - 1 ) {
-					U.safeAppend( frag, document.createElement( 'br' ) );
-				}
-			} );
-
-			return frag;
-		}
-
-		/**
 		 * Render a sent template snapshot.
 		 *
 		 * @param {Object} preview Normalized template preview.
@@ -504,7 +438,7 @@ jQuery( function ( $ ) {
 				'Read more...'
 			);
 
-			U.safeAppend( bodyEl, renderTemplateTextFragment( body ) );
+			U.safeAppend( bodyEl, U.formatInlineFragment( body ) );
 			U.safeAppend( bodyWrap, bodyEl );
 			U.safeAppend( bodyWrap, moreBtn );
 			U.safeAppend( root, bodyWrap );
