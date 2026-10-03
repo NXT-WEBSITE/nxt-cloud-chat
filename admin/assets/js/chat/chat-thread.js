@@ -657,6 +657,20 @@ jQuery( function ( $ ) {
 				)
 			);
 
+			if ( Number( activity.conversation_id ) > 0 && activity.ticket_number ) {
+				const ticket = U.el( 'button', {
+					type: 'button',
+					class: 'nxtcc-chat-activity-ticket nxtcc-chat-activity-meta',
+				}, U.toStr( activity.ticket_number ) );
+				ticket.addEventListener( 'click', function () {
+					if ( Number( activity.contact_id ) === Number( ctx.state.chatContactId ) && ctx.api.tickets && ctx.api.tickets.load ) {
+						ctx.$widget.addClass( 'is-ticket-open' );
+						ctx.api.tickets.load( activity.contact_id, activity.conversation_id );
+					}
+				} );
+				U.safeAppend( card, ticket );
+			}
+
 			if ( activity.summary ) {
 				U.safeAppend( card, U.el( 'div', { class: 'nxtcc-chat-activity-summary' }, U.toStr( activity.summary ) ) );
 			}
@@ -667,7 +681,7 @@ jQuery( function ( $ ) {
 					'div',
 					{ class: 'nxtcc-chat-activity-meta' },
 					[
-						U.toStr( activity.actor_label || 'System' ),
+						U.toStr( activity.actor_label || 'Unknown actor' ),
 						U.toStr( activity.created_at_display || '' ),
 					].filter( Boolean ).join( ' | ' )
 				)
@@ -887,6 +901,9 @@ jQuery( function ( $ ) {
 		}
 
 		function setComposerEnabledFromResp( resp ) {
+			if ( ctx.api.tickets && ctx.api.tickets.setReplyWindow && resp && resp.data ) {
+				ctx.api.tickets.setReplyWindow( resp.data );
+			}
 			if ( ! ctx.api.actions || ! ctx.api.actions.setComposerEnabled ) {
 				return;
 			}
@@ -1183,6 +1200,9 @@ jQuery( function ( $ ) {
 
 			if ( ! activeChat ) {
 				return;
+			}
+			if ( ctx.api.tickets && ctx.api.tickets.updateCount && activeChat.ticket_counts ) {
+				ctx.api.tickets.updateCount( activeChat.ticket_counts.total || 0 );
 			}
 
 			const cc        = activeChat.country_code ? U.toStr( activeChat.country_code ) : '';

@@ -40,13 +40,7 @@ final class NXTCC_Chat_Timeline {
 			$rows = array_reverse( $rows );
 		}
 
-		$items = array();
-		foreach ( $rows as $row ) {
-			$item = self::format_activity( $row );
-			if ( ! empty( $item ) ) {
-				$items[] = $item;
-			}
-		}
+		$items = self::format_activities( $rows, $tenant );
 
 		return array(
 			'items'              => $items,
@@ -66,14 +60,7 @@ final class NXTCC_Chat_Timeline {
 	 */
 	public static function get_context( int $activity_id, array $tenant, int $radius = 10 ): array {
 		$rows  = NXTCC_CRM_Activities::instance()->get_context( $activity_id, $tenant, $radius );
-		$items = array();
-
-		foreach ( $rows as $row ) {
-			$item = self::format_activity( $row );
-			if ( ! empty( $item ) ) {
-				$items[] = $item;
-			}
-		}
+		$items = self::format_activities( $rows, $tenant );
 
 		return array(
 			'target_activity_id' => $activity_id,
@@ -83,12 +70,37 @@ final class NXTCC_Chat_Timeline {
 	}
 
 	/**
+	 * Attach authorized ticket numbers without a lookup for every activity.
+	 *
+	 * @param array $rows Activity rows.
+	 * @param array $tenant Tenant tuple.
+	 * @return array Activity items.
+	 */
+	private static function format_activities( array $rows, array $tenant ): array {
+		$references = NXTCC_Conversations::instance()->get_visible_references( wp_list_pluck( $rows, 'conversation_id' ), $tenant );
+		$items      = array();
+		foreach ( $rows as $row ) {
+			$item = self::format_activity( $row );
+			if ( empty( $item ) ) {
+				continue;
+			}
+			$reference             = $references[ $item['conversation_id'] ] ?? array();
+			$item['ticket_number'] = ! empty( $reference ) && $reference['contact_id'] === $item['contact_id'] ? $reference['ticket_number'] : '';
+			$items[]               = $item;
+		}
+		return $items;
+	}
+
+	/**
 	 * Format one activity for browser and integration consumers.
 	 *
 	 * @param array<string,mixed> $row Activity row.
 	 * @return array<string,mixed>
 	 */
 	public static function format_activity( array $row ): array {
+		if ( ! NXTCC_CRM_Activities::can_view_private_note( $row ) ) {
+			return array();
+		}
 		$activity_id = absint( $row['id'] ?? 0 );
 		$contact_id  = absint( $row['contact_id'] ?? 0 );
 		if ( $activity_id <= 0 || $contact_id <= 0 ) {
@@ -108,7 +120,7 @@ final class NXTCC_Chat_Timeline {
 			'conversation_id'    => absint( $row['conversation_id'] ?? 0 ),
 			'activity_type'      => $type,
 			'activity_label'     => sanitize_text_field( (string) ( $types[ $type ] ?? ucwords( str_replace( '_', ' ', $type ) ) ) ),
-			'actor_label'        => sanitize_text_field( (string) ( $row['actor_label'] ?? __( 'System', 'nxt-cloud-chat' ) ) ),
+			'actor_label'        => sanitize_text_field( (string) ( $row['actor_label'] ?? __( 'Unknown actor', 'nxt-cloud-chat' ) ) ),
 			'source'             => sanitize_key( (string) ( $row['source'] ?? '' ) ),
 			'summary'            => $summary,
 			'created_at_utc'     => $created,
@@ -125,7 +137,7 @@ final class NXTCC_Chat_Timeline {
 	 * @return string
 	 */
 	private static function summary( string $type, array $metadata, string $note ): string {
-		if ( 'internal_note_added' === $type ) {
+		if ( in_array( $type, array( 'internal_note_added', 'conversation_automation_note_added' ), true ) ) {
 			return self::limit( sanitize_textarea_field( $note ), 1000 );
 		}
 

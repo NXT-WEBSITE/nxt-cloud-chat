@@ -121,6 +121,42 @@ final class NXTCC_Conversations {
 	}
 
 	/**
+	 * Fetch compact, visible ticket references for activity links in bounded batches.
+	 *
+	 * @param array $conversation_ids Ticket IDs.
+	 * @param array $tenant_args Tenant tuple.
+	 * @return array<int,array<string,mixed>> References keyed by ticket ID.
+	 */
+	public function get_visible_references( array $conversation_ids, array $tenant_args ): array {
+		$tenant = $this->normalize_tenant( $tenant_args );
+		$ids    = array_values( array_unique( array_filter( array_map( 'absint', $conversation_ids ) ) ) );
+		if ( empty( $ids ) || ! $this->tenant_is_complete( $tenant ) ) {
+			return array();
+		}
+
+		$references = array();
+		foreach ( array_chunk( $ids, 200 ) as $batch ) {
+			$args = array_merge( array( $tenant['user_mailid'], $tenant['business_account_id'], $tenant['phone_number_id'] ), $batch );
+			$rows = $this->db->get_results(
+				$this->db->prepare(
+					'SELECT id, contact_id, ticket_number, assigned_user_id, assigned_role FROM ' . $this->quote_table( $this->conversations_table ) . '
+					WHERE user_mailid = %s AND business_account_id = %s AND phone_number_id = %s
+					AND id IN (' . implode( ',', array_fill( 0, count( $batch ), '%d' ) ) . ')',
+					...$args
+				),
+				ARRAY_A
+			);
+			foreach ( NXTCC_CRM_Access_Policy::filter_conversations( is_array( $rows ) ? $rows : array(), $tenant ) as $row ) {
+				$references[ absint( $row['id'] ) ] = array(
+					'contact_id'    => absint( $row['contact_id'] ),
+					'ticket_number' => sanitize_text_field( (string) $row['ticket_number'] ),
+				);
+			}
+		}
+		return $references;
+	}
+
+	/**
 	 * Return allowed priorities.
 	 *
 	 * @return array<string,string>
@@ -235,6 +271,9 @@ final class NXTCC_Conversations {
 	 * @return array<string,mixed>|null
 	 */
 	public function create_ticket( int $contact_id, array $tenant_args, array $args = array() ): ?array {
+		if ( null !== $this->validate_ticket_text( array_intersect_key( $args, array_flip( array( 'issue', 'customer_message' ) ) ) ) ) {
+			return null;
+		}
 		$tenant  = $this->normalize_tenant( $tenant_args );
 		$contact = $this->get_contact( $contact_id, $tenant );
 		if ( null === $contact ) {
@@ -284,6 +323,7 @@ final class NXTCC_Conversations {
 				'contact_id'            => $contact_id,
 				'ticket_number'         => $ticket_number,
 				'subject'               => $this->limit_text( $args['subject'] ?? '', 191 ),
+				'issue'                 => $this->sanitize_note( $args['issue'] ?? '' ),
 				'category_id'           => $category_id > 0 ? $category_id : null,
 				'category'              => $category_name,
 				'channel'               => 'whatsapp',
@@ -316,7 +356,7 @@ final class NXTCC_Conversations {
 				$conversation,
 				'conversation_status_changed',
 				$actor_id,
-				'system',
+				$this->normalize_source( (string) ( $args['source'] ?? 'system' ) ),
 				array(
 					'previous_status' => '',
 					'status'          => $status,
@@ -554,6 +594,163 @@ final class NXTCC_Conversations {
 	}
 
 	/**
+	 * Match inbox contacts against one accessible ticket satisfying all filter groups.
+	 *
+	 * @param array $contact_ids Candidate contacts already visible in the inbox.
+	 * @param array $tenant_args Tenant tuple.
+	 * @param array $filters Assignment/status/priority arrays and overdue flag.
+	 * @return array<int> Matching contact IDs.
+	 */
+	public function filter_inbox_contacts( array $contact_ids, array $tenant_args, array $filters ): array {
+		$tenant = $this->normalize_tenant( $tenant_args );
+		$ids    = array_values( array_unique( array_filter( array_map( 'absint', $contact_ids ) ) ) );
+		if ( empty( $ids ) || ! $this->tenant_is_complete( $tenant ) ) {
+			return array();
+		}
+		$allowed = array(
+			'assignment' => array( 'mine', 'team', 'following', 'unassigned' ),
+			'status'     => array( 'open', 'pending', 'snoozed', 'resolved', 'closed' ),
+			'priority'   => array( 'low', 'normal', 'high', 'urgent' ),
+		);
+		if ( isset( $filters['overdue'] ) && ! is_bool( $filters['overdue'] ) ) {
+			return array();
+		}
+		foreach ( $allowed as $key => $values ) {
+			$selected = $filters[ $key ] ?? array();
+			if ( ! is_array( $selected ) || count( $selected ) > count( $values ) ) {
+				return array();
+			}
+			foreach ( $selected as $value ) {
+				if ( ! is_string( $value ) || ! in_array( $value, $values, true ) ) {
+					return array();
+				}
+			}
+			$filters[ $key ] = array_values( array_unique( $selected ) );
+		}
+		$policy  = NXTCC_CRM_Access_Policy::get_policy( 0, $tenant, 'nxtcc_access_chat' );
+		$matches = array();
+		foreach ( array_chunk( $ids, 200 ) as $batch ) {
+			$where  = 'user_mailid = %s AND business_account_id = %s AND phone_number_id = %s AND channel = %s';
+			$args   = array( $tenant['user_mailid'], $tenant['business_account_id'], $tenant['phone_number_id'], 'whatsapp' );
+			$where .= ' AND contact_id IN (' . implode( ',', array_fill( 0, count( $batch ), '%d' ) ) . ')';
+			$args   = array_merge( $args, $batch );
+			foreach ( array( 'status', 'priority' ) as $key ) {
+				if ( ! empty( $filters[ $key ] ) ) {
+					$where .= ' AND ' . $key . ' IN (' . implode( ',', array_fill( 0, count( $filters[ $key ] ), '%s' ) ) . ')';
+					$args   = array_merge( $args, $filters[ $key ] );
+				}
+			}
+			if ( ! empty( $filters['overdue'] ) ) {
+				$where .= " AND status NOT IN ('resolved', 'closed') AND ((first_response_at IS NULL AND first_response_due_at < %s) OR resolution_due_at < %s)";
+				$now    = current_time( 'mysql', true );
+				$args[] = $now;
+				$args[] = $now;
+			}
+			$following_sql = '0';
+			if ( in_array( 'following', $filters['assignment'], true ) ) {
+				// Aggregate after status/priority filtering so following matches the same ticket.
+				$following_sql = 'MAX(EXISTS(SELECT 1 FROM ' . $this->quote_table( $this->watchers_table ) . ' w
+					WHERE w.conversation_id = t.id AND w.wp_user_id = %d
+					AND w.user_mailid = t.user_mailid AND w.business_account_id = t.business_account_id
+					AND w.phone_number_id = t.phone_number_id))';
+				array_unshift( $args, absint( $policy['user_id'] ?? 0 ) );
+			}
+			$rows = $this->db->get_results(
+				$this->db->prepare(
+					'SELECT contact_id, assigned_user_id, assigned_role, ' . $following_sql . ' AS is_following FROM ' . $this->quote_table( $this->conversations_table ) . ' t WHERE ' . $where . ' GROUP BY contact_id, assigned_user_id, assigned_role',
+					...$args
+				),
+				ARRAY_A
+			);
+			$rows = NXTCC_CRM_Access_Policy::filter_conversations( is_array( $rows ) ? $rows : array(), $tenant );
+			foreach ( $rows as $row ) {
+				$assignment = $filters['assignment'];
+				$mine       = absint( $policy['user_id'] ?? 0 ) > 0 && absint( $row['assigned_user_id'] ) === absint( $policy['user_id'] );
+				$team       = ! empty( $policy['role_key'] ) && (string) $row['assigned_role'] === (string) $policy['role_key'];
+				$unassigned = 0 === absint( $row['assigned_user_id'] ) && '' === (string) $row['assigned_role'];
+				$following  = absint( $policy['user_id'] ?? 0 ) > 0 && ! empty( $row['is_following'] );
+				if ( empty( $assignment ) || ( $mine && in_array( 'mine', $assignment, true ) ) || ( $team && in_array( 'team', $assignment, true ) ) || ( $following && in_array( 'following', $assignment, true ) ) || ( $unassigned && in_array( 'unassigned', $assignment, true ) ) ) {
+					$matches[ absint( $row['contact_id'] ) ] = true;
+				}
+			}
+		}
+		return array_keys( $matches );
+	}
+
+	/**
+	 * Aggregate visible ticket badges for inbox contacts without loading ticket bodies.
+	 *
+	 * @param array $contact_ids Displayed contact IDs.
+	 * @param array $tenant_args Tenant tuple.
+	 * @return array<int,array<string,array<string,int>>> Counts keyed by contact ID.
+	 */
+	public function get_badge_counts_for_contacts( array $contact_ids, array $tenant_args ): array {
+		$tenant = $this->normalize_tenant( $tenant_args );
+		$ids    = array_values( array_unique( array_filter( array_map( 'absint', $contact_ids ) ) ) );
+		if ( empty( $ids ) || ! $this->tenant_is_complete( $tenant ) ) {
+			return array();
+		}
+
+		$counts = array();
+		$now    = current_time( 'mysql', true );
+		foreach ( array_chunk( $ids, 200 ) as $batch ) {
+			$placeholders = implode( ',', array_fill( 0, count( $batch ), '%d' ) );
+			$args         = array_merge( array( $now, $now, $tenant['user_mailid'], $tenant['business_account_id'], $tenant['phone_number_id'] ), $batch );
+			$rows         = $this->db->get_results(
+				$this->db->prepare(
+					'SELECT contact_id, status, priority, assigned_user_id, assigned_role, COUNT(*) AS ticket_count,
+					SUM(CASE WHEN status NOT IN (\'resolved\', \'closed\') AND (
+						(first_response_at IS NULL AND first_response_due_at IS NOT NULL AND first_response_due_at < %s)
+						OR (resolution_due_at IS NOT NULL AND resolution_due_at < %s)
+					) THEN 1 ELSE 0 END) AS overdue_count
+					FROM ' . $this->quote_table( $this->conversations_table ) . '
+					WHERE user_mailid = %s AND business_account_id = %s AND phone_number_id = %s
+					AND channel = \'whatsapp\'
+					AND contact_id IN (' . $placeholders . ')
+					GROUP BY contact_id, status, priority, assigned_user_id, assigned_role',
+					...$args
+				),
+				ARRAY_A
+			);
+			// Assignment buckets let the shared policy filter totals just like individual tickets.
+			$rows = NXTCC_CRM_Access_Policy::filter_conversations( is_array( $rows ) ? $rows : array(), $tenant );
+			foreach ( $rows as $row ) {
+				$id       = absint( $row['contact_id'] );
+				$total    = absint( $row['ticket_count'] );
+				$status   = (string) $row['status'];
+				$priority = (string) $row['priority'];
+				if ( ! isset( $counts[ $id ] ) ) {
+					$counts[ $id ] = array(
+						'total'      => 0,
+						'statuses'   => array(),
+						'priorities' => array(),
+					);
+				}
+				// The header count excludes closed tickets and tickets without an assignee.
+				if ( ! in_array( $status, array( 'closed', 'unassigned' ), true )
+					&& ( absint( $row['assigned_user_id'] ) > 0 || '' !== (string) $row['assigned_role'] )
+				) {
+					$counts[ $id ]['total'] += $total;
+				}
+				if ( in_array( $status, array( 'open', 'pending', 'snoozed', 'resolved' ), true ) ) {
+					$counts[ $id ]['statuses'][ $status ] = ( $counts[ $id ]['statuses'][ $status ] ?? 0 ) + $total;
+				}
+				if ( in_array( $status, array( 'resolved', 'closed' ), true ) ) {
+					continue;
+				}
+				if ( 0 === absint( $row['assigned_user_id'] ) && '' === (string) $row['assigned_role'] ) {
+					$counts[ $id ]['statuses']['unassigned'] = ( $counts[ $id ]['statuses']['unassigned'] ?? 0 ) + $total;
+				}
+				$counts[ $id ]['statuses']['overdue'] = ( $counts[ $id ]['statuses']['overdue'] ?? 0 ) + absint( $row['overdue_count'] );
+				if ( in_array( $priority, array( 'urgent', 'high', 'normal', 'low' ), true ) ) {
+					$counts[ $id ]['priorities'][ $priority ] = ( $counts[ $id ]['priorities'][ $priority ] ?? 0 ) + $total;
+				}
+			}
+		}
+		return $counts;
+	}
+
+	/**
 	 * List a bounded page of active conversations with SLA deadlines.
 	 *
 	 * This tenant-scoped reader supports Pro catch-up scheduling without
@@ -612,6 +809,10 @@ final class NXTCC_Conversations {
 		if ( null === $conversation ) {
 			return $this->error( 'conversation_not_found' );
 		}
+		$text_error = $this->validate_ticket_text( array_intersect_key( $args, array_flip( array( 'issue', 'customer_message' ) ) ), $conversation );
+		if ( null !== $text_error ) {
+			return $text_error;
+		}
 
 		$data             = array();
 		$metadata         = array();
@@ -625,6 +826,12 @@ final class NXTCC_Conversations {
 			$data['subject'] = $this->limit_text( $args['subject'], 191 );
 			if ( (string) $data['subject'] !== (string) $conversation['subject'] ) {
 				$details_metadata['changed_fields'][] = 'subject';
+			}
+		}
+		if ( array_key_exists( 'issue', $args ) ) {
+			$data['issue'] = $this->sanitize_note( $args['issue'] );
+			if ( (string) ( $conversation['issue'] ?? '' ) !== $data['issue'] ) {
+				$details_metadata['changed_fields'][] = 'issue';
 			}
 		}
 		if ( array_key_exists( 'category', $args ) ) {
@@ -742,13 +949,17 @@ final class NXTCC_Conversations {
 		$actor_id          = absint( $args['actor_id'] ?? get_current_user_id() );
 		$assignment_target = sanitize_text_field( (string) ( $args['assignment_target'] ?? '' ) );
 		$subject           = $this->limit_text( $args['subject'] ?? '', 191 );
+		$issue             = $this->sanitize_note( $args['issue'] ?? '' );
 		$category_id       = absint( $args['category_id'] ?? 0 );
-		$internal_note     = $this->limit_note( $args['internal_note'] ?? '' );
-		$handoff_note      = $this->limit_note( $args['handoff_note'] ?? '' );
-		$customer_message  = sanitize_textarea_field( (string) ( $args['customer_message'] ?? '' ) );
-		$customer_message  = function_exists( 'mb_substr' ) ? mb_substr( $customer_message, 0, 4096 ) : substr( $customer_message, 0, 4096 );
+		$internal_note     = $this->sanitize_note( $args['internal_note'] ?? '' );
+		$handoff_note      = $this->sanitize_note( $args['handoff_note'] ?? '' );
+		$handoff_reason    = sanitize_text_field( (string) ( $args['handoff_reason'] ?? '' ) );
+		$customer_message  = $this->sanitize_note( $args['customer_message'] ?? '' );
 		$requested_status  = sanitize_key( (string) ( $args['status'] ?? 'open' ) );
 		$is_new            = $conversation_id <= 0;
+		if ( $is_new && '' === trim( $issue ) ) {
+			return $this->error( 'ticket_issue_required', __( 'Describe the issue before creating the ticket.', 'nxt-cloud-chat' ) );
+		}
 
 		if ( ! $this->tenant_is_complete( $tenant ) || $contact_id <= 0 ) {
 			return $this->error( 'invalid_ticket_context', __( 'Choose a valid contact before saving the ticket.', 'nxt-cloud-chat' ) );
@@ -762,6 +973,17 @@ final class NXTCC_Conversations {
 		if ( 'unassigned' === $requested_status ) {
 			return $this->error( 'assigned_ticket_status_required', __( 'Assigned tickets cannot use the Unassigned status.', 'nxt-cloud-chat' ) );
 		}
+		if ( ! isset( $this->get_statuses()[ $requested_status ] ) || ! isset( $this->get_priorities()[ $args['priority'] ?? 'normal' ] ) ) {
+			return $this->error( 'invalid_ticket_status_priority', __( 'Choose a valid ticket status and priority.', 'nxt-cloud-chat' ) );
+		}
+		if ( 'snoozed' === $requested_status && null === $this->normalize_datetime( $args['snoozed_until'] ?? null ) ) {
+			return $this->error( 'snooze_time_required' );
+		}
+		foreach ( array( 'first_response_due_at', 'resolution_due_at' ) as $date_field ) {
+			if ( ! empty( $args[ $date_field ] ) && null === $this->normalize_datetime( $args[ $date_field ] ) ) {
+				return $this->error( 'invalid_ticket_deadline', __( 'Enter a valid ticket SLA date and time.', 'nxt-cloud-chat' ) );
+			}
+		}
 		$normalized_target = $this->normalize_target( $assignment_target, $tenant );
 		if ( isset( $normalized_target['error'] ) ) {
 			return $normalized_target;
@@ -770,6 +992,26 @@ final class NXTCC_Conversations {
 		$conversation = $is_new ? null : $this->get( $conversation_id, $tenant );
 		if ( ! $is_new && ( ! is_array( $conversation ) || absint( $conversation['contact_id'] ?? 0 ) !== $contact_id ) ) {
 			return $this->error( 'conversation_not_found' );
+		}
+		if ( ! $is_new && '' !== $internal_note && get_current_user_id() === $actor_id ) {
+			$latest_note = NXTCC_CRM_Activities::instance()->get_latest_private_note( $conversation_id, $tenant );
+			if ( is_array( $latest_note ) && trim( $this->sanitize_note( $latest_note['note_content'] ?? '' ) ) === trim( $internal_note ) ) {
+				$internal_note = '';
+			}
+		}
+
+		$text_error = $this->validate_ticket_text(
+			array(
+				'issue'            => $issue,
+				'internal_note'    => $internal_note,
+				'handoff_note'     => $handoff_note,
+				'handoff_reason'   => $handoff_reason,
+				'customer_message' => $customer_message,
+			),
+			$conversation ?? array()
+		);
+		if ( null !== $text_error ) {
+			return $text_error;
 		}
 
 		$category           = class_exists( 'NXTCC_Ticket_Categories' ) ? NXTCC_Ticket_Categories::instance()->get( $category_id, $tenant ) : null;
@@ -784,6 +1026,7 @@ final class NXTCC_Conversations {
 				$tenant,
 				array(
 					'subject'            => $subject,
+					'issue'              => $issue,
 					'category_id'        => $category_id,
 					'priority'           => (string) ( $args['priority'] ?? 'normal' ),
 					'assignment_target'  => $assignment_target,
@@ -806,7 +1049,7 @@ final class NXTCC_Conversations {
 					'conversation_id'   => $conversation_id,
 					'assignment_target' => $assignment_target,
 					'note'              => $handoff_note,
-					'reason'            => $this->limit_text( $args['handoff_reason'] ?? '', 191 ),
+					'reason'            => $handoff_reason,
 					'customer_message'  => $customer_message,
 					'actor_id'          => $actor_id,
 					'source'            => 'manual',
@@ -836,6 +1079,9 @@ final class NXTCC_Conversations {
 			}
 		}
 
+		if ( array_key_exists( 'issue', $args ) ) {
+			$update_args['issue'] = $issue;
+		}
 		$updated = $this->update( $update_args );
 		if ( empty( $updated['success'] ) ) {
 			return $updated;
@@ -880,9 +1126,19 @@ final class NXTCC_Conversations {
 		$conversation_id = absint( $args['conversation_id'] ?? 0 );
 		$actor_id        = absint( $args['actor_id'] ?? get_current_user_id() );
 		$source          = $this->normalize_source( (string) ( $args['source'] ?? 'manual' ) );
-		$note            = $this->limit_note( $args['note'] ?? '' );
-		$reason          = $this->limit_text( $args['reason'] ?? '', 191 );
-		$conversation    = $this->get( $conversation_id, $tenant );
+		$note            = $this->sanitize_note( $args['note'] ?? '' );
+		$reason          = sanitize_text_field( (string) ( $args['reason'] ?? '' ) );
+		$text_error      = $this->validate_ticket_text(
+			array(
+				'handoff_note'     => $note,
+				'handoff_reason'   => $reason,
+				'customer_message' => $args['customer_message'] ?? '',
+			)
+		);
+		if ( null !== $text_error ) {
+			return $text_error;
+		}
+		$conversation = $this->get( $conversation_id, $tenant );
 		if ( null === $conversation ) {
 			return $this->error( 'conversation_not_found' );
 		}
@@ -1088,13 +1344,21 @@ final class NXTCC_Conversations {
 		$tenant          = $this->normalize_tenant( $args );
 		$conversation_id = absint( $args['conversation_id'] ?? 0 );
 		$conversation    = $this->get( $conversation_id, $tenant );
-		$note            = $this->limit_note( $args['note'] ?? '' );
+		$note            = $this->sanitize_note( $args['note'] ?? '' );
+		$note_field      = in_array( $args['note_type'] ?? 'internal', array( 'handoff', 'assignment' ), true ) ? 'handoff_note' : 'internal_note';
+		$text_error      = $this->validate_ticket_text( array( $note_field => $note ) );
+		if ( null !== $text_error ) {
+			return $text_error;
+		}
 		if ( null === $conversation ) {
 			return $this->error( 'conversation_not_found' );
 		}
 		if ( '' === $note ) {
 			return $this->error( 'internal_note_required' );
 		}
+		$source        = $this->normalize_source( (string) ( $args['source'] ?? 'manual' ) );
+		$actor_id      = absint( $args['actor_id'] ?? get_current_user_id() );
+		$activity_type = 'workflow' === $source && 0 === $actor_id ? 'conversation_automation_note_added' : 'internal_note_added';
 
 		$result = NXTCC_CRM_Activities::instance()->record(
 			array_merge(
@@ -1102,10 +1366,10 @@ final class NXTCC_Conversations {
 				array(
 					'contact_id'      => absint( $conversation['contact_id'] ),
 					'conversation_id' => $conversation_id,
-					'activity_type'   => 'internal_note_added',
+					'activity_type'   => $activity_type,
 					'note_content'    => $note,
-					'source'          => $this->normalize_source( (string) ( $args['source'] ?? 'manual' ) ),
-					'actor_id'        => absint( $args['actor_id'] ?? get_current_user_id() ),
+					'source'          => $source,
+					'actor_id'        => $actor_id,
 					'metadata'        => array(
 						'note_type' => sanitize_key( (string) ( $args['note_type'] ?? 'internal' ) ),
 					),
@@ -1706,8 +1970,9 @@ final class NXTCC_Conversations {
 			? get_date_from_gmt( (string) $row['resolution_due_at'], 'Y-m-d\TH:i' )
 			: '';
 		$now                                      = current_time( 'mysql', true );
-		$row['first_response_overdue']            = empty( $row['first_response_at'] ) && ! empty( $row['first_response_due_at'] ) && (string) $row['first_response_due_at'] < $now;
-		$row['resolution_overdue']                = ! in_array( $row['status'], array( 'resolved', 'closed' ), true ) && ! empty( $row['resolution_due_at'] ) && (string) $row['resolution_due_at'] < $now;
+		$is_unresolved                            = ! in_array( $row['status'], array( 'resolved', 'closed' ), true );
+		$row['first_response_overdue']            = $is_unresolved && empty( $row['first_response_at'] ) && ! empty( $row['first_response_due_at'] ) && (string) $row['first_response_due_at'] < $now;
+		$row['resolution_overdue']                = $is_unresolved && ! empty( $row['resolution_due_at'] ) && (string) $row['resolution_due_at'] < $now;
 
 		return $row;
 	}
@@ -1887,14 +2152,48 @@ final class NXTCC_Conversations {
 	}
 
 	/**
-	 * Limit internal note.
+	 * Sanitize multiline text without silently truncating it.
 	 *
 	 * @param mixed $value Value.
 	 * @return string
 	 */
-	private function limit_note( $value ): string {
-		$value = sanitize_textarea_field( (string) $value );
-		return function_exists( 'mb_substr' ) ? mb_substr( $value, 0, 10000 ) : substr( $value, 0, 10000 );
+	private function sanitize_note( $value ): string {
+		return sanitize_textarea_field( str_replace( array( "\r\n", "\r" ), "\n", (string) $value ) );
+	}
+
+	/**
+	 * Validate ticket text before any writes, preserving unchanged legacy issues.
+	 *
+	 * @param array $fields Submitted fields.
+	 * @param array $current Existing ticket.
+	 * @return array|null Error result, or null when valid.
+	 */
+	private function validate_ticket_text( array $fields, array $current = array() ): ?array {
+		$limits = array(
+			'issue'            => array( 5000, __( 'Issue', 'nxt-cloud-chat' ) ),
+			'internal_note'    => array( 5000, __( 'Private note', 'nxt-cloud-chat' ) ),
+			'handoff_note'     => array( 2000, __( 'Handoff note', 'nxt-cloud-chat' ) ),
+			'handoff_reason'   => array( 191, __( 'Reason', 'nxt-cloud-chat' ) ),
+			'customer_message' => array( 4096, __( 'Message', 'nxt-cloud-chat' ) ),
+		);
+		foreach ( $limits as $field => $rule ) {
+			if ( ! array_key_exists( $field, $fields ) ) {
+				continue;
+			}
+			$value = 'handoff_reason' === $field ? sanitize_text_field( (string) $fields[ $field ] ) : $this->sanitize_note( $fields[ $field ] );
+			if ( 'issue' === $field && isset( $current['issue'] ) && $value === $this->sanitize_note( $current['issue'] ) ) {
+				continue;
+			}
+			$length = function_exists( 'mb_strlen' ) ? mb_strlen( $value, 'UTF-8' ) : preg_match_all( '/./us', $value );
+			if ( false === $length || $length > $rule[0] ) {
+				return $this->error(
+					'ticket_' . $field . '_too_long',
+					/* translators: 1: Ticket field label, 2: Maximum character count. */
+					sprintf( __( '%1$s must be %2$d characters or fewer.', 'nxt-cloud-chat' ), $rule[1], $rule[0] )
+				);
+			}
+		}
+		return null;
 	}
 
 	/**

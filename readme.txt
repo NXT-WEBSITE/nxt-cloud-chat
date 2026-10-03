@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.7
+Stable tag: 1.1.8
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,7 +20,7 @@ Everything runs from the familiar WordPress admin area, so your team can manage 
 
 = Free Plugin =
 
-* Shared inbox with conversation tickets, priorities, assignments, internal notes, saved views, and SLA indicators.
+* Shared inbox with tickets, issues, author-only private notes, multi-select filters, followers, assignments, and SLA indicators.
 * Contacts, groups, tags, lifecycle stages, follow-up tasks, ownership, duplicate detection, and activity history.
 * Sales pipelines, configurable stages, deals, line items, values, reasons, and stage history.
 * Access Teams with module permissions and assigned, team, or all-record scopes.
@@ -107,7 +107,11 @@ Manage your WhatsApp leads and sales opportunities directly inside WordPress.
 A shared WhatsApp inbox for sales, support, and customer communication.
 
 * Browse, filter, and reply to WhatsApp conversations from WordPress.
-* Manage tickets with status, priority, category, followers, notes, and handoff notes.
+* Manage multiple tickets per contact with subject, category, persistent issue descriptions, status, priority, followers, and shared handoff notes.
+* Keep private notes visible only to their author while they retain record access. The latest own note is prefilled without duplicating unchanged text.
+* Combine multi-select assignment, status, and priority filters, including Following and Overdue. Selected criteria match the same accessible ticket.
+* Save a ticket without sending a message. Save & Send requires message content, an open reply window, and the required permissions, with a disabled-button tooltip explaining unmet requirements.
+* Open a ticket from its number in chat activity history and see a compact header count excluding closed and unassigned tickets.
 * Assign tickets to users, teams, or queues with manual or automated routing.
 * Use saved inbox views: All, Mine, Team Queue, Unassigned, Overdue, and Recently Resolved.
 * Track SLA targets for first response and resolution.
@@ -406,6 +410,20 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 
 == Changelog ==
 
+= 1.1.8 =
+* Added compact multi-select Assignment, Status, and Priority inbox filters, including Following, with permission-aware matching on the same ticket.
+* Fixed overdue ticket matching to exclude resolved and closed tickets and protected filter results from stale requests.
+* Added compact status and priority counts, followed-ticket highlighting, ticket links in chat activities, and a header ticket count that excludes closed and unassigned tickets.
+* Reordered the ticket panel and added a persistent Issue field, required for new panel-created tickets while keeping existing tickets compatible.
+* Changed internal notes to author-only Private Notes across activity readers and timelines. Existing notes without an identifiable author are hidden; handoff notes remain shared with authorized handlers.
+* Prefilled each ticket's latest own private note and prevented unchanged note text from being appended again.
+* Added ticket text limits and editing counters, with matching server validation, Unicode-safe note storage, and preservation of unchanged older text.
+* Limits: Issue and Private Note 5,000 characters; Handoff Note 2,000; Reason 191; customer Message 4,096. Pro 1.1.6 adds matching workflow validation.
+* Kept new workflow-generated team notes visible to authorized ticket handlers without exposing personal private notes or older unattributed notes.
+* Allowed new tickets to be saved without a customer message. Save & Send now checks required fields, permissions, message content, and reply-window expiry, with a hover/focus tooltip and duplicate-submit protection.
+* Corrected UTC reply-window checks and preserved saved tickets when direct message delivery fails.
+* Fixed actor lookup for WordPress user rows so manual activities show the recorded user's name, automated actions show their source, and missing actors are not guessed.
+
 = 1.1.7 =
 * Fixed bold, italic, strikethrough, and inline code formatting in chat messages and media captions using the shared safe text renderer.
 * Added formatting to chat-list previews while preserving the 40-character visible-text limit and Unicode characters.
@@ -539,6 +557,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.1.8 =
+Adds ticket issues, filters, and text limits. Personal notes become author-only; old unattributed notes stay hidden. The Issue column is added automatically. Update Pro to 1.1.6 for matching workflow validation and review oversized workflow notes.
 
 = 1.1.7 =
 Fixes chat message and caption formatting, adds formatted chat-list previews, and improves chat script cache refresh. Existing messages do not need to be resent.

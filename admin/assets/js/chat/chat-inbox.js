@@ -41,7 +41,9 @@ jQuery( function ( $ ) {
 
 		let inboxPollingInterval = null;
 		let pollInFlight         = false;
+		let pollPending          = false;
 		let searchDebounceTimer  = null;
+		const ticketFilters = Chat.filters.create( ctx, pollInbox );
 
 		/**
 		 * Render the missing/invalid connection notice with a settings link.
@@ -95,6 +97,35 @@ jQuery( function ( $ ) {
 			}
 
 			return {};
+		}
+
+		/**
+		 * Build a non-interactive row of nonzero ticket counts.
+		 *
+		 * @param {Object} counts Counts keyed by status or priority.
+		 * @param {Array} keys Display order.
+		 * @param {string} type Badge type.
+		 * @return {Element|null} Badge row, or null when empty.
+		 */
+		function buildTicketBadges( counts, keys, type ) {
+			const labels = Chat.cfg.ticketBadgeLabels || {};
+			const row = U.el( 'div', { class: 'nxtcc-chat-head-ticket-meta nxtcc-chat-head-ticket-' + type } );
+			keys.forEach( function ( key ) {
+				const count = Number( counts && counts[ key ] );
+				if ( ! Number.isSafeInteger( count ) || count < 1 ) {
+					return;
+				}
+				const label = U.toStr( labels[ key ] || key );
+				const chip = U.el( 'span', {
+					class: 'nxtcc-ticket-chip ' + type + '-' + key,
+					'aria-label': label + ': ' + String( count ),
+					title: U.toStr( labels[ key + '_hint' ] || label ),
+				} );
+				U.safeAppend( chip, U.el( 'span', { class: 'nxtcc-ticket-chip-label', 'aria-hidden': 'true' }, label ) );
+				U.safeAppend( chip, U.el( 'span', { class: 'nxtcc-ticket-chip-count', 'aria-hidden': 'true' }, String( count ) ) );
+				U.safeAppend( row, chip );
+			} );
+			return row.childNodes.length ? row : null;
 		}
 
 		/**
@@ -160,13 +191,9 @@ jQuery( function ( $ ) {
 			const main = U.el( 'div', { class: 'nxtcc-chat-head-main' } );
 			U.safeAppend( main, U.el( 'div', { class: 'nxtcc-chat-head-name' }, nameText ) );
 			U.safeAppend( main, preview );
-			U.safeAppend( main, U.el( 'div', { class: 'nxtcc-chat-head-assignment' }, assignment && assignment.label ? U.toStr( assignment.label ) : 'Unassigned' ) );
-			if ( conversation ) {
-				const ticketMeta = U.el( 'div', { class: 'nxtcc-chat-head-ticket-meta' } );
-				U.safeAppend( ticketMeta, U.el( 'span', { class: 'nxtcc-ticket-chip status-' + U.toStr( conversation.status || 'open' ) }, U.toStr( conversation.status || 'open' ) ) );
-				U.safeAppend( ticketMeta, U.el( 'span', { class: 'nxtcc-ticket-chip priority-' + U.toStr( conversation.priority || 'normal' ) }, U.toStr( conversation.priority || 'normal' ) ) );
-				U.safeAppend( main, ticketMeta );
-			}
+			const ticketCounts = chat && chat.ticket_counts ? chat.ticket_counts : {};
+			U.safeAppend( main, buildTicketBadges( ticketCounts.statuses, [ 'open', 'pending', 'snoozed', 'resolved', 'unassigned', 'overdue' ], 'status' ) );
+			U.safeAppend( main, buildTicketBadges( ticketCounts.priorities, [ 'urgent', 'high', 'normal', 'low' ], 'priority' ) );
 			U.safeAppend( row, main );
 
 			const meta = U.el( 'div', { class: 'nxtcc-chat-head-meta' } );
@@ -218,6 +245,7 @@ jQuery( function ( $ ) {
 			} );
 
 			U.safeAppend( listEl, frag );
+			filterVisibleRows( U.toStr( $widget.find( '.nxtcc-inbox-search' ).val() ) );
 
 			if ( ctx.state.chatContactId ) {
 				$chatList
@@ -233,6 +261,7 @@ jQuery( function ( $ ) {
 		 */
 		function pollInbox() {
 			if ( pollInFlight ) {
+				pollPending = true;
 				return;
 			}
 
@@ -242,15 +271,19 @@ jQuery( function ( $ ) {
 			}
 
 			pollInFlight = true;
+			const requestedFilters = JSON.stringify( ticketFilters.values() );
 
 			$.post( Chat.cfg.ajaxurl, {
 				action: 'nxtcc_fetch_inbox_summary',
 				business_account_id: ctx.businessAccountId,
 				phone_number_id: ctx.phoneNumberId,
-				ticket_view: U.toStr( $widget.find( '.nxtcc-ticket-view' ).val() || 'all' ),
+				ticket_filters: requestedFilters,
 				nonce: ctx.nonce,
 			} )
 				.done( function ( resp ) {
+					if ( requestedFilters !== JSON.stringify( ticketFilters.values() ) ) {
+						return;
+					}
 					if ( resp && resp.success && resp.data && resp.data.contacts ) {
 						ctx.state.accessPolicy = resp.data.access_policy || { can_manage: false };
 						$widget.toggleClass( 'is-view-only', ! ctx.state.accessPolicy.can_manage );
@@ -274,6 +307,9 @@ jQuery( function ( $ ) {
 					}
 				} )
 				.fail( function ( xhr ) {
+					if ( requestedFilters !== JSON.stringify( ticketFilters.values() ) ) {
+						return;
+					}
 					const listEl = $chatList.get( 0 );
 					if ( listEl ) {
 						const data = ajaxErrorData( xhr );
@@ -287,14 +323,14 @@ jQuery( function ( $ ) {
 				} )
 				.always( function () {
 					pollInFlight = false;
+					if ( pollPending ) {
+						pollPending = false;
+						pollInbox();
+					}
 				} );
 		}
 
 		ctx.api.inbox.refresh = pollInbox;
-
-		$widget.find( '.nxtcc-ticket-view' ).off( 'change' + ns ).on( 'change' + ns, function () {
-			pollInbox();
-		} );
 
 		/**
 		 * Start inbox polling interval.
@@ -330,10 +366,15 @@ jQuery( function ( $ ) {
 		 * @return {void}
 		 */
 		function applyFilter( q ) {
-			const query = U.toStr( q ).toLowerCase();
-
 			stopInboxPolling();
+			filterVisibleRows( q );
+			if ( '' === U.toStr( q ) ) {
+				startInboxPolling();
+			}
+		}
 
+		function filterVisibleRows( q ) {
+			const query = U.toStr( q ).toLowerCase();
 			$chatList.find( '.nxtcc-chat-head' ).each( function () {
 				const row   = this;
 				const name  = U.toStr( row.getAttribute( 'data-name-lc' ) || '' );
@@ -343,9 +384,6 @@ jQuery( function ( $ ) {
 				$( row ).toggle( show );
 			} );
 
-			if ( '' === query ) {
-				startInboxPolling();
-			}
 		}
 
 		// Client-side filter: pause polling while user is typing (debounced).

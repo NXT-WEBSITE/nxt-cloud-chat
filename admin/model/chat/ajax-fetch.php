@@ -32,6 +32,17 @@ if ( ! function_exists( 'nxtcc_chat_ajax_require_caps' ) ) {
 	}
 }
 
+/**
+ * Return the UTC expiry timestamp for a contact's reply window.
+ *
+ * @param string|null $last_incoming Last incoming message in UTC.
+ * @return int
+ */
+function nxtcc_chat_reply_window_expires_at( ?string $last_incoming ): int {
+	$timestamp = ! empty( $last_incoming ) ? strtotime( $last_incoming . ' UTC' ) : false;
+	return false !== $timestamp && $timestamp <= time() ? $timestamp + DAY_IN_SECONDS : 0;
+}
+
 if ( ! function_exists( 'nxtcc_chat_can_reply_24h' ) ) {
 
 	/**
@@ -41,16 +52,7 @@ if ( ! function_exists( 'nxtcc_chat_can_reply_24h' ) ) {
 	 * @return bool
 	 */
 	function nxtcc_chat_can_reply_24h( ?string $last_incoming ): bool {
-		if ( null === $last_incoming || '' === $last_incoming ) {
-			return false;
-		}
-
-		$ts = strtotime( $last_incoming );
-		if ( false === $ts ) {
-			return false;
-		}
-
-		return ( time() - $ts ) <= ( 24 * HOUR_IN_SECONDS );
+		return nxtcc_chat_reply_window_expires_at( $last_incoming ) > time();
 	}
 }
 
@@ -148,13 +150,20 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 		)
 	);
 
-	$view          = isset( $_POST['ticket_view'] ) ? sanitize_key( wp_unslash( $_POST['ticket_view'] ) ) : 'all';
-	$now           = current_time( 'mysql', true );
+	$view           = isset( $_POST['ticket_view'] ) ? sanitize_key( wp_unslash( $_POST['ticket_view'] ) ) : 'all';
+	$ticket_filters = null;
+	if ( isset( $_POST['ticket_filters'] ) ) {
+		$ticket_filters = is_string( $_POST['ticket_filters'] ) ? json_decode( sanitize_text_field( wp_unslash( $_POST['ticket_filters'] ) ), true ) : null;
+		if ( ! is_array( $ticket_filters ) ) {
+			wp_send_json_error( array( 'message' => __( 'Invalid ticket filters.', 'nxt-cloud-chat' ) ), 400 );
+		}
+		$view = 'all';
+	}
 	$recent_cutoff = gmdate( 'Y-m-d H:i:s', time() - ( 7 * DAY_IN_SECONDS ) );
 	$rows          = array_values(
 		array_filter(
 			$rows,
-			static function ( $row ) use ( $conversation_map, $view, $policy, $now, $recent_cutoff ): bool {
+			static function ( $row ) use ( $conversation_map, $view, $policy, $recent_cutoff ): bool {
 				$conversation = $conversation_map[ absint( $row->contact_id ?? 0 ) ] ?? null;
 				if ( ! is_array( $conversation ) || 'all' === $view ) {
 					return is_array( $conversation );
@@ -171,8 +180,7 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 					return 0 === absint( $conversation['assigned_user_id'] ?? 0 ) && '' === (string) ( $conversation['assigned_role'] ?? '' );
 				}
 				if ( 'overdue' === $view ) {
-					return ( ! empty( $conversation['first_response_due_at'] ) && (string) $conversation['first_response_due_at'] < $now && empty( $conversation['first_response_at'] ) )
-						|| ( ! empty( $conversation['resolution_due_at'] ) && (string) $conversation['resolution_due_at'] < $now && ! in_array( $conversation['status'], array( 'resolved', 'closed' ), true ) );
+					return ! empty( $conversation['first_response_overdue'] ) || ! empty( $conversation['resolution_overdue'] );
 				}
 				if ( 'resolved' === $view ) {
 					return in_array( $conversation['status'], array( 'resolved', 'closed' ), true )
@@ -185,9 +193,26 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 		)
 	);
 
+	if ( null !== $ticket_filters ) {
+		$matching_ids = NXTCC_Conversations::instance()->filter_inbox_contacts( array_map( 'absint', wp_list_pluck( $rows, 'contact_id' ) ), $tenant, $ticket_filters );
+		$matching_ids = array_fill_keys( $matching_ids, true );
+		$rows         = array_values(
+			array_filter(
+				$rows,
+				static function ( $row ) use ( $matching_ids ): bool {
+					return isset( $matching_ids[ absint( $row->contact_id ) ] );
+				}
+			)
+		);
+	}
+	$ticket_counts = NXTCC_Conversations::instance()->get_badge_counts_for_contacts( array_map( 'absint', wp_list_pluck( $rows, 'contact_id' ) ), $tenant );
 	foreach ( $rows as &$chat ) {
-		$chat->conversation = $conversation_map[ absint( $chat->contact_id ?? 0 ) ] ?? null;
-		$chat->assignment   = is_array( $chat->conversation )
+		$chat->ticket_counts = $ticket_counts[ absint( $chat->contact_id ) ] ?? array(
+			'statuses'   => array(),
+			'priorities' => array(),
+		);
+		$chat->conversation  = $conversation_map[ absint( $chat->contact_id ?? 0 ) ] ?? null;
+		$chat->assignment    = is_array( $chat->conversation )
 			? array(
 				'label'            => $chat->conversation['assignment_label'],
 				'target_type'      => absint( $chat->conversation['assigned_user_id'] ) > 0 ? 'user' : ( '' !== $chat->conversation['assigned_role'] ? 'role' : '' ),
@@ -395,11 +420,12 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 
 			wp_send_json_success(
 				array(
-					'messages'          => array(),
-					'activities'        => array(),
-					'message_has_more'  => false,
-					'activity_has_more' => false,
-					'can_reply_24hr'    => nxtcc_chat_can_reply_24h( $last_incoming ),
+					'messages'                => array(),
+					'activities'              => array(),
+					'message_has_more'        => false,
+					'activity_has_more'       => false,
+					'can_reply_24hr'          => nxtcc_chat_can_reply_24h( $last_incoming ),
+					'reply_window_expires_at' => nxtcc_chat_reply_window_expires_at( $last_incoming ),
 				)
 			);
 		}
@@ -546,14 +572,15 @@ function nxtcc_ajax_fetch_chat_thread(): void {
 
 	wp_send_json_success(
 		array(
-			'messages'           => $messages,
-			'activities'         => $activity_page['items'],
-			'message_has_more'   => $message_has_more,
-			'activity_has_more'  => ! empty( $activity_page['has_more'] ),
-			'oldest_activity_id' => absint( $activity_page['oldest_activity_id'] ?? 0 ),
-			'latest_activity_id' => absint( $activity_page['latest_activity_id'] ?? 0 ),
-			'can_reply_24hr'     => nxtcc_chat_can_reply_24h( $last_incoming ),
-			'conversation'       => $conversation,
+			'messages'                => $messages,
+			'activities'              => $activity_page['items'],
+			'message_has_more'        => $message_has_more,
+			'activity_has_more'       => ! empty( $activity_page['has_more'] ),
+			'oldest_activity_id'      => absint( $activity_page['oldest_activity_id'] ?? 0 ),
+			'latest_activity_id'      => absint( $activity_page['latest_activity_id'] ?? 0 ),
+			'can_reply_24hr'          => nxtcc_chat_can_reply_24h( $last_incoming ),
+			'reply_window_expires_at' => nxtcc_chat_reply_window_expires_at( $last_incoming ),
+			'conversation'            => $conversation,
 		)
 	);
 }

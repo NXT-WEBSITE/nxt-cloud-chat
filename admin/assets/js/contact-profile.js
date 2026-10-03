@@ -398,7 +398,7 @@ jQuery( function ( $ ) {
 			meta.className      = 'nxtcc-profile-activity-meta';
 			heading.textContent = safeText( activity.activity_label, activity.activity_type );
 			meta.textContent    = [
-				safeText( activity.actor_label, text.system || 'System' ),
+				safeText( activity.actor_label, text.unknownActor || 'Unknown actor' ),
 				safeText( activity.source, '' ),
 				safeText( activity.created_at_display, '' ),
 			].filter( Boolean ).join( ' | ' );

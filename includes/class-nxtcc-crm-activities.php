@@ -122,7 +122,8 @@ final class NXTCC_CRM_Activities {
 			'conversation_priority_changed'        => 'Ticket priority changed',
 			'conversation_details_changed'         => 'Ticket details changed',
 			'conversation_first_response_recorded' => 'Ticket first response recorded',
-			'internal_note_added'                  => 'Internal note added',
+			'internal_note_added'                  => 'Private note added',
+			'conversation_automation_note_added'   => 'Automated team note added',
 			'task_created'                         => 'Task created',
 			'task_updated'                         => 'Task updated',
 			'task_completed'                       => 'Task completed',
@@ -166,7 +167,14 @@ final class NXTCC_CRM_Activities {
 		$activity_type = sanitize_key( (string) ( $args['activity_type'] ?? '' ) );
 		$source        = $this->normalize_source( (string) ( $args['source'] ?? 'integration' ) );
 		$actor_user_id = absint( $args['actor_user_id'] ?? $args['actor_id'] ?? get_current_user_id() );
-		$note_content  = isset( $args['note_content'] ) ? substr( sanitize_textarea_field( (string) $args['note_content'] ), 0, self::MAX_NOTE_LENGTH ) : '';
+		$note_content  = isset( $args['note_content'] ) ? sanitize_textarea_field( str_replace( array( "\r\n", "\r" ), "\n", (string) $args['note_content'] ) ) : '';
+		$note_length   = function_exists( 'mb_strlen' ) ? mb_strlen( $note_content, 'UTF-8' ) : preg_match_all( '/./us', $note_content );
+		if ( false === $note_length || $note_length > self::MAX_NOTE_LENGTH ) {
+			return array(
+				'success' => false,
+				'error'   => 'activity_note_too_long',
+			);
+		}
 
 		if ( ! isset( $this->get_activity_types()[ $activity_type ] ) ) {
 			return array(
@@ -262,6 +270,8 @@ final class NXTCC_CRM_Activities {
 		$sql       = 'SELECT * FROM ' . $table_sql . '
 			WHERE contact_id = %d AND user_mailid = %s AND business_account_id = %s AND phone_number_id = %s';
 		$query     = array( $contact_id, $tenant['user_mailid'], $tenant['business_account_id'], $tenant['phone_number_id'] );
+		$sql      .= " AND (activity_type <> 'internal_note_added' OR (actor_user_id = %d AND actor_user_id > 0))";
+		$query[]   = get_current_user_id();
 
 		if ( $before_id > 0 ) {
 			$sql    .= ' AND id < %d';
@@ -307,11 +317,13 @@ final class NXTCC_CRM_Activities {
 			$this->db->prepare(
 				'SELECT * FROM ' . $this->quote_table( $this->activities_table ) . '
 				WHERE id = %d AND user_mailid = %s AND business_account_id = %s AND phone_number_id = %s
+				AND (activity_type <> \'internal_note_added\' OR (actor_user_id = %d AND actor_user_id > 0))
 				LIMIT 1',
 				$activity_id,
 				$tenant['user_mailid'],
 				$tenant['business_account_id'],
-				$tenant['phone_number_id']
+				$tenant['phone_number_id'],
+				get_current_user_id()
 			),
 			ARRAY_A
 		);
@@ -378,17 +390,50 @@ final class NXTCC_CRM_Activities {
 			$this->db->prepare(
 				'SELECT * FROM ' . $this->quote_table( $this->activities_table ) . '
 				WHERE conversation_id = %d AND user_mailid = %s AND business_account_id = %s AND phone_number_id = %s
+				AND (activity_type <> \'internal_note_added\' OR (actor_user_id = %d AND actor_user_id > 0))
 				ORDER BY id DESC LIMIT %d',
 				$conversation_id,
 				$tenant['user_mailid'],
 				$tenant['business_account_id'],
 				$tenant['phone_number_id'],
+				get_current_user_id(),
 				$limit
 			),
 			ARRAY_A
 		);
 
 		return $this->decorate_rows( is_array( $rows ) ? $rows : array() );
+	}
+
+	/**
+	 * Read the current author's latest private note, independently of timeline paging.
+	 *
+	 * @param int   $conversation_id Ticket ID.
+	 * @param array $tenant_args Tenant tuple.
+	 * @return array|null
+	 */
+	public function get_latest_private_note( int $conversation_id, array $tenant_args ): ?array {
+		$tenant  = $this->normalize_tenant( $tenant_args );
+		$user_id = get_current_user_id();
+		if ( $conversation_id <= 0 || $user_id <= 0 || ! $this->tenant_is_complete( $tenant ) ) {
+			return null;
+		}
+		$row  = $this->db->get_row(
+			$this->db->prepare(
+				'SELECT * FROM ' . $this->quote_table( $this->activities_table ) . '
+				WHERE conversation_id = %d AND user_mailid = %s AND business_account_id = %s AND phone_number_id = %s
+				AND activity_type = \'internal_note_added\' AND actor_user_id = %d
+				ORDER BY id DESC LIMIT 1',
+				$conversation_id,
+				$tenant['user_mailid'],
+				$tenant['business_account_id'],
+				$tenant['phone_number_id'],
+				$user_id
+			),
+			ARRAY_A
+		);
+		$rows = $this->decorate_rows( is_array( $row ) ? array( $row ) : array() );
+		return $rows[0] ?? null;
 	}
 
 	/**
@@ -602,6 +647,7 @@ final class NXTCC_CRM_Activities {
 	 * @return array<int,array<string,mixed>>
 	 */
 	private function decorate_rows( array $rows ): array {
+		$rows     = array_values( array_filter( $rows, array( self::class, 'can_view_private_note' ) ) );
 		$user_ids = array_values( array_filter( array_map( 'absint', wp_list_pluck( $rows, 'actor_user_id' ) ) ) );
 		$user_map = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::get_user_map( $user_ids ) : array();
 
@@ -611,7 +657,7 @@ final class NXTCC_CRM_Activities {
 			$row['id']                 = absint( $row['id'] ?? 0 );
 			$row['contact_id']         = absint( $row['contact_id'] ?? 0 );
 			$row['actor_user_id']      = $actor_id;
-			$row['actor_label']        = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::label_for_user_id( $actor_id, $user_map, 'System' ) : '';
+			$row['actor_label']        = class_exists( 'NXTCC_Actor_Audit' ) ? NXTCC_Actor_Audit::activity_label( $actor_id, (string) ( $row['source'] ?? '' ), $user_map ) : __( 'Unknown actor', 'nxt-cloud-chat' );
 			$row['metadata']           = is_array( $decoded ) ? $decoded : array();
 			$row['created_at_display'] = ! empty( $row['created_at'] )
 				? get_date_from_gmt( (string) $row['created_at'], get_option( 'date_format' ) . ' ' . get_option( 'time_format' ) )
@@ -621,6 +667,30 @@ final class NXTCC_CRM_Activities {
 		unset( $row );
 
 		return $rows;
+	}
+
+	/**
+	 * Personal notes require authorship; automated team notes require record access.
+	 *
+	 * @param array $row Activity row.
+	 * @return bool
+	 */
+	public static function can_view_private_note( array $row ): bool {
+		$is_automation_note = 'conversation_automation_note_added' === ( $row['activity_type'] ?? '' );
+		if ( ! $is_automation_note && 'internal_note_added' !== ( $row['activity_type'] ?? '' ) ) {
+			return true;
+		}
+		$user_id = get_current_user_id();
+		if ( $user_id <= 0 || ( ! $is_automation_note && absint( $row['actor_user_id'] ?? 0 ) !== $user_id ) ) {
+			return false;
+		}
+		$tenant = array_intersect_key( $row, array_flip( array( 'user_mailid', 'business_account_id', 'phone_number_id' ) ) );
+		if ( 3 !== count( array_filter( $tenant ) ) || ! is_array( NXTCC_Tenant_Access_DAO::get_user_access( $user_id, $tenant ) ) ) {
+			return false;
+		}
+		return ! empty( $row['conversation_id'] )
+			? NXTCC_CRM_Access_Policy::user_can_view_conversation( absint( $row['conversation_id'] ), $tenant )
+			: NXTCC_CRM_Access_Policy::user_can_view_contact( absint( $row['contact_id'] ?? 0 ), $tenant );
 	}
 
 	/**

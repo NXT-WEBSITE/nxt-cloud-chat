@@ -686,6 +686,7 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   contact_id BIGINT(20) UNSIGNED NOT NULL,
   ticket_number VARCHAR(40) NOT NULL,
   subject VARCHAR(191) NULL,
+  issue TEXT NULL,
   category_id BIGINT(20) UNSIGNED NULL,
   category VARCHAR(100) NULL,
   channel VARCHAR(30) NOT NULL DEFAULT 'whatsapp',

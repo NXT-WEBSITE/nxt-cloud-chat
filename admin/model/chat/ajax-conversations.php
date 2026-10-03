@@ -49,7 +49,7 @@ function nxtcc_ajax_get_conversation_ticket(): void {
 		$tenant,
 		get_current_user_id()
 	);
-	$tickets = array_values(
+	$tickets       = array_values(
 		array_filter(
 			NXTCC_Conversations::instance()->list_for_contact( absint( $conversation['contact_id'] ?? 0 ), $tenant ),
 			static function ( array $ticket ) use ( $tenant ): bool {
@@ -57,17 +57,24 @@ function nxtcc_ajax_get_conversation_ticket(): void {
 			}
 		)
 	);
+	$last_incoming = nxtcc_chat_repo()->get_last_incoming_time( absint( $conversation['contact_id'] ), (string) $tenant['user_mailid'] );
+	$ticket_counts = NXTCC_Conversations::instance()->get_badge_counts_for_contacts( array( absint( $conversation['contact_id'] ) ), $tenant );
 
 	wp_send_json_success(
 		array(
-			'conversation'       => $conversation,
-			'tickets'            => $tickets,
-			'categories'         => NXTCC_Ticket_Categories::instance()->list_categories( $tenant, true ),
-			'activity'           => $can_view_activity ? NXTCC_Conversations::instance()->list_activity( absint( $conversation['id'] ), $tenant ) : array(),
-			'statuses'           => NXTCC_Conversations::instance()->get_statuses(),
-			'priorities'         => NXTCC_Conversations::instance()->get_priorities(),
-			'assignment_targets' => nxtcc_list_contact_assignment_targets( $tenant ),
-			'permissions'        => array(
+			'conversation'            => $conversation,
+			'can_reply_24hr'          => nxtcc_chat_can_reply_24h( $last_incoming ),
+			'reply_window_expires_at' => nxtcc_chat_reply_window_expires_at( $last_incoming ),
+			'tickets'                 => $tickets,
+			'ticket_count'            => absint( $ticket_counts[ absint( $conversation['contact_id'] ) ]['total'] ?? 0 ),
+			'categories'              => NXTCC_Ticket_Categories::instance()->list_categories( $tenant, true ),
+			'activity'                => $can_view_activity ? NXTCC_Conversations::instance()->list_activity( absint( $conversation['id'] ), $tenant ) : array(),
+			'private_note'            => $can_view_activity || NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_crm_notes' ) )
+				? NXTCC_CRM_Activities::instance()->get_latest_private_note( absint( $conversation['id'] ), $tenant ) : null,
+			'statuses'                => NXTCC_Conversations::instance()->get_statuses(),
+			'priorities'              => NXTCC_Conversations::instance()->get_priorities(),
+			'assignment_targets'      => nxtcc_list_contact_assignment_targets( $tenant ),
+			'permissions'             => array(
 				'can_manage'        => NXTCC_CRM_Access_Policy::user_can_manage_conversation( absint( $conversation['id'] ), $tenant ),
 				'can_view_activity' => $can_view_activity,
 				'can_reassign'      => NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_reassign_conversations' ) ),
@@ -109,7 +116,6 @@ function nxtcc_ajax_save_conversation_ticket(): void {
 	$message         = isset( $_POST['message'] ) ? sanitize_textarea_field( wp_unslash( $_POST['message'] ) ) : '';
 	$internal_note   = isset( $_POST['internal_note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['internal_note'] ) ) : '';
 	$send_message    = isset( $_POST['send_message'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['send_message'] ) );
-	$is_new          = $conversation_id <= 0;
 
 	if ( $contact_id <= 0 ) {
 		wp_send_json_error( array( 'message' => __( 'Choose a valid contact before saving the ticket.', 'nxt-cloud-chat' ) ), 400 );
@@ -135,14 +141,12 @@ function nxtcc_ajax_save_conversation_ticket(): void {
 	) {
 		wp_send_json_error( array( 'message' => __( 'You cannot add internal notes.', 'nxt-cloud-chat' ) ), 403 );
 	}
-	if ( $is_new && ( ! $send_message || '' === trim( $message ) ) ) {
-		wp_send_json_error( array( 'message' => __( 'A customer message is required when creating a ticket.', 'nxt-cloud-chat' ) ), 400 );
-	}
 	if ( $send_message && '' === trim( $message ) ) {
 		wp_send_json_error( array( 'message' => __( 'Enter a message before sending.', 'nxt-cloud-chat' ) ), 400 );
 	}
-	$message_length = function_exists( 'mb_strlen' ) ? mb_strlen( $message ) : strlen( $message );
-	if ( $message_length > 4096 ) {
+	$message        = str_replace( array( "\r\n", "\r" ), "\n", $message );
+	$message_length = function_exists( 'mb_strlen' ) ? mb_strlen( $message, 'UTF-8' ) : preg_match_all( '/./us', $message );
+	if ( false === $message_length || $message_length > 4096 ) {
 		wp_send_json_error( array( 'message' => __( 'Ticket messages cannot exceed 4,096 characters.', 'nxt-cloud-chat' ) ), 400 );
 	}
 
@@ -152,6 +156,7 @@ function nxtcc_ajax_save_conversation_ticket(): void {
 			'conversation_id'   => $conversation_id,
 			'contact_id'        => $contact_id,
 			'subject'           => isset( $_POST['subject'] ) ? sanitize_text_field( wp_unslash( $_POST['subject'] ) ) : '',
+			'issue'             => isset( $_POST['issue'] ) ? sanitize_textarea_field( wp_unslash( $_POST['issue'] ) ) : '',
 			'category_id'       => isset( $_POST['category_id'] ) ? absint( wp_unslash( $_POST['category_id'] ) ) : 0,
 			'status'            => isset( $_POST['status'] ) ? sanitize_key( wp_unslash( $_POST['status'] ) ) : 'open',
 			'priority'          => isset( $_POST['priority'] ) ? sanitize_key( wp_unslash( $_POST['priority'] ) ) : 'normal',
@@ -189,7 +194,7 @@ function nxtcc_ajax_save_conversation_ticket(): void {
 			require_once NXTCC_PLUGIN_DIR . 'admin/model/chat/chat-helpers.php';
 		}
 		$last_incoming = nxtcc_chat_repo()->get_last_incoming_time( $contact_id, (string) $tenant['user_mailid'] );
-		if ( function_exists( 'nxtcc_chat_can_reply_24h' ) && ! nxtcc_chat_can_reply_24h( $last_incoming ) ) {
+		if ( ! function_exists( 'nxtcc_chat_can_reply_24h' ) || ! nxtcc_chat_can_reply_24h( $last_incoming ) ) {
 			$message_error = __( 'Ticket saved, but the message was not sent because the 24-hour reply window is closed.', 'nxt-cloud-chat' );
 		} else {
 			$send_result  = nxtcc_send_message_immediately(

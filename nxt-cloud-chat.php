@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat - CRM, Inbox & OTP Login
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       WhatsApp CRM for WordPress with real-time messaging, customer communication, contact management, sales pipelines, team management, automated notifications, and WhatsApp OTP login.
- * Version:           1.1.7
+ * Version:           1.1.8
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.1.7' );
+	define( 'NXTCC_VERSION', '1.1.8' );
 }
 
 /**
@@ -1134,11 +1134,13 @@ add_action(
 
 		nxtcc_enqueue_contact_profile_assets();
 
+		$chat_css_path = NXTCC_PLUGIN_DIR . 'admin/assets/css/received-messages.css';
+		$chat_css_ver  = file_exists( $chat_css_path ) ? (string) filemtime( $chat_css_path ) : NXTCC_VERSION;
 		wp_enqueue_style(
 			'nxtcc-chat-css',
 			NXTCC_PLUGIN_URL . 'admin/assets/css/received-messages.css',
 			array(),
-			NXTCC_VERSION
+			$chat_css_ver
 		);
 
 		nxtcc_enqueue_fontawesome();
@@ -1168,8 +1170,22 @@ add_action(
 			'nxtcc-chat-runtime',
 			'NXTCC_ReceivedMessages',
 			array(
-				'ajaxurl'     => admin_url( 'admin-ajax.php' ),
-				'settingsUrl' => admin_url( 'admin.php?page=nxtcc-settings' ),
+				'ajaxurl'           => admin_url( 'admin-ajax.php' ),
+				'settingsUrl'       => admin_url( 'admin.php?page=nxtcc-settings' ),
+				'ticketBadgeLabels' => array(
+					'open'            => __( 'Open', 'nxt-cloud-chat' ),
+					'pending'         => __( 'Pending', 'nxt-cloud-chat' ),
+					'snoozed'         => __( 'Snoozed', 'nxt-cloud-chat' ),
+					'resolved'        => __( 'Resolved', 'nxt-cloud-chat' ),
+					'unassigned'      => __( 'Unassigned', 'nxt-cloud-chat' ),
+					'overdue'         => __( 'Overdue', 'nxt-cloud-chat' ),
+					'urgent'          => __( 'Urgent', 'nxt-cloud-chat' ),
+					'high'            => __( 'High', 'nxt-cloud-chat' ),
+					'normal'          => __( 'Normal', 'nxt-cloud-chat' ),
+					'low'             => __( 'Low', 'nxt-cloud-chat' ),
+					'unassigned_hint' => __( 'Unresolved tickets without a member or team assignment. May also appear in status and overdue counts.', 'nxt-cloud-chat' ),
+					'overdue_hint'    => __( 'Unresolved tickets with a missed SLA deadline. Each ticket is counted once, even if both deadlines were missed.', 'nxt-cloud-chat' ),
+				),
 			)
 		);
 
@@ -1183,10 +1199,18 @@ add_action(
 		);
 
 		// 3) Inbox THIRD.
+		$chat_filters_path = NXTCC_PLUGIN_DIR . 'admin/assets/js/chat/chat-filters.js';
+		wp_enqueue_script(
+			'nxtcc-chat-filters',
+			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-filters.js',
+			array( 'jquery', 'nxtcc-chat-runtime' ),
+			file_exists( $chat_filters_path ) ? (string) filemtime( $chat_filters_path ) : NXTCC_VERSION,
+			true
+		);
 		wp_enqueue_script(
 			'nxtcc-chat-inbox',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-inbox.js',
-			array( 'jquery', 'nxtcc-chat-runtime' ),
+			array( 'jquery', 'nxtcc-chat-runtime', 'nxtcc-chat-filters' ),
 			$chat_inbox_ver,
 			true
 		);
@@ -1201,11 +1225,12 @@ add_action(
 		);
 
 		// 5) Ticket sidebar.
+		$chat_tickets_path = NXTCC_PLUGIN_DIR . 'admin/assets/js/chat/chat-tickets.js';
 		wp_enqueue_script(
 			'nxtcc-chat-tickets',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-tickets.js',
 			array( 'jquery', 'nxtcc-chat-runtime' ),
-			NXTCC_VERSION,
+			file_exists( $chat_tickets_path ) ? (string) filemtime( $chat_tickets_path ) : NXTCC_VERSION,
 			true
 		);
 

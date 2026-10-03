@@ -47,6 +47,7 @@
 		'admin.php?page=nxtcc-settings';
 
 	Chat.util = Chat.util || {};
+	Chat.cfg.ticketBadgeLabels = ( window.NXTCC_ReceivedMessages && window.NXTCC_ReceivedMessages.ticketBadgeLabels ) || {};
 	const U   = Chat.util;
 
 	/**

@@ -80,7 +80,7 @@ final class NXTCC_Actor_Audit {
 			return array();
 		}
 
-		$cache_key = 'map:v2:' . md5( implode( ',', $user_ids ) );
+		$cache_key = 'map:v3:' . md5( implode( ',', $user_ids ) );
 		$cached    = wp_cache_get( $cache_key, self::CACHE_GROUP );
 
 		if ( is_array( $cached ) ) {
@@ -98,7 +98,8 @@ final class NXTCC_Actor_Audit {
 		$map = array();
 
 		foreach ( $users as $user ) {
-			if ( ! $user instanceof WP_User || $user->ID <= 0 ) {
+			// A fields array makes WP_User_Query return lightweight row objects.
+			if ( ! is_object( $user ) || empty( $user->ID ) || (int) $user->ID <= 0 ) {
 				continue;
 			}
 
@@ -124,6 +125,31 @@ final class NXTCC_Actor_Audit {
 		wp_cache_set( $cache_key, $map, self::CACHE_GROUP, 300 );
 
 		return $map;
+	}
+
+	/**
+	 * Label an activity from its recorded actor and execution source.
+	 *
+	 * @param int    $user_id Recorded actor ID.
+	 * @param string $source Activity source.
+	 * @param array  $user_map Preloaded user map.
+	 * @return string
+	 */
+	public static function activity_label( int $user_id, string $source, array $user_map ): string {
+		if ( 'workflow' === $source ) {
+			return __( 'System (Workflow)', 'nxt-cloud-chat' );
+		}
+		if ( 'webhook' === $source ) {
+			return __( 'System (Webhook)', 'nxt-cloud-chat' );
+		}
+		if ( $user_id > 0 ) {
+			$user = $user_map[ $user_id ] ?? array();
+			return sanitize_text_field( (string) ( ! empty( $user['display_name'] ) ? $user['display_name'] : ( $user['label'] ?? __( 'Unknown user', 'nxt-cloud-chat' ) ) ) );
+		}
+		if ( 'system' === $source ) {
+			return __( 'System', 'nxt-cloud-chat' );
+		}
+		return 'integration' === $source ? __( 'Integration', 'nxt-cloud-chat' ) : __( 'Unknown actor', 'nxt-cloud-chat' );
 	}
 
 	/**

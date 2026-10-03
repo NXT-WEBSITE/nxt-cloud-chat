@@ -890,6 +890,66 @@ $result = nxtcc_auto_assign_ticket(
 
 ### Internal notes, watchers, activities, and SLA
 
+Ticket-panel **Private Notes** retain the `internal_note_added` event and existing
+note wrappers for compatibility. Reads return a private note only to its logged-in
+author, while that author still has tenant and ticket/contact access. Administrators
+and new assignees do not inherit access to another author's notes. Anonymous/background
+readers and legacy notes without an identifiable author are excluded. Handoff notes
+remain shared with authorized ticket handlers. Never expose private notes in customer
+messages or template tokens.
+
+From Free 1.1.8, ticket notes written through the existing note wrappers with
+`source => 'workflow'` and `actor_id => 0` use the separate activity type
+`conversation_automation_note_added`. These are automated team notes, readable only
+by authenticated tenant members with access to the ticket/contact. They never prefill
+the personal Private Note field. The `nxtcc_conversation_internal_note_added` hook
+remains unchanged; Pro does not include note content in its event payload.
+Existing `internal_note_added` records are not reclassified or made public, including
+legacy records with no author. Do not substitute an agent's ID for automated actions.
+
+Pro validates ticket action notes before publishing and again before executing
+each node: 2,000 characters for assignments/handoffs, 5,000 for standalone notes,
+and 191 for reasons. Escalation uses 2,000 when targeting a member/team, otherwise
+5,000. Invalid text fails before any escalation updates. Existing published flows
+with longer notes need their configuration shortened; drafts are never truncated.
+
+The ticket panel prefills Private Note with the current author's latest accessible
+note for that ticket, independently of activity pagination. Saving unchanged text
+does not append another note; changed nonblank text appends a new private note and
+preserves earlier history. Clearing the input does not delete previously saved notes.
+
+Ticket text limits apply in the panel and the shared ticket writers:
+
+| Field | Maximum Unicode characters |
+| --- | ---: |
+| `issue` | 5,000 |
+| `internal_note` / private `note` | 5,000 |
+| `handoff_note` / assignment `note` | 2,000 |
+| `handoff_reason` / assignment `reason` | 191 |
+| `customer_message` | 4,096 |
+
+Limits count Unicode code points, not bytes or JavaScript UTF-16 units. Combined
+emoji sequences can contain multiple code points; line endings are normalized to LF.
+The panel shows editing counters and prevents saving oversized input without cutting
+the draft. Shared ticket writers reject oversized sanitized values before writing;
+save/update/note/assignment errors use `ticket_<field>_too_long`. The existing
+nullable create-ticket return contract remains unchanged (`null` on invalid input).
+Unchanged legacy Issues may be retained above the limit. Unchanged latest own Private
+Notes are deduplicated on panel save, not recreated or truncated. Editing either
+field requires the replacement text to meet its limit; historical notes are untouched.
+
+The nullable `issue` ticket field is a persistent staff-visible description, separate
+from notes and `customer_message`. It is accepted by existing create/update ticket
+wrappers. New tickets created through the chat panel require an Issue; legacy tickets
+and existing automated creation flows remain compatible. Issue changes record the
+field name in activity history without copying its content into customer variables.
+
+The panel's Save Ticket action can create a ticket without sending a message.
+Save & Send additionally requires nonblank customer message text and an open reply
+window. The server rechecks the window before direct delivery; if delivery fails,
+the ticket remains saved and the response includes `message_error`. Workflow template
+delivery remains independent of this direct-session-message restriction.
+
 ```php
 $note = nxtcc_add_ticket_note(
 	array_merge(
