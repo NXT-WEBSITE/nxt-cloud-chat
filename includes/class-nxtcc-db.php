@@ -290,6 +290,15 @@ final class NXTCC_DB {
 	}
 
 	/**
+	 * Agent message-view receipts table.
+	 *
+	 * @return string
+	 */
+	public function t_message_reads(): string {
+		return $this->db->prefix . 'nxtcc_message_reads';
+	}
+
+	/**
 	 * Prepare a SQL query safely.
 	 *
 	 * @param string $sql  SQL with placeholders.
@@ -428,6 +437,18 @@ final class NXTCC_DB {
 
 		$this->db->query( $q );
 		return (int) $this->db->rows_affected;
+	}
+
+	/**
+	 * Run a query while distinguishing failure from a successful no-op.
+	 *
+	 * @param string $sql SQL with placeholders (or full SQL if args empty).
+	 * @param array  $args Placeholder args.
+	 * @return bool
+	 */
+	public function query_succeeded( string $sql, array $args = array() ): bool {
+		$q = empty( $args ) ? $sql : $this->prepare( $sql, $args );
+		return false !== $this->db->query( $q );
 	}
 
 	/**

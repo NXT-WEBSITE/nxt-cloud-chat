@@ -24,6 +24,7 @@ require_once __DIR__ . '/chat/chat-helpers.php';
  */
 if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
 	require_once __DIR__ . '/chat/ajax-fetch.php';
+	require_once __DIR__ . '/chat/ajax-message-reads.php';
 	require_once __DIR__ . '/chat/ajax-send.php';
 	require_once __DIR__ . '/chat/ajax-forward.php';
 	require_once __DIR__ . '/chat/ajax-bulk.php';

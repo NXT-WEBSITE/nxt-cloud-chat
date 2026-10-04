@@ -39,6 +39,9 @@ jQuery( function ( $ ) {
 		ctx.state      = ctx.state || {};
 		ctx.api        = ctx.api || {};
 		ctx.api.thread = ctx.api.thread || {};
+		if ( Chat.reads ) {
+			Chat.reads.start( ctx );
+		}
 
 		// Thread state.
 		ctx.state.chatContactId        = ctx.state.chatContactId || null;
@@ -567,6 +570,58 @@ jQuery( function ( $ ) {
 			return null;
 		}
 
+		/**
+		 * Build a compact agent avatar or automation source indicator.
+		 *
+		 * @param {Object} sender Display-only sender metadata.
+		 * @return {Element|null} Sender indicator.
+		 */
+		function makeSenderEl( sender ) {
+			if ( ! sender || ! sender.label ) {
+				return null;
+			}
+			const icons = {
+				workflow: 'fa-solid fa-gears',
+				broadcast: 'fa-solid fa-bullhorn',
+				system: 'fa-solid fa-robot',
+				integration: 'fa-solid fa-plug'
+			};
+			if ( sender.type !== 'user' && ! icons[ sender.type ] ) {
+				return null;
+			}
+			const label = U.toStr( sender.label );
+			const node = U.el( 'span', {
+				class: 'nxtcc-msg-sender ' + ( sender.type === 'user' ? 'nxtcc-msg-sender-user' : 'nxtcc-msg-sender-source' ),
+				title: label,
+				'aria-label': label,
+				role: 'img',
+				tabindex: '0'
+			} );
+			U.safeAppend( node, U.el( 'span', { class: 'nxtcc-msg-sender-tooltip', 'aria-hidden': 'true' }, label ) );
+			if ( sender.type === 'user' ) {
+				const initials = label.trim().split( /\s+/ ).filter( Boolean ).slice( 0, 2 ).map( function ( name ) {
+					return Array.from( name )[ 0 ] || '';
+				} ).join( '' ).toUpperCase();
+				U.safeAppend( node, U.el( 'span', { class: 'nxtcc-msg-sender-initials', 'aria-hidden': 'true' }, initials || '?' ) );
+				let avatarUrl = null;
+				try {
+					avatarUrl = new URL( U.toStr( sender.avatar_url ), window.location.href );
+				} catch ( error ) {
+					avatarUrl = null;
+				}
+				if ( sender.avatar_url && avatarUrl && /^(https?:)$/.test( avatarUrl.protocol ) ) {
+					const avatar = U.el( 'img', { src: avatarUrl.href, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' } );
+					avatar.addEventListener( 'error', function () {
+						avatar.remove();
+					}, { once: true } );
+					U.safeAppend( node, avatar );
+				}
+			} else {
+				U.safeAppend( node, U.el( 'i', { class: icons[ sender.type ], 'aria-hidden': 'true' } ) );
+			}
+			return node;
+		}
+
 		function attachBubbleData( $bub, msg ) {
 			$bub.data( 'raw', msg.message_content );
 			$bub.data( 'metaId', msg.meta_message_id || '' );
@@ -621,6 +676,12 @@ jQuery( function ( $ ) {
 				U.safeAppend( meta, star );
 			}
 
+			if ( isSent ) {
+				U.safeAppend( meta, makeSenderEl( msg.sender ) );
+			}
+			if ( ctx.api.reads ) {
+				ctx.api.reads.decorate( bubble, msg, meta );
+			}
 			U.safeAppend( meta, document.createTextNode( U.toStr( msg.created_at || '' ) + ' ' ) );
 
 			const tick = getStatusTickEl( msg.status );
@@ -881,6 +942,9 @@ jQuery( function ( $ ) {
 		}
 
 		function resetThreadStateForContact() {
+			if ( ctx.api.reads ) {
+				ctx.api.reads.reset();
+			}
 			ctx.state.lastMessageId        = null;
 			ctx.state.oldestMessageId      = null;
 			ctx.state.lastActivityId       = null;
@@ -914,20 +978,6 @@ jQuery( function ( $ ) {
 			}
 
 			ctx.api.actions.setComposerEnabled( true );
-		}
-
-		function markCurrentChatRead() {
-			if ( ! ctx.state.chatContactId ) {
-				return;
-			}
-
-			$.post( Chat.cfg.ajaxurl, {
-				action: 'nxtcc_mark_chat_read',
-				contact_id: ctx.state.chatContactId,
-				business_account_id: ctx.businessAccountId,
-				phone_number_id: ctx.phoneNumberId,
-				nonce: ctx.nonce,
-			} );
 		}
 
 		function isThreadEligibleForPolling() {
@@ -971,6 +1021,9 @@ jQuery( function ( $ ) {
 			if ( ! ctx.state.chatContactId ) {
 				return;
 			}
+			if ( ctx.api.reads ) {
+				ctx.api.reads.reset();
+			}
 
 			const myToken   = activeThreadToken;
 			const requestId = ++loadRequestId;
@@ -1002,8 +1055,6 @@ jQuery( function ( $ ) {
 						if ( ctx.api.tickets && ctx.api.tickets.renderConversation && resp.data.conversation ) {
 							ctx.api.tickets.renderConversation( resp.data.conversation );
 						}
-
-						markCurrentChatRead();
 
 						return;
 					}
@@ -1163,7 +1214,6 @@ jQuery( function ( $ ) {
 					if ( activities.length ) {
 						ctx.state.lastActivityId = Number( resp.data.latest_activity_id || activities[ activities.length - 1 ].activity_id ) || ctx.state.lastActivityId;
 					}
-					markCurrentChatRead();
 
 					if ( wasNear ) {
 						threadEl.scrollTo( { top: threadEl.scrollHeight, behavior: 'smooth' } );
@@ -1437,10 +1487,6 @@ jQuery( function ( $ ) {
 			}
 
 			reloadChatThread();
-
-			$row.find( '.nxtcc-chat-head-unread' ).fadeOut( 200, function () {
-				$( this ).remove();
-			} );
 
 			setTimeout( updateScrollButton, 100 );
 		} );

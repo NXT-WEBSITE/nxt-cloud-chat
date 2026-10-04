@@ -1213,6 +1213,9 @@ final class NXTCC_Data_Cleanup {
 			)
 		);
 
+		if ( false !== $result && self::table_name( 'nxtcc_message_history' ) === $table && class_exists( 'NXTCC_Message_Reads' ) ) {
+			NXTCC_Message_Reads::delete_orphaned_for_messages( $ids );
+		}
 		return false === $result ? 0 : (int) $result;
 	}
 

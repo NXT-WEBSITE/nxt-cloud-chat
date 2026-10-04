@@ -97,6 +97,8 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'conversation_sla_candidate_reader'   => function_exists( 'nxtcc_list_conversation_sla_candidates' ),
 				'conversation_access_checker'         => function_exists( 'nxtcc_user_can_view_conversation' ),
 				'ticket_reader'                       => function_exists( 'nxtcc_get_ticket' ),
+				'message_view_reader'                 => function_exists( 'nxtcc_get_message_view_counts' ) && function_exists( 'nxtcc_get_message_viewers' ),
+				'ticket_contact_reader'               => function_exists( 'nxtcc_get_ticket_for_contact' ),
 				'ticket_create_writer'                => function_exists( 'nxtcc_create_or_get_ticket' ),
 				'ticket_list_reader'                  => function_exists( 'nxtcc_list_tickets_for_contact' ),
 				'ticket_explicit_create_writer'       => function_exists( 'nxtcc_create_ticket' ),
@@ -235,6 +237,7 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'nxtcc_user_can_view_conversation',
 				'nxtcc_user_can_manage_conversation',
 				'nxtcc_get_ticket',
+				'nxtcc_get_ticket_for_contact',
 				'nxtcc_create_or_get_ticket',
 				'nxtcc_list_tickets_for_contact',
 				'nxtcc_create_ticket',
@@ -976,6 +979,19 @@ if ( ! function_exists( 'nxtcc_get_ticket' ) ) {
 	 */
 	function nxtcc_get_ticket( int $ticket_id, array $tenant ): ?array {
 		return nxtcc_get_conversation( $ticket_id, $tenant );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_ticket_for_contact' ) ) {
+	/**
+	 * Read a tenant contact's current ticket without creating one.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $tenant Tenant tuple.
+	 * @return array<string,mixed>|null
+	 */
+	function nxtcc_get_ticket_for_contact( int $contact_id, array $tenant ): ?array {
+		return NXTCC_Conversations::instance()->get_for_contact( $contact_id, $tenant );
 	}
 }
 
@@ -2125,6 +2141,35 @@ if ( ! function_exists( 'nxtcc_get_meta_health_status' ) ) {
 		}
 
 		return NXTCC_Meta_Health_Status::get_status( $tenant, $args );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_message_view_counts' ) ) {
+	/**
+	 * Read view summaries using the authenticated agent's Chat access.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $message_ids Incoming message IDs, up to 100.
+	 * @param array $tenant Full tenant tuple.
+	 * @return array|WP_Error
+	 */
+	function nxtcc_get_message_view_counts( int $contact_id, array $message_ids, array $tenant ) {
+		return NXTCC_Message_Reads::summaries( $contact_id, $message_ids, $tenant );
+	}
+}
+
+if ( ! function_exists( 'nxtcc_get_message_viewers' ) ) {
+	/**
+	 * Read a viewer page using the authenticated agent's Chat access.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param int   $message_id Incoming message ID.
+	 * @param array $tenant Full tenant tuple.
+	 * @param int   $offset Page offset.
+	 * @return array|WP_Error
+	 */
+	function nxtcc_get_message_viewers( int $contact_id, int $message_id, array $tenant, int $offset = 0 ) {
+		return NXTCC_Message_Reads::viewers( $contact_id, $message_id, $tenant, $offset );
 	}
 }
 

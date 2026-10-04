@@ -149,6 +149,7 @@ final class NXTCC_Contact_Merger {
 				'nxtcc_crm_activities',
 				'nxtcc_crm_tasks',
 				'nxtcc_message_history',
+				'nxtcc_message_reads',
 				'nxtcc_conversations',
 			) as $table ) {
 				$this->update_contact_reference( $table, $target_id, $source_id, $tenant );

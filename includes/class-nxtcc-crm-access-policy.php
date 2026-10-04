@@ -228,6 +228,61 @@ final class NXTCC_CRM_Access_Policy {
 	}
 
 	/**
+	 * Filter chats using ticket assignment, or contact ownership without a ticket.
+	 *
+	 * @param array      $contact_ids Contact IDs.
+	 * @param array      $tenant Tenant tuple.
+	 * @param bool       $manage Require mutation access.
+	 * @param int        $user_id WordPress user ID.
+	 * @param array|null $conversations Optional preloaded current tickets.
+	 * @return array<int,int>
+	 */
+	public static function filter_chat_contacts( array $contact_ids, array $tenant = array(), bool $manage = false, int $user_id = 0, ?array $conversations = null ): array {
+		$policy = self::get_policy( $user_id, $tenant, 'nxtcc_access_chat' );
+		$tenant = $policy['tenant'];
+		$ids    = array_values( array_unique( array_filter( array_map( 'absint', $contact_ids ) ) ) );
+		if ( empty( $ids ) || empty( $tenant['user_mailid'] ) || empty( $tenant['business_account_id'] ) || empty( $tenant['phone_number_id'] ) || ( $manage && ! self::can_manage( $policy ) ) ) {
+			return array();
+		}
+
+		$db      = NXTCC_DB::i();
+		$table   = preg_replace( '/[^A-Za-z0-9_]/', '', $db->t_contacts() );
+		$allowed = array();
+		foreach ( array_chunk( $ids, 200 ) as $batch ) {
+			$sql          = 'SELECT id FROM `' . ( is_string( $table ) && '' !== $table ? $table : 'nxtcc_invalid' ) . '` WHERE id IN (' . implode( ',', array_fill( 0, count( $batch ), '%d' ) ) . ')
+				AND user_mailid = %s AND business_account_id = %s AND phone_number_id = %s';
+			$args         = array_merge( $batch, array( $tenant['user_mailid'], $tenant['business_account_id'], $tenant['phone_number_id'] ) );
+			$rows         = $db->get_results( $sql, $args );
+			$existing_ids = array_map( 'absint', wp_list_pluck( is_array( $rows ) ? $rows : array(), 'id' ) );
+			$tickets      = null !== $conversations ? $conversations : NXTCC_Conversations::instance()->get_for_contacts( $existing_ids, $tenant );
+			$without      = array_values( array_diff( $existing_ids, array_keys( $tickets ) ) );
+			$assignments  = NXTCC_Contact_Assignments::instance()->get_assignments_for_contacts( $without, $tenant );
+			foreach ( $existing_ids as $contact_id ) {
+				$visible = isset( $tickets[ $contact_id ] )
+					? self::conversation_matches( $tickets[ $contact_id ], $policy )
+					: self::assignment_matches( $assignments[ $contact_id ] ?? null, $policy );
+				if ( $visible ) {
+					$allowed[] = $contact_id;
+				}
+			}
+		}
+		return $allowed;
+	}
+
+	/**
+	 * Authorize a chat without creating a ticket or requiring Contacts permissions.
+	 *
+	 * @param int   $contact_id Contact ID.
+	 * @param array $tenant Tenant tuple.
+	 * @param bool  $manage Require mutation access.
+	 * @param int   $user_id WordPress user ID.
+	 * @return bool
+	 */
+	public static function user_can_access_chat( int $contact_id, array $tenant = array(), bool $manage = false, int $user_id = 0 ): bool {
+		return in_array( $contact_id, self::filter_chat_contacts( array( $contact_id ), $tenant, $manage, $user_id ), true );
+	}
+
+	/**
 	 * Whether a user may view one conversation ticket.
 	 *
 	 * @param int   $conversation_id Conversation ID.

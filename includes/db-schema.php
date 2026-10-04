@@ -854,6 +854,23 @@ if ( ! function_exists( 'nxtcc_install_db_schema' ) ) {
   KEY idx_thread_poll (contact_id, user_mailid(191), phone_number_id(191), deleted_at, id)
 ) {$nxtcc_charset_collate};",
 
+			/* ----------------------- Agent message views ---------------------- */
+			"CREATE TABLE {$nxtcc_prefix}nxtcc_message_reads (
+  id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+  message_id BIGINT(20) UNSIGNED NOT NULL,
+  wp_user_id BIGINT(20) UNSIGNED NOT NULL,
+  contact_id BIGINT(20) UNSIGNED NOT NULL,
+  user_mailid VARCHAR(255) NOT NULL,
+  business_account_id VARCHAR(255) NOT NULL,
+  phone_number_id VARCHAR(255) NOT NULL,
+  first_read_at DATETIME NOT NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY message_agent (message_id, wp_user_id),
+  KEY message_viewers (message_id, first_read_at, id),
+  KEY tenant_contact (contact_id, user_mailid(191), business_account_id(191), phone_number_id(191)),
+  KEY agent_views (wp_user_id)
+) {$nxtcc_charset_collate};",
+
 			/* -------------------------- User settings ------------------------- */
 			"CREATE TABLE {$nxtcc_prefix}nxtcc_user_settings (
   id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,

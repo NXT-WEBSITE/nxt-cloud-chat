@@ -10,9 +10,10 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Resolve and authorize one conversation from a request.
  *
- * @return array<string,mixed>
+ * @param bool $allow_empty Allow a ticket-free contact for the panel reader.
+ * @return array<string,mixed>|null
  */
-function nxtcc_chat_ajax_conversation(): array {
+function nxtcc_chat_ajax_conversation( bool $allow_empty = false ): ?array {
 	nxtcc_chat_ajax_require_caps();
 	check_ajax_referer( 'nxtcc_received_messages', 'nonce', true );
 
@@ -21,10 +22,17 @@ function nxtcc_chat_ajax_conversation(): array {
 	$tenant          = NXTCC_Access_Control::get_current_tenant_context();
 	$conversation    = $conversation_id > 0
 		? NXTCC_Conversations::instance()->get( $conversation_id, $tenant )
-		: NXTCC_Conversations::instance()->get_or_create_for_contact( $contact_id, $tenant );
+		: NXTCC_Conversations::instance()->get_for_contact( $contact_id, $tenant );
 
 	if ( ! is_array( $conversation ) ) {
+		if ( $allow_empty && 0 === $conversation_id && $contact_id > 0 ) {
+			nxtcc_chat_require_contact_access( $contact_id );
+			return null;
+		}
 		wp_send_json_error( array( 'message' => __( 'Conversation not found.', 'nxt-cloud-chat' ) ), 404 );
+	}
+	if ( $contact_id > 0 && absint( $conversation['contact_id'] ?? 0 ) !== $contact_id ) {
+		wp_send_json_error( array( 'message' => __( 'Ticket not found for this contact.', 'nxt-cloud-chat' ) ), 404 );
 	}
 
 	if ( ! NXTCC_CRM_Access_Policy::user_can_view_conversation( absint( $conversation['id'] ), $tenant ) ) {
@@ -40,25 +48,25 @@ function nxtcc_chat_ajax_conversation(): array {
  * @return void
  */
 function nxtcc_ajax_get_conversation_ticket(): void {
-	$conversation      = nxtcc_chat_ajax_conversation();
+	$conversation      = nxtcc_chat_ajax_conversation( true );
 	$tenant            = NXTCC_Access_Control::get_current_tenant_context();
 	$can_view_activity = NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_view_crm_activity' ) );
-	NXTCC_Conversations::instance()->set_current_for_contact(
-		absint( $conversation['contact_id'] ?? 0 ),
-		absint( $conversation['id'] ?? 0 ),
-		$tenant,
-		get_current_user_id()
-	);
+	// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nxtcc_chat_ajax_conversation() verifies the nonce and contact access before returning.
+	$contact_id      = is_array( $conversation ) ? absint( $conversation['contact_id'] ) : absint( wp_unslash( $_POST['contact_id'] ?? 0 ) );
+	$conversation_id = absint( $conversation['id'] ?? 0 );
+	if ( $conversation_id > 0 ) {
+		NXTCC_Conversations::instance()->set_current_for_contact( $contact_id, $conversation_id, $tenant, get_current_user_id() );
+	}
 	$tickets       = array_values(
 		array_filter(
-			NXTCC_Conversations::instance()->list_for_contact( absint( $conversation['contact_id'] ?? 0 ), $tenant ),
+			NXTCC_Conversations::instance()->list_for_contact( $contact_id, $tenant ),
 			static function ( array $ticket ) use ( $tenant ): bool {
 				return NXTCC_CRM_Access_Policy::user_can_view_conversation( absint( $ticket['id'] ?? 0 ), $tenant );
 			}
 		)
 	);
-	$last_incoming = nxtcc_chat_repo()->get_last_incoming_time( absint( $conversation['contact_id'] ), (string) $tenant['user_mailid'] );
-	$ticket_counts = NXTCC_Conversations::instance()->get_badge_counts_for_contacts( array( absint( $conversation['contact_id'] ) ), $tenant );
+	$last_incoming = nxtcc_chat_repo()->get_last_incoming_time( $contact_id, (string) $tenant['user_mailid'] );
+	$ticket_counts = NXTCC_Conversations::instance()->get_badge_counts_for_contacts( array( $contact_id ), $tenant );
 
 	wp_send_json_success(
 		array(
@@ -66,16 +74,18 @@ function nxtcc_ajax_get_conversation_ticket(): void {
 			'can_reply_24hr'          => nxtcc_chat_can_reply_24h( $last_incoming ),
 			'reply_window_expires_at' => nxtcc_chat_reply_window_expires_at( $last_incoming ),
 			'tickets'                 => $tickets,
-			'ticket_count'            => absint( $ticket_counts[ absint( $conversation['contact_id'] ) ]['total'] ?? 0 ),
+			'ticket_count'            => absint( $ticket_counts[ $contact_id ]['total'] ?? 0 ),
 			'categories'              => NXTCC_Ticket_Categories::instance()->list_categories( $tenant, true ),
-			'activity'                => $can_view_activity ? NXTCC_Conversations::instance()->list_activity( absint( $conversation['id'] ), $tenant ) : array(),
-			'private_note'            => $can_view_activity || NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_crm_notes' ) )
-				? NXTCC_CRM_Activities::instance()->get_latest_private_note( absint( $conversation['id'] ), $tenant ) : null,
+			'activity'                => $conversation_id > 0 && $can_view_activity ? NXTCC_Conversations::instance()->list_activity( $conversation_id, $tenant ) : array(),
+			'private_note'            => $conversation_id > 0 && ( $can_view_activity || NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_manage_crm_notes' ) ) )
+				? NXTCC_CRM_Activities::instance()->get_latest_private_note( $conversation_id, $tenant ) : null,
 			'statuses'                => NXTCC_Conversations::instance()->get_statuses(),
 			'priorities'              => NXTCC_Conversations::instance()->get_priorities(),
 			'assignment_targets'      => nxtcc_list_contact_assignment_targets( $tenant ),
 			'permissions'             => array(
-				'can_manage'        => NXTCC_CRM_Access_Policy::user_can_manage_conversation( absint( $conversation['id'] ), $tenant ),
+				'can_manage'        => $conversation_id > 0
+					? NXTCC_CRM_Access_Policy::user_can_manage_conversation( $conversation_id, $tenant )
+					: NXTCC_CRM_Access_Policy::user_can_access_chat( $contact_id, $tenant, true ),
 				'can_view_activity' => $can_view_activity,
 				'can_reassign'      => NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_reassign_conversations' ) ),
 				'can_resolve'       => NXTCC_Access_Control::current_user_can_any( array( 'nxtcc_resolve_conversations' ) ),
@@ -98,7 +108,12 @@ function nxtcc_chat_ticket_local_datetime_to_gmt( string $value ): string {
 		$value .= ':00';
 	}
 
-	return preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value ) ? get_gmt_from_date( $value ) : '';
+	if ( ! preg_match( '/^([1-9]\d{3})-(\d{2})-(\d{2}) ([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/', $value, $parts )
+		|| ! checkdate( (int) $parts[2], (int) $parts[3], (int) $parts[1] )
+	) {
+		return '';
+	}
+	return get_gmt_from_date( $value );
 }
 
 /**
@@ -172,6 +187,9 @@ function nxtcc_ajax_save_conversation_ticket(): void {
 		$date_value = isset( $_POST[ $date_field ] ) ? sanitize_text_field( wp_unslash( $_POST[ $date_field ] ) ) : '';
 		if ( '' !== $date_value ) {
 			$args[ $date_field ] = nxtcc_chat_ticket_local_datetime_to_gmt( $date_value );
+			if ( '' === $args[ $date_field ] ) {
+				wp_send_json_error( array( 'message' => __( 'Enter a valid ticket date and time.', 'nxt-cloud-chat' ) ), 400 );
+			}
 		}
 	}
 
@@ -289,7 +307,6 @@ add_action( 'wp_ajax_nxtcc_delete_ticket_category', 'nxtcc_ajax_delete_ticket_ca
  * @return void
  */
 function nxtcc_ajax_set_conversation_watcher(): void {
-	check_ajax_referer( 'nxtcc_received_messages', 'nonce', true );
 	$conversation = nxtcc_chat_ajax_conversation();
 	$result       = NXTCC_Conversations::instance()->set_watcher(
 		array_merge(
@@ -298,6 +315,7 @@ function nxtcc_ajax_set_conversation_watcher(): void {
 				'conversation_id' => absint( $conversation['id'] ),
 				'wp_user_id'      => get_current_user_id(),
 				'actor_id'        => get_current_user_id(),
+				// phpcs:ignore WordPress.Security.NonceVerification.Missing -- nxtcc_chat_ajax_conversation() verifies the nonce and ticket access before returning.
 				'watch'           => isset( $_POST['watch'] ) && '1' === sanitize_text_field( wp_unslash( $_POST['watch'] ) ),
 			)
 		)

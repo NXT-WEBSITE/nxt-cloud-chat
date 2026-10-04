@@ -117,6 +117,7 @@ final class NXTCC_CRM_Activities {
 			'contact_tags_removed'                 => 'Contact tags removed',
 			'subscription_status_changed'          => 'Subscription status changed',
 			'contact_assignment_changed'           => 'Contact assignment changed',
+			'conversation_created'                 => 'New ticket created',
 			'conversation_assigned'                => 'Ticket assigned',
 			'conversation_status_changed'          => 'Ticket status changed',
 			'conversation_priority_changed'        => 'Ticket priority changed',

@@ -178,8 +178,7 @@ function nxtcc_ajax_media_proxy(): void {
 	$repo       = nxtcc_chat_repo();
 	$contact_id = $repo->get_contact_id_for_media_id( $media_id, $user_mailid, $phone_number_id );
 	$tenant     = NXTCC_Access_Control::get_current_tenant_context();
-	$ticket     = NXTCC_Conversations::instance()->get_or_create_for_contact( $contact_id, $tenant );
-	if ( $contact_id <= 0 || ! is_array( $ticket ) || ! NXTCC_CRM_Access_Policy::user_can_view_conversation( absint( $ticket['id'] ), $tenant ) ) {
+	if ( $contact_id <= 0 || ! NXTCC_CRM_Access_Policy::user_can_access_chat( $contact_id, $tenant ) ) {
 		nxtcc_chat_proxy_die( 403, 'Forbidden' );
 	}
 

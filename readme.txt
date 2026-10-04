@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.8
+Stable tag: 1.1.9
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,6 +21,9 @@ Everything runs from the familiar WordPress admin area, so your team can manage 
 = Free Plugin =
 
 * Shared inbox with tickets, issues, author-only private notes, multi-select filters, followers, assignments, and SLA indicators.
+* Create tickets explicitly from the ticket panel or configured automation; ordinary chats do not create tickets automatically.
+* Outgoing messages identify other agents and automated send sources without showing your own avatar.
+* Incoming messages show a unique agent-view count and a Viewed by list with first-view times. Views are recorded only while the message is visible in a focused chat.
 * Contacts, groups, tags, lifecycle stages, follow-up tasks, ownership, duplicate detection, and activity history.
 * Sales pipelines, configurable stages, deals, line items, values, reasons, and stage history.
 * Access Teams with module permissions and assigned, team, or all-record scopes.
@@ -410,6 +413,21 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 
 == Changelog ==
 
+= 1.1.9 =
+* Recorded new ticket creation as a distinct New ticket created activity instead of a ticket status change, in chat and ticket timelines.
+* Create/Get Ticket now reuses only active tickets and creates a new ticket when all previous tickets are resolved or closed. Incoming messages no longer reopen completed tickets; explicit reopening and snoozed-ticket wake-up remain available.
+* Added unique incoming-message agent views and a paginated Viewed by list, including your own first view, entirely in Free.
+* Counted only messages visibly observed in the focused chat; polling, offscreen messages, and hidden tabs do not create views. Shared inbox unread flags now update only for observed messages.
+* Retried failed unread updates without duplicating agent views or changing first-view times, and respected WordPress's disabled-avatar setting in the viewer list.
+* Added a dedicated tenant-scoped message-view table and read-only integration wrappers. Existing WhatsApp read timestamps and historical read flags are preserved without backfilling agent identities.
+* Stopped automatic ticket creation when messages arrive, messages are sent, or chats and media are opened. Existing tickets and their activity are preserved.
+* Added a clear No tickets selector state; New Ticket opens the existing panel form for explicit creation.
+* Kept authorized ticket-free chats visible in the default inbox while ticket-specific filters match existing tickets only.
+* Added compact sender avatars for other agents and source icons for workflow, broadcast, system, and integration messages, with name/source tooltips.
+* Preserved ticket and contact assignment access rules for chat, activity, and media requests without creating tickets during authorization.
+* Removed unused private helpers, cache constants, and obsolete inbox assignment metadata; consolidated duplicate ticket nonce checks in the shared authorization guard without changing public integration wrappers.
+* Recommended alongside Pro 1.1.7 for explicit workflow ticket handling and the ticket.message template-variable fix.
+
 = 1.1.8 =
 * Added compact multi-select Assignment, Status, and Priority inbox filters, including Following, with permission-aware matching on the same ticket.
 * Fixed overdue ticket matching to exclude resolved and closed tickets and protected filter results from stale requests.
@@ -557,6 +575,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.1.9 =
+Back up before updating. Message-view receipts begin after updating; older views are not backfilled. Chats no longer create tickets automatically; existing tickets are preserved. Review ticket workflows and use Create New Ticket where needed. Update Pro to 1.1.7.
 
 = 1.1.8 =
 Adds ticket issues, filters, and text limits. Personal notes become author-only; old unattributed notes stay hidden. The Issue column is added automatically. Update Pro to 1.1.6 for matching workflow validation and review oversized workflow notes.

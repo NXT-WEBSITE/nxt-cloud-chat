@@ -173,15 +173,6 @@ jQuery( function ( $ ) {
 			if ( conversation ) {
 				row.setAttribute( 'data-ticket-id', U.toStr( conversation.id || '' ) );
 			}
-			const assignment = chat && chat.assignment && 'object' === typeof chat.assignment ? chat.assignment : null;
-			let assignmentTarget = '';
-			if ( assignment && 'user' === U.toStr( assignment.target_type ) ) {
-				assignmentTarget = 'user:' + U.toStr( assignment.assigned_user_id );
-			} else if ( assignment && 'role' === U.toStr( assignment.target_type ) ) {
-				assignmentTarget = 'role:' + U.toStr( assignment.assigned_role );
-			}
-			row.setAttribute( 'data-assignment-target', assignmentTarget );
-
 			// Cache normalized text for fast client-side filtering (no repeated DOM reads).
 			row.setAttribute( 'data-name-lc', U.toStr( nameText ).toLowerCase() );
 			row.setAttribute( 'data-phone-lc', U.toStr( full ).toLowerCase() );

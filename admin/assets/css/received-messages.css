@@ -1182,6 +1182,189 @@
 	text-align: right;
 }
 
+.nxtcc-message-views {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	min-height: 24px;
+	padding: 0 3px;
+	border: 0;
+	background: transparent;
+	color: #42645a;
+	font: inherit;
+	cursor: pointer;
+}
+
+.nxtcc-message-views[hidden], .nxtcc-viewers-more[hidden] {
+	display: none;
+}
+
+.nxtcc-message-views .fa-eye {
+	width: 10px;
+	height: 10px;
+	font-size: 10px;
+}
+
+.nxtcc-message-views:focus-visible, .nxtcc-message-viewers button:focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 2px;
+}
+
+.nxtcc-message-viewers {
+	position: fixed;
+	z-index: 100005;
+	box-sizing: border-box;
+	width: 320px;
+	max-width: calc(100vw - 24px);
+	max-height: calc(100vh - 24px);
+	overflow: auto;
+	padding: 12px;
+	border: 1px solid #c3c4c7;
+	border-radius: 6px;
+	background: #fff;
+	color: #1d2327;
+	box-shadow: 0 3px 16px #0002;
+	font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	letter-spacing: 0;
+}
+
+.nxtcc-message-viewers-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid #e5e5e5;
+}
+
+.nxtcc-viewers-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 32px;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.nxtcc-message-viewer {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 0;
+	border-bottom: 1px solid #f0f0f1;
+}
+
+.nxtcc-message-viewer img, .nxtcc-viewer-initial {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 32px;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: #eaf1ee;
+	color: #245444;
+}
+
+.nxtcc-message-viewer-details {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.nxtcc-message-viewer-details strong, .nxtcc-message-viewer-details time {
+	display: block;
+}
+
+.nxtcc-message-viewer-details time, .nxtcc-message-viewers-state {
+	color: #646970;
+	font-size: 12px;
+}
+
+.nxtcc-message-viewers-state:not(:empty) { padding: 10px 0; }
+
+.nxtcc-viewers-more {
+	width: 100%;
+	min-height: 32px;
+	margin-top: 8px;
+	border: 1px solid #c3c4c7;
+	border-radius: 3px;
+	background: #f6f7f7;
+	color: #2271b1;
+	cursor: pointer;
+}
+
+.nxtcc-ticket-panel.is-empty-ticket .nxtcc-ticket-panel-body {
+	display: none;
+}
+
+.nxtcc-msg-sender {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	flex: 0 0 18px;
+	border-radius: 50%;
+	font-size: 9px;
+	line-height: 1;
+}
+
+.nxtcc-msg-sender-user {
+	background: #16a34a;
+	color: #fff;
+	font-weight: 600;
+}
+
+.nxtcc-msg-sender img {
+	position: absolute;
+	inset: 0;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.nxtcc-msg-sender-source {
+	color: #52645a;
+	font-size: 12px;
+}
+
+.nxtcc-msg-sender:focus-visible {
+	outline: 2px solid #1c4fb2;
+	outline-offset: 2px;
+}
+
+.nxtcc-msg-sender-tooltip {
+	display: none;
+	position: absolute;
+	bottom: calc(100% + 6px);
+	right: 0;
+	z-index: 2;
+	width: max-content;
+	max-width: 180px;
+	padding: 5px 7px;
+	border-radius: 4px;
+	background: #25352c;
+	color: #fff;
+	font-size: 11px;
+	font-weight: 400;
+	line-height: 1.4;
+	text-align: left;
+	overflow-wrap: anywhere;
+	pointer-events: none;
+}
+
+.nxtcc-msg-sender:hover .nxtcc-msg-sender-tooltip,
+.nxtcc-msg-sender:focus .nxtcc-msg-sender-tooltip {
+	display: block;
+}
+
 /* Inline favorite star beside date */
 .nxtcc-fav-star-inline {
 	color: #f5c518;

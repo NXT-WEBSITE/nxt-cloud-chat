@@ -1214,6 +1214,9 @@ final class NXTCC_Contacts_Handler_Repo {
 			),
 			array( '%d', '%s', '%s' )
 		);
+		if ( class_exists( 'NXTCC_Message_Reads' ) ) {
+			NXTCC_Message_Reads::delete_orphaned_for_contacts( array( $id ) );
+		}
 
 		nxtcc_invalidate_tenant_caches( $baid, $pnid );
 
@@ -1324,6 +1327,9 @@ final class NXTCC_Contacts_Handler_Repo {
 		);
 		if ( '' !== $query_delete_contacts ) {
 			$db->query( $query_delete_contacts );
+		}
+		if ( class_exists( 'NXTCC_Message_Reads' ) ) {
+			NXTCC_Message_Reads::delete_orphaned_for_contacts( $ids );
 		}
 
 		nxtcc_invalidate_tenant_caches( $baid, $pnid );

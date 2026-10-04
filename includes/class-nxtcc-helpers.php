@@ -28,13 +28,6 @@ final class NXTCC_Helpers {
 	private const CACHE_GROUP = 'nxtcc';
 
 	/**
-	 * Default cache TTL in seconds (must be >= 300 for VIP cache sniff).
-	 *
-	 * @var int
-	 */
-	private const CACHE_TTL = 300;
-
-	/**
 	 * Transient key used to store country codes parsed from JSON.
 	 *
 	 * @var string

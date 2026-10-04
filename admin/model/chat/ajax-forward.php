@@ -364,7 +364,6 @@ function nxtcc_ajax_forward_messages(): void {
 	}
 
 	$rows          = $repo->get_messages_for_forwarding( $message_ids, $user_mailid );
-	$tenant        = NXTCC_Access_Control::get_current_tenant_context();
 	$contact_ids   = nxtcc_chat_filter_contact_ids_by_conversation_access( $contact_ids, true );
 	$source_ids    = nxtcc_chat_filter_contact_ids_by_conversation_access( wp_list_pluck( $rows, 'contact_id' ) );
 	$source_lookup = array_fill_keys( $source_ids, true );

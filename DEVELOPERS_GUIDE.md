@@ -159,6 +159,33 @@ function example_nxtcc_tenant_is_complete( array $tenant ): bool {
 }
 ```
 
+## Incoming Message Views
+
+Free owns incoming-message agent-view receipts. They record a unique WordPress
+agent's first observed view, not proof that the agent read or understood the text.
+The inbox requires a focused, visible tab and meaningful bubble visibility for
+one second. Loading a thread or polling alone never records a view.
+
+Use `nxtcc_get_message_view_counts( $contact_id, $message_ids, $tenant )` for a
+map of `view_count`, `viewed_by_me`, and shared inbox `is_read` (at most 100 IDs
+per call). Receipt existence is independent of unread-update success; retry the
+observed message if its receipt exists but `is_read` is false. Use
+`nxtcc_get_message_viewers( $contact_id, $message_id, $tenant, $offset )` for a
+50-row viewer page with `has_more` and `next_offset`. Both return `WP_Error` on
+invalid input or denied access and require the authenticated agent's Chat read
+permission, contact access, and complete current tenant tuple. Background jobs
+must not impersonate agents or manufacture receipts. Discovery capability:
+`message_view_reader`.
+
+Viewer payloads expose public display names, avatars, `is_me`, UTC
+`first_view_at`, and site-timezone `viewed_at`. Former tenant members are
+anonymized. Emails and permission metadata are not returned. The dedicated
+`nxtcc_message_reads` table deduplicates `(message_id, wp_user_id)` and never
+changes the first timestamp on repeated views. Contact merges move receipt
+references; message retention removes receipts for deleted messages. Shared
+inbox `is_read` changes only for observed incoming IDs; Meta `read_at` remains
+independent. No historical agent identities are inferred or backfilled.
+
 ## Runtime Discovery
 
 Read the Free contract:
@@ -207,7 +234,7 @@ plugin supports several NXT Cloud Chat versions.
 | Tags and groups | `contact_group_reader`, `contact_tag_reader`, `contact_tag_writer`, `contact_tag_definition_writer` |
 | Assignment | `contact_assignment_reader`, `contact_assignment_writer`, `contact_auto_assignment_writer`, `contact_assignment_targets_reader` |
 | Access | `crm_access_policy_reader`, `crm_contact_access_checker`, `access_teams_reader` |
-| Conversations and tickets | `conversation_reader`, `conversation_create_writer`, `conversation_writer`, `conversation_assignment_writer`, `conversation_auto_assignment_writer`, `conversation_note_writer`, `conversation_watcher_writer`, `conversation_activity_reader`, `conversation_access_checker`, `ticket_reader`, `ticket_create_writer`, `ticket_list_reader`, `ticket_explicit_create_writer`, `ticket_current_writer`, `ticket_category_reader`, `ticket_category_writer`, `ticket_writer`, `ticket_assignment_writer`, `ticket_auto_assignment_writer`, `ticket_note_writer`, `ticket_activity_writer`, `ticket_explicit_activity_writer`, `ticket_access_checker` |
+| Conversations and tickets | `conversation_reader`, `conversation_create_writer`, `conversation_writer`, `conversation_assignment_writer`, `conversation_auto_assignment_writer`, `conversation_note_writer`, `conversation_watcher_writer`, `conversation_activity_reader`, `conversation_access_checker`, `ticket_reader`, `ticket_contact_reader`, `ticket_create_writer`, `ticket_list_reader`, `ticket_explicit_create_writer`, `ticket_current_writer`, `ticket_category_reader`, `ticket_category_writer`, `ticket_writer`, `ticket_assignment_writer`, `ticket_auto_assignment_writer`, `ticket_note_writer`, `ticket_activity_writer`, `ticket_explicit_activity_writer`, `ticket_access_checker` |
 | CRM | `crm_activity_reader`, `crm_activity_writer`, `chat_timeline_reader`, `token_catalog_reader`, `token_context_builder`, `lifecycle_stage_reader`, `lifecycle_stage_writer`, `crm_task_reader`, `crm_task_writer`, `crm_saved_view_reader`, `crm_saved_view_writer` |
 | Sales | `crm_pipeline_reader`, `crm_pipeline_writer`, `crm_deal_reader`, `crm_deal_writer`, `crm_deal_lifecycle_writer`, `crm_deal_access_checker`, `crm_analytics_reader` |
 | Queries | `contact_query_reader`, `contact_query_provider_reader` |
@@ -706,11 +733,41 @@ The original `conversation` wrappers remain supported. New integrations should
 prefer the equivalent `ticket` aliases. Both names operate on the same records,
 IDs, tables, permissions, hooks, and workflow machine identifiers.
 
+### Read an existing ticket
+
+Chats and tickets are independent. Receiving a message, opening the Inbox,
+replying, sending a template, and browsing media do not create tickets.
+Ticket-free contacts remain visible in the default Inbox when the agent's Chat
+scope permits access. They do not match ticket-specific filters or contribute
+ticket badge counts. Without a ticket, Chat scope uses contact ownership; with
+an existing ticket, it uses the ticket's assignment. This does not require the
+agent to have Contacts-module permissions.
+
+Use the read-only wrapper when you must not create a support issue:
+
+```php
+$ticket = nxtcc_get_ticket_for_contact( $contact_id, $tenant );
+
+if ( null === $ticket ) {
+	// No existing ticket: do not treat this as an Unassigned ticket.
+}
+```
+
+The wrapper returns the current ticket, or the most recently updated existing
+ticket if none is selected. It returns `null` for a missing ticket or incomplete
+tenant tuple, and never creates a ticket or changes the current selection.
+Discover availability using `function_exists()` or the runtime capability
+`ticket_contact_reader`. As with other wrappers, integrations must authorize
+the caller and validate the tenant before invoking it.
+
 ### Get or create a ticket
 
 `nxtcc_create_or_get_ticket()` returns the contact's current ticket and creates
 one only when no ticket exists. Use `nxtcc_create_ticket()` when the integration
 must open a separate issue for a contact who already has tickets.
+These are explicit creation APIs; never use them as authorization checks or
+read-only lookups. The Chat Window's New Ticket button opens the existing panel
+form; a ticket is persisted only when the user saves it.
 
 ```php
 $ticket = nxtcc_create_or_get_ticket(
@@ -2433,8 +2490,29 @@ which prevents self-triggering loops.
 
 Available conditions cover assignment, status, priority, SLA state,
 subject/category matching, age, last activity, first response, reopen count,
-and source. Actions include Create/Get Ticket, assign, auto-assign, status,
+and source. Actions include Create New Ticket, assign, auto-assign, status,
 priority, details, snooze, internal note, escalation, and watcher updates.
+
+Ticket conditions and actions require ticket context on every incoming path.
+Use a Ticket lifecycle trigger, or place Create New Ticket before those nodes.
+The `create_ticket` node calls the Free `nxtcc_create_ticket()` wrapper and
+always creates a separate ticket, even when the contact has an active ticket.
+It provides the new `ticket` and `conversation` context to downstream status,
+priority, and other ticket actions without modifying previous tickets.
+Repeating a step with its saved successful node output resolves that same
+created ticket; this does not provide transactional exactly-once creation
+if execution stops before saving the successful output.
+Existing `get_or_create_conversation` nodes remain executable as legacy nodes
+but are hidden from the node library. They reuse a ticket in `unassigned`, `open`, `pending`, or `snoozed`
+status. If none exists, it creates a new ticket without reopening resolved or
+closed history. The selected active ticket is preferred; otherwise the most
+recently updated active ticket is used. Incoming messages can wake a snoozed
+ticket, but leave completed tickets unchanged and do not create tickets.
+Reopening a completed ticket requires an explicit status action.
+An Incoming Message trigger alone does not guarantee a ticket. Wait nodes
+preserve the provided context. Runtime lookups can read an existing contact
+ticket for compatibility, but never create one implicitly; a missing ticket
+fails the step clearly rather than being treated as a False condition.
 
 The Send Template action can use grouped CRM variables in body text, text
 headers, and text button parameters:
@@ -2828,6 +2906,7 @@ nxtcc_user_can_view_conversation( int $conversation_id, array $tenant = array(),
 nxtcc_user_can_manage_conversation( int $conversation_id, array $tenant = array(), int $user_id = 0 ): bool
 
 nxtcc_get_ticket( int $ticket_id, array $tenant ): ?array
+nxtcc_get_ticket_for_contact( int $contact_id, array $tenant ): ?array
 nxtcc_create_or_get_ticket( int $contact_id, array $tenant, array $args = array() ): ?array
 nxtcc_create_ticket( int $contact_id, array $tenant, array $args = array() ): ?array
 nxtcc_list_tickets_for_contact( int $contact_id, array $tenant, int $limit = 50 ): array

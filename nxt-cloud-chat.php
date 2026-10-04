@@ -3,7 +3,7 @@
  * Plugin Name:       NXT Cloud Chat - CRM, Inbox & OTP Login
  * Plugin URI:        https://nxtcloudchat.com/
  * Description:       WhatsApp CRM for WordPress with real-time messaging, customer communication, contact management, sales pipelines, team management, automated notifications, and WhatsApp OTP login.
- * Version:           1.1.8
+ * Version:           1.1.9
  * Requires at least: 6.4
  * Requires PHP:      7.4
  * Author:            NXTWEBSITE
@@ -22,7 +22,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin version.
  */
 if ( ! defined( 'NXTCC_VERSION' ) ) {
-	define( 'NXTCC_VERSION', '1.1.8' );
+	define( 'NXTCC_VERSION', '1.1.9' );
 }
 
 /**
@@ -272,6 +272,7 @@ require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-contact-query.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-access-policy.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-ticket-categories.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-conversations.php';
+require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-message-reads.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-crm-analytics.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-interactive-messages.php';
 require_once NXTCC_PLUGIN_DIR . 'includes/nxtcc-interactive-functions.php';
@@ -1172,6 +1173,16 @@ add_action(
 			array(
 				'ajaxurl'           => admin_url( 'admin-ajax.php' ),
 				'settingsUrl'       => admin_url( 'admin.php?page=nxtcc-settings' ),
+				'viewLabels'        => array(
+					'viewedBy' => __( 'Viewed by', 'nxt-cloud-chat' ),
+					'you'      => __( 'You', 'nxt-cloud-chat' ),
+					'close'    => __( 'Close', 'nxt-cloud-chat' ),
+					'loading'  => __( 'Loading...', 'nxt-cloud-chat' ),
+					'empty'    => __( 'No views yet.', 'nxt-cloud-chat' ),
+					'error'    => __( 'Could not load viewers.', 'nxt-cloud-chat' ),
+					'more'     => __( 'Load more', 'nxt-cloud-chat' ),
+					'retry'    => __( 'Retry', 'nxt-cloud-chat' ),
+				),
 				'ticketBadgeLabels' => array(
 					'open'            => __( 'Open', 'nxt-cloud-chat' ),
 					'pending'         => __( 'Pending', 'nxt-cloud-chat' ),
@@ -1215,11 +1226,20 @@ add_action(
 			true
 		);
 
-		// 4) Thread FOURTH (depends on runtime + actions).
+		$chat_reads_path = NXTCC_PLUGIN_DIR . 'admin/assets/js/chat/chat-reads.js';
+		wp_enqueue_script(
+			'nxtcc-chat-reads',
+			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-reads.js',
+			array( 'jquery', 'nxtcc-chat-runtime' ),
+			file_exists( $chat_reads_path ) ? (string) filemtime( $chat_reads_path ) : NXTCC_VERSION,
+			true
+		);
+
+		// 4) Thread FOURTH (depends on runtime + actions + observations).
 		wp_enqueue_script(
 			'nxtcc-chat-thread',
 			NXTCC_PLUGIN_URL . 'admin/assets/js/chat/chat-thread.js',
-			array( 'jquery', 'nxtcc-chat-runtime', 'nxtcc-chat-actions' ),
+			array( 'jquery', 'nxtcc-chat-runtime', 'nxtcc-chat-actions', 'nxtcc-chat-reads' ),
 			$chat_thread_ver,
 			true
 		);

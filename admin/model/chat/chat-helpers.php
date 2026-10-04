@@ -7,6 +7,62 @@
 
 defined( 'ABSPATH' ) || exit;
 
+/**
+ * Attach display-only sender metadata to an authorized message page.
+ *
+ * @param array $messages Tenant-scoped message rows.
+ * @return void
+ */
+function nxtcc_chat_attach_message_senders( array $messages ): void {
+	$user_ids = array();
+	foreach ( $messages as $message ) {
+		if ( 'received' !== (string) ( $message->status ?? '' ) && 'chat_user' === (string) ( $message->origin_type ?? '' ) ) {
+			$user_ids[] = absint( $message->origin_user_id ?? 0 );
+		}
+	}
+	$user_map = NXTCC_Actor_Audit::get_user_map( $user_ids );
+	$senders  = array();
+	$labels   = array(
+		'workflow'    => __( 'Workflow', 'nxt-cloud-chat' ),
+		'broadcast'   => __( 'Broadcast', 'nxt-cloud-chat' ),
+		'system'      => __( 'System', 'nxt-cloud-chat' ),
+		'integration' => __( 'Integration', 'nxt-cloud-chat' ),
+	);
+
+	foreach ( $messages as $message ) {
+		$message->sender = null;
+		if ( 'received' === (string) ( $message->status ?? '' ) ) {
+			continue;
+		}
+		$source  = sanitize_key( (string) ( $message->origin_type ?? '' ) );
+		$user_id = absint( $message->origin_user_id ?? 0 );
+		if ( isset( $labels[ $source ] ) ) {
+			$message->sender = array(
+				'type'  => $source,
+				'label' => $labels[ $source ],
+			);
+		} elseif ( 'chat_user' === $source && $user_id > 0 && get_current_user_id() !== $user_id && isset( $user_map[ $user_id ] ) ) {
+			if ( ! isset( $senders[ $user_id ] ) ) {
+				$user                = $user_map[ $user_id ];
+				$senders[ $user_id ] = array(
+					'type'       => 'user',
+					'label'      => sanitize_text_field( (string) ( ! empty( $user['display_name'] ) ? $user['display_name'] : $user['user_login'] ) ),
+					'avatar_url' => get_option( 'show_avatars' ) ? esc_url_raw(
+						get_avatar_url(
+							$user_id,
+							array(
+								'size'    => 36,
+								'default' => '404',
+							)
+						)
+					) : '',
+				);
+			}
+			$message->sender = $senders[ $user_id ];
+		}
+	}
+}
+
 if ( ! function_exists( 'nxtcc_chat_repo' ) ) {
 	/**
 	 * Convenience accessor for the chat repository.

@@ -380,6 +380,7 @@ if ( ! function_exists( 'nxtcc__wipe_site_data' ) ) {
 
 		$tables_free = array(
 			$site_prefix . 'nxtcc_message_history',
+			$site_prefix . 'nxtcc_message_reads',
 			$site_prefix . 'nxtcc_conversation_watchers',
 			$site_prefix . 'nxtcc_conversation_assignment_history',
 			$site_prefix . 'nxtcc_contact_ticket_state',

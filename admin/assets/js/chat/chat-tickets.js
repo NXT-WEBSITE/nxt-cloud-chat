@@ -186,7 +186,7 @@ jQuery( function ( $ ) {
 				}, label ) );
 			} );
 			if ( ! isNew && ! ( tickets || [] ).length ) {
-				U.safeAppend( select, U.el( 'option', { value: '' }, 'No ticket selected' ) );
+				U.safeAppend( select, U.el( 'option', { value: '' }, 'No tickets' ) );
 			}
 			select.value = isNew ? 'new' : U.toStr( selectedId || '' );
 			$selector.toggleClass( 'is-watching', ! isNew && $( select ).find( 'option:selected' ).hasClass( 'is-watching' ) );
@@ -216,6 +216,7 @@ jQuery( function ( $ ) {
 
 		function activityLabel( activity ) {
 			const labels = {
+				conversation_created: 'New ticket created',
 				conversation_assigned: 'Assignment updated',
 				conversation_details_changed: 'Ticket details changed',
 				conversation_first_response_recorded: 'First response recorded',
@@ -299,6 +300,7 @@ jQuery( function ( $ ) {
 			const current = ctx.state.conversation;
 			if ( saving ) { return 'Saving ticket...'; }
 			if ( loadingTicket ) { return 'Loading ticket details...'; }
+			if ( !current && !ctx.state.isNewTicket ) { return 'Create or select a ticket first.'; }
 			if ( !permissions.can_manage || !permissions.can_resolve || !permissions.can_reassign ) { return 'You do not have permission to save and send.'; }
 			if ( limitError ) { return limitError; }
 			if ( !U.toStr( $subject.val() ).trim() || !Number( $category.val() ) || !$assignment.val() ) { return 'Complete the subject, category, and assignment.'; }
@@ -313,7 +315,7 @@ jQuery( function ( $ ) {
 		function updateSaveButtons() {
 			const limitError = textLimitError();
 			const permissions = ctx.state.ticketPermissions || {};
-			$save.prop( 'disabled', !!limitError || saving || loadingTicket || !permissions.can_manage || !permissions.can_resolve || !permissions.can_reassign );
+			$save.prop( 'disabled', !!limitError || saving || loadingTicket || ( !ctx.state.conversation && !ctx.state.isNewTicket ) || !permissions.can_manage || !permissions.can_resolve || !permissions.can_reassign );
 			const reason = sendDisabledReason( limitError );
 			const $wrap = $panel.find( '.nxtcc-ticket-send-wrap' );
 			const $tip = $wrap.find( '.nxtcc-ticket-send-tooltip' );
@@ -347,11 +349,13 @@ jQuery( function ( $ ) {
 			const current          = ctx.state.conversation;
 			const isNew            = Boolean( ctx.state.isNewTicket );
 
-			$toggle.prop( 'disabled', ! current && ! isNew );
+			$toggle.prop( 'disabled', ! Number( ctx.state.chatContactId ) );
 			$watch.prop( 'disabled', ! current );
 			$save.show();
 			$saveSend.text( 'Save & Send' );
 			$panel.toggleClass( 'is-new-ticket', isNew );
+			$panel.toggleClass( 'is-empty-ticket', ! current && ! isNew );
+			$panel.find( '.nxtcc-ticket-panel-body' ).prop( 'hidden', ! current && ! isNew );
 			$panel.find( '.nxtcc-ticket-updated' ).text( isNew ? 'Complete the required fields' : '' );
 			$panel.find( '.nxtcc-ticket-activity' ).closest( '.nxtcc-ticket-section' ).toggle( ! isNew );
 
@@ -481,6 +485,7 @@ jQuery( function ( $ ) {
 
 		function saveTicket( sendMessage ) {
 			if ( saving || loadingTicket ) { return; }
+			if ( !ctx.state.conversation && !ctx.state.isNewTicket ) { return; }
 			const limitError = textLimitError();
 			if ( sendMessage && sendDisabledReason( limitError ) ) { return; }
 			if ( limitError ) {
@@ -783,6 +788,7 @@ jQuery( function ( $ ) {
 			ctx.state.ticketCategories  = [];
 			ctx.state.contactTickets    = [];
 			ctx.state.isNewTicket       = false;
+			renderTicketOptions( [], 0, false );
 			renderConversation( null );
 			$widget.removeClass( 'is-ticket-open' );
 		};

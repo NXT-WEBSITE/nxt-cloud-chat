@@ -285,37 +285,6 @@ class NXTCC_Routes {
 	}
 
 	/**
-	 * Grab last configured tenant row for an owner (owner + baid + pnid).
-	 *
-	 * @param string $user_mailid Owner email.
-	 * @return object|null
-	 */
-	private static function latest_tenant_row_for_owner( string $user_mailid ) {
-		$db                  = NXTCC_DB::i();
-		$table_user_settings = self::quote_table_name( $db->t_user_settings() );
-
-		$cache_key = 'tenant:' . md5( $user_mailid );
-		$cached    = wp_cache_get( $cache_key, 'nxtcc' );
-		if ( false !== $cached ) {
-			return '' !== $cached ? $cached : null;
-		}
-
-		$row = $db->get_row(
-			$db->prepare(
-				'SELECT user_mailid, business_account_id, phone_number_id
-			   FROM ' . $table_user_settings . '
-			  WHERE user_mailid = %s
-		   ORDER BY id DESC LIMIT 1',
-				$user_mailid
-			),
-			array()
-		);
-
-		wp_cache_set( $cache_key, $row ? $row : '', 'nxtcc', 300 );
-		return $row ? $row : null;
-	}
-
-	/**
 	 * Get WP_Filesystem instance (or false).
 	 *
 	 * @return WP_Filesystem_Base|false

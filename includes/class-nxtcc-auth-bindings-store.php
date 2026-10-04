@@ -33,16 +33,6 @@ final class NXTCC_Auth_Bindings_Store {
 	private const TABLE_EXISTS_CACHE_KEY = 'bindings_table_exists';
 
 	/**
-	 * Cache TTL (seconds) for per-user reads.
-	 *
-	 * Kept as a constant for internal reference, but cache calls use a literal
-	 * value because VIP sniffs cannot always evaluate class constants.
-	 *
-	 * @var int
-	 */
-	private const CACHE_TTL = 300;
-
-	/**
 	 * Cached table name for this request.
 	 *
 	 * @var string|null

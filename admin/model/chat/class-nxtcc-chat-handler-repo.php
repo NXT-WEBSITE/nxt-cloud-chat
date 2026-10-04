@@ -23,13 +23,6 @@ final class NXTCC_Chat_Handler_Repo {
 	public const CACHE_GROUP = 'nxtcc_chat';
 
 	/**
-	 * Minimum TTL allowed for persistent object cache writes (VIP requirement).
-	 *
-	 * @var int
-	 */
-	private const CACHE_TTL_MIN = 300;
-
-	/**
 	 * Singleton instance.
 	 *
 	 * @var self|null
@@ -735,6 +728,7 @@ final class NXTCC_Chat_Handler_Repo {
 			$query = $this->prepare_with_table_tokens(
 				'SELECT id, contact_id, conversation_id, message_content, status, created_at, is_read, is_favorite,
 						meta_message_id, reply_to_history_id, reply_to_wamid, response_json,
+						origin_type, origin_user_id,
 						user_mailid, business_account_id, phone_number_id, template_name, template_type, template_data
 				 FROM {history}
 				 WHERE contact_id = %d
@@ -756,6 +750,7 @@ final class NXTCC_Chat_Handler_Repo {
 			$query = $this->prepare_with_table_tokens(
 				'SELECT id, contact_id, conversation_id, message_content, status, created_at, is_read, is_favorite,
 						meta_message_id, reply_to_history_id, reply_to_wamid, response_json,
+						origin_type, origin_user_id,
 						user_mailid, business_account_id, phone_number_id, template_name, template_type, template_data
 				 FROM {history}
 				 WHERE contact_id = %d
@@ -777,6 +772,7 @@ final class NXTCC_Chat_Handler_Repo {
 			$query = $this->prepare_with_table_tokens(
 				'SELECT id, contact_id, conversation_id, message_content, status, created_at, is_read, is_favorite,
 						meta_message_id, reply_to_history_id, reply_to_wamid, response_json,
+						origin_type, origin_user_id,
 						user_mailid, business_account_id, phone_number_id, template_name, template_type, template_data
 				 FROM {history}
 				 WHERE contact_id = %d
@@ -976,6 +972,18 @@ final class NXTCC_Chat_Handler_Repo {
 			array( '%d', '%s', '%s', '%s' )
 		);
 
+		$this->bust_hot_caches( $user_mailid, $phone_number_id, $contact_id );
+	}
+
+	/**
+	 * Invalidate shared inbox/thread caches after observed-message read updates.
+	 *
+	 * @param int    $contact_id Contact ID.
+	 * @param string $user_mailid Tenant owner.
+	 * @param string $phone_number_id Tenant phone ID.
+	 * @return void
+	 */
+	public function invalidate_read_cache( int $contact_id, string $user_mailid, string $phone_number_id ): void {
 		$this->bust_hot_caches( $user_mailid, $phone_number_id, $contact_id );
 	}
 

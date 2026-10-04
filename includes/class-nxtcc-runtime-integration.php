@@ -485,10 +485,9 @@ final class NXTCC_Runtime_Integration {
 			);
 		}
 
-		$db           = NXTCC_DB::i();
-		$contacts_sql = self::quote_table( $db->t_contacts() );
-		$phone_e164   = self::normalize_phone( $country_code . $local_phone );
-		$existing     = self::get_contact_by_phone( $phone_e164, $user_mailid, $business_account_id, $phone_number_id );
+		$db         = NXTCC_DB::i();
+		$phone_e164 = self::normalize_phone( $country_code . $local_phone );
+		$existing   = self::get_contact_by_phone( $phone_e164, $user_mailid, $business_account_id, $phone_number_id );
 
 		if ( ! is_array( $existing ) && $wp_user_id > 0 ) {
 			$existing = self::get_contact_by_wp_user( $wp_user_id, $user_mailid, $business_account_id, $phone_number_id );

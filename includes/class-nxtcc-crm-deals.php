@@ -1873,17 +1873,6 @@ final class NXTCC_CRM_Deals {
 	}
 
 	/**
-	 * Return nullable key.
-	 *
-	 * @param mixed $value Raw value.
-	 * @return string|null
-	 */
-	private function nullable_key( $value ): ?string {
-		$value = sanitize_key( (string) $value );
-		return '' !== $value ? substr( $value, 0, 50 ) : null;
-	}
-
-	/**
 	 * Quote a controlled table identifier.
 	 *
 	 * @param string $table Table name.

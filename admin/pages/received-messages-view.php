@@ -302,7 +302,7 @@ $nxtcc_instance_id         = isset( $instance_id ) ? (string) $instance_id : 'ad
 			<div class="nxtcc-ticket-selector-wrap">
 				<label class="screen-reader-text" for="nxtcc-ticket-selector-<?php echo esc_attr( $nxtcc_instance_id ); ?>"><?php esc_html_e( 'Selected ticket', 'nxt-cloud-chat' ); ?></label>
 				<select id="nxtcc-ticket-selector-<?php echo esc_attr( $nxtcc_instance_id ); ?>" class="nxtcc-ticket-selector" disabled>
-					<option value=""><?php esc_html_e( 'No ticket selected', 'nxt-cloud-chat' ); ?></option>
+					<option value=""><?php esc_html_e( 'No tickets', 'nxt-cloud-chat' ); ?></option>
 				</select>
 				<div class="nxtcc-ticket-updated"></div>
 			</div>
