@@ -452,6 +452,15 @@ final class NXTCC_DB {
 	}
 
 	/**
+	 * Distinguish a failed read from a successful query with no matching rows.
+	 *
+	 * @return bool
+	 */
+	public function last_query_failed(): bool {
+		return '' !== (string) ( $this->db->last_error ?? '' );
+	}
+
+	/**
 	 * Last insert ID.
 	 *
 	 * @return int

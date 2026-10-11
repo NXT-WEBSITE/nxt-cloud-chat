@@ -554,7 +554,7 @@ function nxtcc_rest_extract_status_error_message( array $st ): string {
 }
 
 /**
- * Merge/append a timestamp into existing status_timestamps JSON.
+ * Merge the earliest receipt timestamp into existing status_timestamps JSON.
  *
  * @param string $existing_json Existing JSON (may be empty).
  * @param string $key          Key to set (sent|delivered|read|failed...).
@@ -573,11 +573,64 @@ function nxtcc_rest_merge_status_timestamp( string $existing_json, string $key, 
 
 	$key = sanitize_key( $key );
 	if ( '' !== $key ) {
-		$out[ $key ] = sanitize_text_field( $mysql_utc );
+		$existing    = nxtcc_rest_get_history_status_timestamp( array( 'status_timestamps' => $existing_json ), $key );
+		$out[ $key ] = '' !== $existing && $existing < $mysql_utc ? $existing : sanitize_text_field( $mysql_utc );
 	}
 
 	$json = wp_json_encode( $out );
 	return is_string( $json ) ? $json : '';
+}
+
+/**
+ * Read the earliest valid UTC timestamp for a recorded receipt.
+ *
+ * @param array  $row History row.
+ * @param string $status Receipt status.
+ * @return string
+ */
+function nxtcc_rest_get_history_status_timestamp( array $row, string $status ): string {
+	$timestamps = json_decode( (string) ( $row['status_timestamps'] ?? '' ), true );
+	$values     = array( $row[ $status . '_at' ] ?? '', is_array( $timestamps ) ? ( $timestamps[ $status ] ?? '' ) : '' );
+	$earliest   = '';
+
+	foreach ( $values as $value ) {
+		if ( ! is_string( $value ) || 1 !== preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $value ) ) {
+			continue;
+		}
+		$date = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, new DateTimeZone( 'UTC' ) );
+		if ( false !== $date && $date->format( 'Y-m-d H:i:s' ) === $value && ( '' === $earliest || $value < $earliest ) ) {
+			$earliest = $value;
+		}
+	}
+
+	return $earliest;
+}
+
+/**
+ * Preserve confirmed delivery/read receipts and failed submission outcomes.
+ *
+ * @param array $row History row with merged receipt timestamps.
+ * @return string
+ */
+function nxtcc_rest_resolve_history_status( array $row ): string {
+	$status = sanitize_key( (string) ( $row['status'] ?? '' ) );
+	$ranks  = array(
+		'sent'      => 1,
+		'failed'    => 2,
+		'delivered' => 3,
+		'read'      => 4,
+	);
+	$rank   = $ranks[ $status ] ?? 0;
+
+	// A failure cannot undo proof of delivery; a late acceptance cannot undo failure.
+	foreach ( $ranks as $receipt => $receipt_rank ) {
+		if ( $receipt_rank > $rank && '' !== nxtcc_rest_get_history_status_timestamp( $row, $receipt ) ) {
+			$status = $receipt;
+			$rank   = $receipt_rank;
+		}
+	}
+
+	return $status;
 }
 
 /**
@@ -617,9 +670,9 @@ function nxtcc_rest_normalize_meta_message_id( string $wamid ): string {
  * @param int      $unix_ts    Status timestamp (unix seconds) from Meta (may be 0).
  * @param string   $err_msg    Optional error message.
  * @param array    $status_obj Raw status object.
- * @return void
+ * @return bool True when persisted or intentionally ignored; false when retry is required.
  */
-function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, string $new_status, int $unix_ts, string $err_msg, array $status_obj ): void {
+function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, string $new_status, int $unix_ts, string $err_msg, array $status_obj ): bool {
 	$wamid_raw  = sanitize_text_field( $wamid );
 	$wamid      = nxtcc_rest_normalize_meta_message_id( $wamid_raw );
 	$new_status = sanitize_key( $new_status );
@@ -629,126 +682,155 @@ function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, 
 		'history' => $table_hist,
 	);
 
-	if ( '' === $wamid || '' === $new_status ) {
-		return;
+	if ( '' === $wamid || ! in_array( $new_status, array( 'sent', 'delivered', 'read', 'failed' ), true ) ) {
+		return true;
 	}
+	$ts_mysql = $unix_ts > 0 ? gmdate( 'Y-m-d H:i:s', $unix_ts ) : current_time( 'mysql', 1 );
 
-	// Find the row first (need current status_timestamps + response_json).
-	$row = $db->get_row(
-		nxtcc_rest_sql_with_table_tokens(
-			'SELECT id, queue_id, user_mailid, business_account_id, phone_number_id, contact_id, status, status_timestamps, response_json
+	// Retry a compare-and-swap if another webhook changes the same history row.
+	for ( $attempt = 0; $attempt < 3; ++$attempt ) {
+		$row = $db->get_row(
+			nxtcc_rest_sql_with_table_tokens(
+				'SELECT *
 		   FROM {history}
 		  WHERE meta_message_id = %s
 		  LIMIT 1',
-			$table_map
-		),
-		array( $wamid ),
-		OBJECT
-	);
+				$table_map
+			),
+			array( $wamid ),
+			OBJECT
+		);
 
-	if ( ! $row || empty( $row->id ) ) {
-		return;
-	}
+		if ( $db->last_query_failed() ) {
+			continue;
+		}
+		if ( ! $row || empty( $row->id ) ) {
+			return true;
+		}
 
-	$id = (int) $row->id;
+		$id = (int) $row->id;
 
-	$ts_mysql = '';
-	if ( $unix_ts > 0 ) {
-		$ts_mysql = gmdate( 'Y-m-d H:i:s', $unix_ts );
-	} else {
-		$ts_mysql = current_time( 'mysql', 1 );
-	}
+		$existing_ts     = isset( $row->status_timestamps ) ? (string) $row->status_timestamps : '';
+		$merged_ts       = nxtcc_rest_merge_status_timestamp( $existing_ts, $new_status, $ts_mysql );
+		$previous_status = isset( $row->status ) ? sanitize_key( (string) $row->status ) : '';
+		$merged_row      = array_merge( (array) $row, array( 'status_timestamps' => $merged_ts ) );
+		$resolved_status = nxtcc_rest_resolve_history_status( $merged_row );
+		$receipt_at      = nxtcc_rest_get_history_status_timestamp( $merged_row, $new_status );
+		$merged_ts       = nxtcc_rest_merge_status_timestamp( $merged_ts, $new_status, $receipt_at );
 
-	$existing_ts     = isset( $row->status_timestamps ) ? (string) $row->status_timestamps : '';
-	$merged_ts       = nxtcc_rest_merge_status_timestamp( $existing_ts, $new_status, $ts_mysql );
-	$previous_status = isset( $row->status ) ? sanitize_key( (string) $row->status ) : '';
+		// Append status object into response_json in a safe way.
+		$resp_blob = array(
+			'webhook_status' => $status_obj,
+			'updated_utc'    => $ts_mysql,
+		);
 
-	// Append status object into response_json in a safe way.
-	$resp_blob = array(
-		'webhook_status' => $status_obj,
-		'updated_utc'    => $ts_mysql,
-	);
+		$existing_resp = isset( $row->response_json ) ? (string) $row->response_json : '';
+		$decoded_resp  = json_decode( $existing_resp, true );
+		if ( ! is_array( $decoded_resp ) ) {
+			$decoded_resp = array();
+		}
+		$decoded_resp[] = $resp_blob;
 
-	$existing_resp = isset( $row->response_json ) ? (string) $row->response_json : '';
-	$decoded_resp  = json_decode( $existing_resp, true );
-	if ( ! is_array( $decoded_resp ) ) {
-		$decoded_resp = array();
-	}
-	$decoded_resp[] = $resp_blob;
+		$resp_json = wp_json_encode( $decoded_resp );
+		$resp_json = is_string( $resp_json ) ? $resp_json : $existing_resp;
 
-	$resp_json = wp_json_encode( $decoded_resp );
-	$resp_json = is_string( $resp_json ) ? $resp_json : $existing_resp;
+		$update = array(
+			'status'            => $resolved_status,
+			'status_timestamps' => $merged_ts,
+			'response_json'     => $resp_json,
+		);
 
-	$update = array(
-		'status'            => $new_status,
-		'status_timestamps' => $merged_ts,
-		'response_json'     => $resp_json,
-	);
+		// Update the appropriate *_at field if the schema includes it.
+		if ( 'delivered' === $new_status ) {
+			$update['delivered_at'] = $receipt_at;
+		} elseif ( 'read' === $new_status ) {
+			$update['read_at'] = $receipt_at;
+		} elseif ( 'failed' === $new_status ) {
+			$update['failed_at'] = $receipt_at;
+			if ( 'failed' === $resolved_status ) {
+				$update['last_error'] = ( '' !== $err_msg ) ? $err_msg : 'failed';
+			}
+		} elseif ( 'sent' === $new_status ) {
+			$update['sent_at'] = $receipt_at;
+		}
+		if ( in_array( $resolved_status, array( 'delivered', 'read' ), true ) ) {
+			$update['last_error'] = null;
+		}
 
-	// Update the appropriate *_at field if the schema includes it.
-	if ( 'delivered' === $new_status ) {
-		$update['delivered_at'] = $ts_mysql;
-	} elseif ( 'read' === $new_status ) {
-		$update['read_at'] = $ts_mysql;
-	} elseif ( 'failed' === $new_status ) {
-		$update['failed_at']  = $ts_mysql;
-		$update['last_error'] = ( '' !== $err_msg ) ? $err_msg : 'failed';
-	} elseif ( 'sent' === $new_status ) {
-		$update['sent_at'] = $ts_mysql;
-	}
+		// Ensure we don't try to update columns that don't exist.
+		$show_cols_sql = nxtcc_rest_sql_with_table_tokens( 'SHOW COLUMNS FROM {history}', $table_map );
 
-	// Ensure we don't try to update columns that don't exist.
-	$show_cols_sql = nxtcc_rest_sql_with_table_tokens( 'SHOW COLUMNS FROM {history}', $table_map );
+		$cols = $db->get_col( $show_cols_sql );
+		if ( $db->last_query_failed() || empty( $cols ) ) {
+			return false;
+		}
 
-	$cols = $db->get_col( $show_cols_sql );
-
-	$has = array();
-	if ( is_array( $cols ) ) {
+		$has = array();
 		foreach ( $cols as $col_name ) {
 			if ( is_string( $col_name ) && '' !== $col_name ) {
 				$has[ $col_name ] = true;
 			}
 		}
-	}
 
-	if ( ! empty( $has ) ) {
-		foreach ( array_keys( $update ) as $k ) {
-			if ( ! isset( $has[ $k ] ) ) {
-				unset( $update[ $k ] );
+		if ( ! empty( $has ) ) {
+			foreach ( array_keys( $update ) as $k ) {
+				if ( ! isset( $has[ $k ] ) ) {
+					unset( $update[ $k ] );
+				}
 			}
 		}
+
+		$where = array( 'id' => $id );
+		foreach ( array( 'status', 'status_timestamps', 'response_json' ) as $field ) {
+			$where[ $field ] = $row->$field ?? null;
+		}
+		if ( ! $db->update(
+			$db->t_message_history(),
+			$update,
+			$where
+		) ) {
+			continue;
+		}
+
+		/**
+		 * Fires after a webhook status updates a message-history row.
+		 *
+		 * Status describes the incoming receipt; history_status is the resolved outcome.
+		 *
+		 * @param array<string, mixed> $event Status update event payload.
+		 */
+		do_action(
+			'nxtcc_message_history_status_updated',
+			array(
+				'history_id'          => $id,
+				'queue_id'            => isset( $row->queue_id ) ? (int) $row->queue_id : 0,
+				'user_mailid'         => isset( $row->user_mailid ) ? sanitize_email( (string) $row->user_mailid ) : '',
+				'business_account_id' => isset( $row->business_account_id ) ? sanitize_text_field( (string) $row->business_account_id ) : '',
+				'phone_number_id'     => isset( $row->phone_number_id ) ? sanitize_text_field( (string) $row->phone_number_id ) : '',
+				'contact_id'          => isset( $row->contact_id ) ? (int) $row->contact_id : 0,
+				'meta_message_id'     => $wamid,
+				'meta_message_id_raw' => $wamid_raw,
+				'previous_status'     => $previous_status,
+				'history_status'      => $resolved_status,
+				'status'              => $new_status,
+				'status_at'           => $receipt_at,
+				'error_message'       => $err_msg,
+				'webhook_status'      => $status_obj,
+			)
+		);
+		return true;
 	}
 
-	// Perform update.
-	$db->update(
-		$db->t_message_history(),
-		$update,
-		array( 'id' => $id )
-	);
+	return false;
+}
 
-	/**
-	 * Fires after a webhook status updates a message-history row.
-	 *
-	 * @param array<string, mixed> $event Status update event payload.
-	 */
-	do_action(
-		'nxtcc_message_history_status_updated',
-		array(
-			'history_id'          => $id,
-			'queue_id'            => isset( $row->queue_id ) ? (int) $row->queue_id : 0,
-			'user_mailid'         => isset( $row->user_mailid ) ? sanitize_email( (string) $row->user_mailid ) : '',
-			'business_account_id' => isset( $row->business_account_id ) ? sanitize_text_field( (string) $row->business_account_id ) : '',
-			'phone_number_id'     => isset( $row->phone_number_id ) ? sanitize_text_field( (string) $row->phone_number_id ) : '',
-			'contact_id'          => isset( $row->contact_id ) ? (int) $row->contact_id : 0,
-			'meta_message_id'     => $wamid,
-			'meta_message_id_raw' => $wamid_raw,
-			'previous_status'     => $previous_status,
-			'status'              => $new_status,
-			'status_at'           => $ts_mysql,
-			'error_message'       => $err_msg,
-			'webhook_status'      => $status_obj,
-		)
-	);
+/**
+ * Request webhook redelivery without exposing database errors or payload data.
+ *
+ * @return WP_REST_Response
+ */
+function nxtcc_rest_webhook_retry_response(): WP_REST_Response {
+	return new WP_REST_Response( 'EVENT_RETRY', 503, array( 'Retry-After' => '60' ) );
 }
 
 /**
@@ -1003,6 +1085,9 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 				OBJECT
 			);
 
+			if ( $db->last_query_failed() ) {
+				return nxtcc_rest_webhook_retry_response();
+			}
 			if ( ! $settings || empty( $settings->business_account_id ) || empty( $settings->user_mailid ) ) {
 				continue;
 			}
@@ -1030,7 +1115,7 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 
 				$err_msg = nxtcc_rest_extract_status_error_message( $st );
 
-				nxtcc_rest_update_message_history_status(
+				$persisted = nxtcc_rest_update_message_history_status(
 					$db,
 					$wamid,
 					$status,
@@ -1038,6 +1123,9 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 					$err_msg,
 					$st
 				);
+				if ( ! $persisted ) {
+					return nxtcc_rest_webhook_retry_response();
+				}
 
 				if ( function_exists( 'nxtcc_invalidate_tenant_caches' ) ) {
 					nxtcc_invalidate_tenant_caches( $business_account_id, $phone_number_id );
@@ -1050,188 +1138,212 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 			$contacts     = isset( $value['contacts'] ) && is_array( $value['contacts'] ) ? $value['contacts'] : array();
 			$messages     = isset( $value['messages'] ) && is_array( $value['messages'] ) ? $value['messages'] : array();
 			$history_cols = array();
+			if ( empty( $messages ) ) {
+				continue;
+			}
 
-			$show_cols_sql = nxtcc_rest_sql_with_table_tokens( 'SHOW COLUMNS FROM {history}', $table_map );
-			$cols          = $db->get_col( $show_cols_sql );
+			// Serialize each tenant phone's inbound dedupe/contact writes across callbacks.
+			$lock_scope = ( defined( 'DB_NAME' ) ? DB_NAME : '' ) . '|' . $db->t_message_history() . '|' . $phone_number_id;
+			$lock_name  = 'nxtcc-inbound:' . substr( hash( 'sha256', $lock_scope ), 0, 48 );
+			if ( 1 !== (int) $db->get_var( 'SELECT GET_LOCK(%s, 0)', array( $lock_name ) ) ) {
+				return nxtcc_rest_webhook_retry_response();
+			}
 
-			if ( is_array( $cols ) ) {
+			try {
+				$show_cols_sql = nxtcc_rest_sql_with_table_tokens( 'SHOW COLUMNS FROM {history}', $table_map );
+				$cols          = $db->get_col( $show_cols_sql );
+				if ( $db->last_query_failed() || empty( $cols ) ) {
+					return nxtcc_rest_webhook_retry_response();
+				}
+
 				foreach ( $cols as $col_name ) {
 					if ( is_string( $col_name ) && '' !== $col_name ) {
 						$history_cols[ $col_name ] = true;
 					}
 				}
-			}
 
-			// Build wa_id => name map.
-			$name_by_wa = array();
-			foreach ( $contacts as $c ) {
-				if ( ! is_array( $c ) ) {
-					continue;
-				}
+				// Build wa_id => name map.
+				$name_by_wa = array();
+				foreach ( $contacts as $c ) {
+					if ( ! is_array( $c ) ) {
+						continue;
+					}
 
-				$wa_id = isset( $c['wa_id'] ) ? preg_replace( '/\D+/', '', (string) $c['wa_id'] ) : '';
-				$prof  = isset( $c['profile'] ) && is_array( $c['profile'] ) ? $c['profile'] : array();
-				$name  = isset( $prof['name'] ) ? sanitize_text_field( (string) $prof['name'] ) : '';
+					$wa_id = isset( $c['wa_id'] ) ? preg_replace( '/\D+/', '', (string) $c['wa_id'] ) : '';
+					$prof  = isset( $c['profile'] ) && is_array( $c['profile'] ) ? $c['profile'] : array();
+					$name  = isset( $prof['name'] ) ? sanitize_text_field( (string) $prof['name'] ) : '';
 
-				if ( '' !== $wa_id ) {
-					$name_by_wa[ $wa_id ] = $name;
-				}
-			}
-
-			foreach ( $messages as $m ) {
-				if ( ! is_array( $m ) ) {
-					continue;
-				}
-
-				$meta_message_id = isset( $m['id'] ) ? sanitize_text_field( (string) $m['id'] ) : '';
-				$from_wa         = isset( $m['from'] ) ? preg_replace( '/\D+/', '', (string) $m['from'] ) : '';
-				$type            = isset( $m['type'] ) ? sanitize_key( (string) $m['type'] ) : '';
-				$wa_ts           = isset( $m['timestamp'] ) ? (int) $m['timestamp'] : 0;
-
-				if ( '' === $meta_message_id || '' === $from_wa ) {
-					continue;
-				}
-
-				// Dedupe (your schema uses meta_message_id).
-				$exists = (int) $db->get_var(
-					nxtcc_rest_sql_with_table_tokens(
-						'SELECT COUNT(*) FROM {history} WHERE meta_message_id = %s',
-						$table_map
-					),
-					array( $meta_message_id )
-				);
-
-				if ( $exists > 0 ) {
-					continue;
-				}
-
-				// Build display content for all supported inbound message types.
-				$interactive        = function_exists( 'nxtcc_parse_meta_interactive_message' )
-					? nxtcc_parse_meta_interactive_message( $m )
-					: array();
-				$message_content    = nxtcc_build_inbound_message_content_from_webhook( $m );
-				$message_event_text = ! empty( $interactive['summary'] )
-					? sanitize_textarea_field( (string) $interactive['summary'] )
-					: $message_content;
-				$interactive_type   = isset( $interactive['interactive_type'] )
-					? sanitize_key( (string) $interactive['interactive_type'] )
-					: '';
-				$flow_response      = isset( $interactive['flow_response'] ) && is_array( $interactive['flow_response'] )
-					? $interactive['flow_response']
-					: array();
-				$flow_answer_count  = isset( $flow_response['answer_count'] )
-					? absint( $flow_response['answer_count'] )
-					: 0;
-
-				// Sender name (if provided by Meta).
-				$sender_name = isset( $name_by_wa[ $from_wa ] ) ? (string) $name_by_wa[ $from_wa ] : '';
-
-				// Find/create contact row so UI can link inbound message to a contact.
-				list( $cc, $local ) = nxtcc_split_msisdn( $from_wa );
-				$cc                 = preg_replace( '/\D+/', '', (string) $cc );
-				$local              = preg_replace( '/\D+/', '', (string) $local );
-
-				$contact_id = null;
-
-				if ( '' !== $local ) {
-					$found_contact_id = $db->get_var(
-						nxtcc_rest_sql_with_table_tokens(
-							'SELECT id FROM {contacts}
-						  WHERE business_account_id = %s
-						    AND phone_number_id = %s
-						    AND country_code = %s
-						    AND phone_number = %s
-						  LIMIT 1',
-							$table_map
-						),
-						array( $business_account_id, $phone_number_id, $cc, $local )
-					);
-
-					if ( $found_contact_id ) {
-						$contact_id = (int) $found_contact_id;
-					} else {
-						$ins = $db->insert(
-							$db->t_contacts(),
-							array(
-								'user_mailid'         => $user_mailid,
-								'business_account_id' => $business_account_id,
-								'phone_number_id'     => $phone_number_id,
-								'country_code'        => $cc,
-								'phone_number'        => $local,
-								'name'                => $sender_name,
-								'is_verified'         => 0,
-								'is_subscribed'       => 1,
-								'created_at'          => current_time( 'mysql', 1 ),
-								'updated_at'          => current_time( 'mysql', 1 ),
-							)
-						);
-
-						if ( $ins ) {
-							$contact_id = (int) $db->insert_id();
-						}
+					if ( '' !== $wa_id ) {
+						$name_by_wa[ $wa_id ] = $name;
 					}
 				}
 
-				// Store a small timestamp blob (your schema has status_timestamps LONGTEXT).
-				$status_ts = array(
-					'received_unix' => $wa_ts,
-					'received_utc'  => gmdate( 'Y-m-d H:i:s', $wa_ts > 0 ? $wa_ts : time() ),
-				);
+				foreach ( $messages as $m ) {
+					if ( ! is_array( $m ) ) {
+						continue;
+					}
 
-				$reply_to_wamid      = '';
-				$reply_to_history_id = 0;
+					$meta_message_id = isset( $m['id'] ) ? sanitize_text_field( (string) $m['id'] ) : '';
+					$from_wa         = isset( $m['from'] ) ? preg_replace( '/\D+/', '', (string) $m['from'] ) : '';
+					$type            = isset( $m['type'] ) ? sanitize_key( (string) $m['type'] ) : '';
+					$wa_ts           = isset( $m['timestamp'] ) ? (int) $m['timestamp'] : 0;
 
-				if ( function_exists( 'nxtcc_rest_extract_related_wamid_from_webhook' ) ) {
-					$reply_to_wamid = nxtcc_rest_extract_related_wamid_from_webhook( $m );
-				}
+					if ( '' === $meta_message_id || '' === $from_wa ) {
+						continue;
+					}
 
-				if ( '' !== $reply_to_wamid ) {
-					$reply_to_history_id = (int) $db->get_var(
+					// Dedupe (your schema uses meta_message_id).
+					$exists = (int) $db->get_var(
 						nxtcc_rest_sql_with_table_tokens(
-							'SELECT id FROM {history} WHERE meta_message_id = %s LIMIT 1',
+							'SELECT COUNT(*) FROM {history} WHERE meta_message_id = %s',
 							$table_map
 						),
-						array( $reply_to_wamid )
+						array( $meta_message_id )
 					);
-				}
 
-				$json_ts = wp_json_encode( $status_ts );
-				$json_m  = wp_json_encode( $m );
+					if ( $db->last_query_failed() ) {
+						return nxtcc_rest_webhook_retry_response();
+					}
+					if ( $exists > 0 ) {
+						continue;
+					}
 
-				// Persist the inbound message first so downstream listeners can trust the row id.
-				$received_at = current_time( 'mysql', 1 );
-				$insert_row  = array(
-					'user_mailid'          => $user_mailid,
-					'business_account_id'  => $business_account_id,
-					'phone_number_id'      => $phone_number_id,
-					'contact_id'           => $contact_id,
-					'display_phone_number' => $display_phone_number,
-					'template_type'        => $type,
-					'message_content'      => $message_content,
-					'status'               => 'received',
-					'status_timestamps'    => is_string( $json_ts ) ? $json_ts : '',
-					'meta_message_id'      => $meta_message_id,
-					'origin_type'          => 'inbound',
-					'origin_ref'           => substr( $meta_message_id, 0, 191 ),
-					'response_json'        => is_string( $json_m ) ? $json_m : '',
-					'created_at'           => $received_at,
-					'is_read'              => 0,
-				);
+					// Build display content for all supported inbound message types.
+					$interactive        = function_exists( 'nxtcc_parse_meta_interactive_message' )
+						? nxtcc_parse_meta_interactive_message( $m )
+						: array();
+					$message_content    = nxtcc_build_inbound_message_content_from_webhook( $m );
+					$message_event_text = ! empty( $interactive['summary'] )
+						? sanitize_textarea_field( (string) $interactive['summary'] )
+						: $message_content;
+					$interactive_type   = isset( $interactive['interactive_type'] )
+						? sanitize_key( (string) $interactive['interactive_type'] )
+						: '';
+					$flow_response      = isset( $interactive['flow_response'] ) && is_array( $interactive['flow_response'] )
+						? $interactive['flow_response']
+						: array();
+					$flow_answer_count  = isset( $flow_response['answer_count'] )
+						? absint( $flow_response['answer_count'] )
+						: 0;
 
-				if ( '' !== $reply_to_wamid && isset( $history_cols['reply_to_wamid'] ) ) {
-					$insert_row['reply_to_wamid'] = $reply_to_wamid;
-				}
+					// Sender name (if provided by Meta).
+					$sender_name = isset( $name_by_wa[ $from_wa ] ) ? (string) $name_by_wa[ $from_wa ] : '';
 
-				if ( $reply_to_history_id > 0 && isset( $history_cols['reply_to_history_id'] ) ) {
-					$insert_row['reply_to_history_id'] = $reply_to_history_id;
-				}
+					// Find/create contact row so UI can link inbound message to a contact.
+					list( $cc, $local ) = nxtcc_split_msisdn( $from_wa );
+					$cc                 = preg_replace( '/\D+/', '', (string) $cc );
+					$local              = preg_replace( '/\D+/', '', (string) $local );
 
-				$inserted = $db->insert(
-					$db->t_message_history(),
-					$insert_row
-				);
+					$contact_id = null;
 
-				if ( $inserted ) {
+					if ( '' !== $local ) {
+						$found_contact_id = $db->get_var(
+							nxtcc_rest_sql_with_table_tokens(
+								'SELECT id FROM {contacts}
+							  WHERE business_account_id = %s
+							    AND phone_number_id = %s
+							    AND country_code = %s
+							    AND phone_number = %s
+							  LIMIT 1',
+								$table_map
+							),
+							array( $business_account_id, $phone_number_id, $cc, $local )
+						);
+
+						if ( $db->last_query_failed() ) {
+							return nxtcc_rest_webhook_retry_response();
+						}
+						if ( $found_contact_id ) {
+							$contact_id = (int) $found_contact_id;
+						} else {
+							$ins = $db->insert(
+								$db->t_contacts(),
+								array(
+									'user_mailid'         => $user_mailid,
+									'business_account_id' => $business_account_id,
+									'phone_number_id'     => $phone_number_id,
+									'country_code'        => $cc,
+									'phone_number'        => $local,
+									'name'                => $sender_name,
+									'is_verified'         => 0,
+									'is_subscribed'       => 1,
+									'created_at'          => current_time( 'mysql', 1 ),
+									'updated_at'          => current_time( 'mysql', 1 ),
+								)
+							);
+
+							if ( ! $ins ) {
+								return nxtcc_rest_webhook_retry_response();
+							}
+							$contact_id = (int) $db->insert_id();
+						}
+					}
+
+					// Store a small timestamp blob (your schema has status_timestamps LONGTEXT).
+					$status_ts = array(
+						'received_unix' => $wa_ts,
+						'received_utc'  => gmdate( 'Y-m-d H:i:s', $wa_ts > 0 ? $wa_ts : time() ),
+					);
+
+					$reply_to_wamid      = '';
+					$reply_to_history_id = 0;
+
+					if ( function_exists( 'nxtcc_rest_extract_related_wamid_from_webhook' ) ) {
+						$reply_to_wamid = nxtcc_rest_extract_related_wamid_from_webhook( $m );
+					}
+
+					if ( '' !== $reply_to_wamid ) {
+						$reply_to_history_id = (int) $db->get_var(
+							nxtcc_rest_sql_with_table_tokens(
+								'SELECT id FROM {history} WHERE meta_message_id = %s LIMIT 1',
+								$table_map
+							),
+							array( $reply_to_wamid )
+						);
+						if ( $db->last_query_failed() ) {
+							return nxtcc_rest_webhook_retry_response();
+						}
+					}
+
+					$json_ts = wp_json_encode( $status_ts );
+					$json_m  = wp_json_encode( $m );
+
+					// Persist the inbound message first so downstream listeners can trust the row id.
+					$received_at = current_time( 'mysql', 1 );
+					$insert_row  = array(
+						'user_mailid'          => $user_mailid,
+						'business_account_id'  => $business_account_id,
+						'phone_number_id'      => $phone_number_id,
+						'contact_id'           => $contact_id,
+						'display_phone_number' => $display_phone_number,
+						'template_type'        => $type,
+						'message_content'      => $message_content,
+						'status'               => 'received',
+						'status_timestamps'    => is_string( $json_ts ) ? $json_ts : '',
+						'meta_message_id'      => $meta_message_id,
+						'origin_type'          => 'inbound',
+						'origin_ref'           => substr( $meta_message_id, 0, 191 ),
+						'response_json'        => is_string( $json_m ) ? $json_m : '',
+						'created_at'           => $received_at,
+						'is_read'              => 0,
+					);
+
+					if ( '' !== $reply_to_wamid && isset( $history_cols['reply_to_wamid'] ) ) {
+						$insert_row['reply_to_wamid'] = $reply_to_wamid;
+					}
+
+					if ( $reply_to_history_id > 0 && isset( $history_cols['reply_to_history_id'] ) ) {
+						$insert_row['reply_to_history_id'] = $reply_to_history_id;
+					}
+
+					$inserted = $db->insert(
+						$db->t_message_history(),
+						$insert_row
+					);
+					if ( ! $inserted ) {
+						return nxtcc_rest_webhook_retry_response();
+					}
+
 					/**
 					 * Fires after an inbound webhook message is persisted to message history.
 					 *
@@ -1259,11 +1371,13 @@ function nxtcc_whatsapp_webhook_handler( WP_REST_Request $request ): WP_REST_Res
 							'received_unix'        => $wa_ts > 0 ? $wa_ts : time(),
 						)
 					);
-				}
 
-				if ( function_exists( 'nxtcc_invalidate_tenant_caches' ) ) {
-					nxtcc_invalidate_tenant_caches( $business_account_id, $phone_number_id );
+					if ( function_exists( 'nxtcc_invalidate_tenant_caches' ) ) {
+						nxtcc_invalidate_tenant_caches( $business_account_id, $phone_number_id );
+					}
 				}
+			} finally {
+				$db->get_var( 'SELECT RELEASE_LOCK(%s)', array( $lock_name ) );
 			}
 		}
 	}

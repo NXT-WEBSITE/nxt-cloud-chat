@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.9
+Stable tag: 1.2.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -212,7 +212,9 @@ Monitor every automation execution.
 
 * View workflow logs with trigger event, contact, status, and timestamps.
 * Drill into individual runs to see step-by-step execution.
-* Review or retry failed runs and track broadcast or abandoned cart automation status.
+* Track execution separately from message acceptance, delivery, read receipts, and failures.
+* Filter runs by tenant, workflow, execution, delivery, and creation date, including custom date ranges.
+* Review execution errors, message failure reasons, scheduled delays, and paginated run history.
 
 = History =
 
@@ -404,7 +406,7 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 9. **Abandoned Carts** – WooCommerce abandoned cart recovery table with cart value, time abandoned, and recovery status (Pro).
 10. **Segments** – Dynamic segment builder with rule conditions, live membership preview, and WooCommerce filters (Pro).
 11. **Workflows** – Visual WhatsApp automation builder with CRM, deal, conversation, login, WooCommerce, and abandoned cart triggers (Pro).
-12. **Workflow Runs** – Workflow execution log with trigger events, matched contacts, step results, status, and retry controls (Pro).
+12. **Workflow Runs** - Separate execution and message delivery dashboards, date filters, paginated runs, and step diagnostics (Pro).
 13. **History** – WhatsApp message history with delivery status, read receipts, timestamps, template names, and contact details.
 14. **Authentication** – WhatsApp OTP login settings with OTP length, cooldown, allowed countries, force-migration URL, and login button appearance.
 15. **WhatsApp login widget** – WhatsApp login widget embedded on a WordPress page.
@@ -412,6 +414,15 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 17. **Settings** – WhatsApp Cloud API credentials, connection diagnostics, webhook URL, verify token, team access, retention tools, and support badge preferences.
 
 == Changelog ==
+
+= 1.2.0 =
+* Prevented late or out-of-order WhatsApp receipts from downgrading confirmed Delivered or Read status; late acceptance no longer erases a recorded failure.
+* Preserved the earliest valid receipt timestamps and cleared stale failure text when delivery or reading is confirmed.
+* Added bounded compare-and-swap retries so concurrent receipt updates preserve status and audit evidence.
+* Return HTTP 503 with Retry-After when webhook database reads or writes fail, instead of acknowledging unpersisted events. Redelivered batches retain inbound-message deduplication.
+* Serialized inbound deduplication and contact writes with a per-phone database advisory lock, preventing overlapping callbacks from creating duplicate messages or automation events. Busy or unavailable locks request redelivery without changing existing records.
+* Notify status listeners only after a successful history update and include the resolved history outcome alongside the incoming receipt status.
+* Recommended alongside Pro 1.1.8 for separate workflow execution and message delivery reporting.
 
 = 1.1.9 =
 * Recorded new ticket creation as a distinct New ticket created activity instead of a ticket status change, in chat and ticket timelines.
@@ -575,6 +586,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Back up before updating. Improves receipt ordering and webhook retry handling. Update Pro to 1.1.8 for separate execution and delivery reporting. Existing messages do not need to be resent; historical status corrections are not bulk-backfilled.
 
 = 1.1.9 =
 Back up before updating. Message-view receipts begin after updating; older views are not backfilled. Chats no longer create tickets automatically; existing tickets are preserved. Review ticket workflows and use Create New Ticket where needed. Update Pro to 1.1.7.
