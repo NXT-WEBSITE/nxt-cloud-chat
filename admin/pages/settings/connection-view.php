@@ -98,25 +98,37 @@ $nxtcc_delete_on_uninstall = (int) get_option( 'nxtcc_delete_data_on_uninstall' 
 						id="nxtcc_phone_number_id"
 						name="nxtcc_phone_number_id"
 						value="<?php echo esc_attr( $nxtcc_phone_number_id ); ?>"
+						inputmode="numeric"
+						pattern="[0-9]+"
+						aria-describedby="nxtcc_phone_number_id_error"
+						data-required-error="<?php echo esc_attr__( 'Phone Number ID is required.', 'nxt-cloud-chat' ); ?>"
+						data-format-error="<?php echo esc_attr__( 'Phone Number ID must contain only digits (maximum 255).', 'nxt-cloud-chat' ); ?>"
 						required
 						maxlength="255"
 						autocomplete="off"
 					/>
+					<p id="nxtcc_phone_number_id_error" class="nxtcc-settings-field-error" aria-live="polite" hidden></p>
 				</div>
 
 				<div class="nxtcc-settings-field">
 					<label for="nxtcc_whatsapp_business_account_id">
-						<?php echo esc_html__( 'Business Account ID', 'nxt-cloud-chat' ); ?> <span class="nxtcc-required">*</span>
+						<?php echo esc_html__( 'Business / Messaging Account ID', 'nxt-cloud-chat' ); ?> <span class="nxtcc-required">*</span>
 					</label>
 					<input
 						type="text"
 						id="nxtcc_whatsapp_business_account_id"
 						name="nxtcc_whatsapp_business_account_id"
 						value="<?php echo esc_attr( $nxtcc_business_account_id ); ?>"
+						inputmode="numeric"
+						pattern="[0-9]+"
+						aria-describedby="nxtcc_whatsapp_business_account_id_error"
+						data-required-error="<?php echo esc_attr__( 'Business / Messaging Account ID is required.', 'nxt-cloud-chat' ); ?>"
+						data-format-error="<?php echo esc_attr__( 'Business / Messaging Account ID must contain only digits (maximum 255).', 'nxt-cloud-chat' ); ?>"
 						required
 						maxlength="255"
 						autocomplete="off"
 					/>
+					<p id="nxtcc_whatsapp_business_account_id_error" class="nxtcc-settings-field-error" aria-live="polite" hidden></p>
 				</div>
 
 				<div class="nxtcc-settings-field nxtcc-settings-field-span-2">
@@ -183,6 +195,7 @@ $nxtcc_delete_on_uninstall = (int) get_option( 'nxtcc_delete_data_on_uninstall' 
 							type="button"
 							class="nxtcc-button nxtcc-button-light"
 							id="nxtcc_generate_token"
+							data-identifier-changed-error="<?php echo esc_attr__( 'Connection identifiers changed. Generate a token for the current account.', 'nxt-cloud-chat' ); ?>"
 							<?php echo $nxtcc_meta_webhook_sub ? '' : 'disabled'; ?>
 						>
 							<?php echo esc_html__( 'Generate', 'nxt-cloud-chat' ); ?>
@@ -265,7 +278,13 @@ $nxtcc_delete_on_uninstall = (int) get_option( 'nxtcc_delete_data_on_uninstall' 
 			</button>
 		</div>
 
-		<div id="nxtcc-connection-results" class="nxtcc-connection-results" aria-live="polite">
+		<div
+			id="nxtcc-connection-results"
+			class="nxtcc-connection-results"
+			aria-live="polite"
+			data-meta-error-label="<?php echo esc_attr__( 'Meta error code:', 'nxt-cloud-chat' ); ?>"
+			data-meta-subcode-label="<?php echo esc_attr__( 'Subcode:', 'nxt-cloud-chat' ); ?>"
+		>
 			<?php if ( ! empty( $nxtcc_connection_results ) ) : ?>
 				<div class="nxtcc-connection-results-panel">
 					<table class="nxtcc-connection-results-table">
@@ -291,7 +310,17 @@ $nxtcc_delete_on_uninstall = (int) get_option( 'nxtcc_delete_data_on_uninstall' 
 											<?php echo esc_html( $nxtcc_ok ? __( 'Pass', 'nxt-cloud-chat' ) : __( 'Fail', 'nxt-cloud-chat' ) ); ?>
 										</span>
 									</td>
-									<td><?php echo esc_html( $nxtcc_detail ); ?></td>
+									<td>
+										<?php echo esc_html( $nxtcc_detail ); ?>
+										<?php if ( isset( $nxtcc_info['error_code'] ) ) : ?>
+											<div class="nxtcc-connection-error-code">
+												<?php esc_html_e( 'Meta error code:', 'nxt-cloud-chat' ); ?> <code><?php echo esc_html( (string) $nxtcc_info['error_code'] ); ?></code>
+												<?php if ( isset( $nxtcc_info['error_subcode'] ) ) : ?>
+													<?php esc_html_e( 'Subcode:', 'nxt-cloud-chat' ); ?> <code><?php echo esc_html( (string) $nxtcc_info['error_subcode'] ); ?></code>
+												<?php endif; ?>
+											</div>
+										<?php endif; ?>
+									</td>
 								</tr>
 							<?php endforeach; ?>
 						</tbody>

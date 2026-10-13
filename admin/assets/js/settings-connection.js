@@ -13,6 +13,7 @@ jQuery( function ( $ ) {
 	'use strict';
 
 	const $connection = $( '.nxtcc-settings-connection' );
+	let generatingToken = false;
 
 	if ( ! $connection.length ) {
 		return;
@@ -42,6 +43,41 @@ jQuery( function ( $ ) {
 
 	function getVal( selector ) {
 		return String( $( selector ).val() || '' ).trim();
+	}
+
+	function ajaxErrorMessage( xhr, fallback ) {
+		const data = xhr.responseJSON && xhr.responseJSON.data;
+		return data && data.message ? String( data.message ) : fallback;
+	}
+
+	const identifierFields = [ 'nxtcc_whatsapp_business_account_id', 'nxtcc_phone_number_id' ];
+
+	function setIdentifierError( input, message ) {
+		const error = document.getElementById( input.id + '_error' );
+		input.setCustomValidity( message );
+		input.setAttribute( 'aria-invalid', message ? 'true' : 'false' );
+		if ( error ) {
+			error.textContent = message;
+			error.hidden = ! message;
+		}
+	}
+
+	function validateIdentifier( input, required ) {
+		const value = input.value.trim();
+		const message = ! value ? ( required ? input.dataset.requiredError : '' )
+			: ( /^[0-9]+$/.test( value ) && value.length <= 255 ? '' : input.dataset.formatError );
+		setIdentifierError( input, message || '' );
+		return ! message;
+	}
+
+	function validateIdentifiers() {
+		let firstInvalid = null;
+		identifierFields.forEach( function ( id ) {
+			const input = document.getElementById( id );
+			if ( input && ! validateIdentifier( input, true ) && ! firstInvalid ) { firstInvalid = input; }
+		} );
+		if ( firstInvalid ) { firstInvalid.focus(); }
+		return ! firstInvalid;
 	}
 
 	function createEl( tag, attrs, text ) {
@@ -82,10 +118,11 @@ jQuery( function ( $ ) {
 		const enabledWebhook = $( '#nxtcc_meta_webhook_subscribed' ).is( ':checked' );
 		const hasToken       = getVal( '#nxtcc_meta_webhook_verify_token' ).length > 0;
 
-		$( '#nxtcc_meta_webhook_verify_token, #nxtcc_generate_token' ).prop(
+		$( '#nxtcc_meta_webhook_verify_token' ).prop(
 			'disabled',
 			! enabledWebhook
 		);
+		$( '#nxtcc_generate_token' ).prop( 'disabled', ! enabledWebhook || generatingToken );
 
 		$( '#nxtcc_copy_verify_token' ).prop(
 			'disabled',
@@ -133,6 +170,8 @@ jQuery( function ( $ ) {
 	}
 
 	function renderConnectionResults( results ) {
+		const target = document.getElementById( 'nxtcc-connection-results' );
+		const labels = target ? target.dataset : {};
 		const panel = createEl( 'div', { class: 'nxtcc-connection-results-panel' } );
 		const table = createEl( 'table', { class: 'nxtcc-connection-results-table' } );
 		const thead = createEl( 'thead' );
@@ -159,7 +198,17 @@ jQuery( function ( $ ) {
 			row.appendChild( createEl( 'td', null, label ) );
 			statusCell.appendChild( statusPill );
 			row.appendChild( statusCell );
-			row.appendChild( createEl( 'td', null, detail ) );
+			const detailCell = createEl( 'td', null, detail );
+			if ( null != info.error_code ) {
+				const code = createEl( 'div', { class: 'nxtcc-connection-error-code' }, ( labels.metaErrorLabel || 'Meta error code:' ) + ' ' );
+				code.appendChild( createEl( 'code', null, info.error_code ) );
+				if ( null != info.error_subcode ) {
+					code.appendChild( document.createTextNode( ' ' + ( labels.metaSubcodeLabel || 'Subcode:' ) + ' ' ) );
+					code.appendChild( createEl( 'code', null, info.error_subcode ) );
+				}
+				detailCell.appendChild( code );
+			}
+			row.appendChild( detailCell );
 			tbody.appendChild( row );
 		} );
 
@@ -175,6 +224,16 @@ jQuery( function ( $ ) {
 	}
 
 	const ajaxURL = getAjaxUrl();
+
+	$connection.on( 'input blur', '#nxtcc_whatsapp_business_account_id, #nxtcc_phone_number_id', function ( event ) {
+		validateIdentifier( this, 'blur' === event.type || 'true' === this.getAttribute( 'aria-invalid' ) );
+	} );
+
+	$connection.on( 'submit', 'form', function ( event ) {
+		if ( $( this ).find( 'input[name="nxtcc_settings_action"]' ).val() === 'save_connection_settings' && ! validateIdentifiers() ) {
+			event.preventDefault();
+		}
+	} );
 
 	$connection.on( 'click', '#nxtcc_toggle_token_visibility', function () {
 		const $button = $( this );
@@ -205,22 +264,26 @@ jQuery( function ( $ ) {
 	} );
 
 	$connection.on( 'click', '#nxtcc_generate_token', function () {
+		if ( generatingToken || ! $( '#nxtcc_meta_webhook_subscribed' ).is( ':checked' ) ) {
+			return;
+		}
 		const nonce = getNonce();
 		const baid = getVal( '#nxtcc_whatsapp_business_account_id' );
 		const pnid = getVal( '#nxtcc_phone_number_id' );
-		const $button = $( this ).prop( 'disabled', true ).addClass( 'is-disabled' );
+		const $button = $( this );
 
 		if ( ! ajaxURL || ! nonce ) {
 			window.alert( 'Missing security token.' );
-			$button.prop( 'disabled', false ).removeClass( 'is-disabled' );
 			return;
 		}
 
-		if ( ! baid || ! pnid ) {
-			window.alert( 'Please fill Business Account ID and Phone Number ID first.' );
-			$button.prop( 'disabled', false ).removeClass( 'is-disabled' );
+		if ( ! validateIdentifiers() ) {
 			return;
 		}
+
+		generatingToken = true;
+		$button.addClass( 'is-disabled' );
+		toggleVerifyCopyButton();
 
 		$.ajax( {
 			url: ajaxURL,
@@ -235,19 +298,24 @@ jQuery( function ( $ ) {
 		} )
 			.done( function ( response ) {
 				if ( response && response.success && response.data && response.data.token ) {
+					if ( baid !== getVal( '#nxtcc_whatsapp_business_account_id' ) || pnid !== getVal( '#nxtcc_phone_number_id' ) ) {
+						window.alert( $button.attr( 'data-identifier-changed-error' ) || 'Connection identifiers changed. Generate a token for the current account.' );
+						return;
+					}
 					$( '#nxtcc_meta_webhook_verify_token' ).val( response.data.token );
-					$( '#nxtcc_meta_webhook_subscribed' ).prop( 'checked', true );
 					toggleVerifyCopyButton();
 					return;
 				}
 
-				window.alert( 'Failed to generate token.' );
+				window.alert( response && response.data && response.data.message ? String( response.data.message ) : 'Failed to generate token.' );
 			} )
-			.fail( function () {
-				window.alert( 'Network error while generating token.' );
+			.fail( function ( xhr ) {
+				window.alert( ajaxErrorMessage( xhr, 'Network error while generating token.' ) );
 			} )
 			.always( function () {
-				$button.prop( 'disabled', false ).removeClass( 'is-disabled' );
+				generatingToken = false;
+				$button.removeClass( 'is-disabled' );
+				toggleVerifyCopyButton();
 			} );
 	} );
 
@@ -277,6 +345,7 @@ jQuery( function ( $ ) {
 			window.alert( 'Missing security token.' );
 			return;
 		}
+		if ( ! validateIdentifiers() ) { return; }
 
 		$button
 			.text( 'Checking...' )
@@ -312,8 +381,8 @@ jQuery( function ( $ ) {
 					)
 				);
 			} )
-			.fail( function () {
-				replaceResults( renderError( 'Network error while checking connections.' ) );
+			.fail( function ( xhr ) {
+				replaceResults( renderError( ajaxErrorMessage( xhr, 'Network error while checking connections.' ) ) );
 			} )
 			.always( function () {
 				$button

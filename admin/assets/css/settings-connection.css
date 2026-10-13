@@ -127,6 +127,18 @@
 	color: var(--nxtcc-muted);
 }
 
+.nxtcc-settings-connection .nxtcc-settings-field input[aria-invalid="true"] {
+	border-color: #b42318;
+}
+
+.nxtcc-settings-field-error {
+	margin: 6px 0 0;
+	font-size: 12px;
+	line-height: 1.45;
+	color: #b42318;
+	overflow-wrap: anywhere;
+}
+
 .nxtcc-settings-actions {
 	display: flex;
 	align-items: center;
@@ -204,6 +216,15 @@
 .nxtcc-connection-results-table {
 	width: 100%;
 	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+.nxtcc-connection-results-table th:first-child {
+	width: 24%;
+}
+
+.nxtcc-connection-results-table th:nth-child(2) {
+	width: 72px;
 }
 
 .nxtcc-connection-results-table th,
@@ -214,6 +235,13 @@
 	font-size: 12px;
 	vertical-align: top;
 	color: var(--nxtcc-text);
+	overflow-wrap: anywhere;
+}
+
+.nxtcc-connection-error-code {
+	margin-top: 6px;
+	font-size: 12px;
+	line-height: 1.45;
 }
 
 .nxtcc-connection-results-table th {
@@ -237,6 +265,7 @@
 	background: #eef2f3;
 	color: #3f4b53;
 	border: 1px solid #e2e8eb;
+	white-space: nowrap;
 }
 
 .nxtcc-settings-status-pill.is-success {

@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -62,10 +62,10 @@ This plugin connects to the official **WhatsApp Business Platform / WhatsApp Clo
 
 = What Data Is Sent and When =
 
-* **During setup** – your App ID, App Secret, Business Account ID, Phone Number ID, and Access Token are stored in your WordPress database and used server-side to authenticate API calls and verify incoming webhook signatures (`X-Hub-Signature-256`). These values are not printed into public pages or client-side JavaScript.
+* **During setup** – your App ID, App Secret, Business / Messaging Account ID, Phone Number ID, and Access Token are stored in your WordPress database and used server-side to authenticate API calls and verify incoming webhook signatures (`X-Hub-Signature-256`). These values are not printed into public pages or client-side JavaScript.
 * **When sending or receiving WhatsApp messages** – the recipient phone number, message content, template name, template parameters, media attachments, and delivery metadata are sent to or received from the WhatsApp Cloud API.
 * **During WhatsApp OTP login** – the user's phone number and OTP message template data are sent to the WhatsApp Cloud API.
-* **During template sync** – your Business Account ID and Phone Number ID are used to fetch and synchronise approved templates from your Meta account.
+* **During template sync** – your Business / Messaging Account ID and Phone Number ID are used to fetch and synchronise approved templates from your Meta account.
 * **During webhook delivery** – Meta sends inbound messages, delivery receipts, read events, and status payloads to your WordPress webhook endpoint. These are validated server-side using your App Secret before being stored.
 
 = Service Provider =
@@ -241,7 +241,7 @@ Offer passwordless login using WhatsApp OTP.
 
 Configure WhatsApp Cloud API securely from WordPress.
 
-* Save App ID, App Secret, Access Token, Phone Number ID, Business Account ID, and display phone number.
+* Save App ID, App Secret, Access Token, Phone Number ID, Business / Messaging Account ID, and display phone number.
 * Run connection diagnostics and test template sends.
 * Generate Verify Token and copy Callback URL for Meta webhook setup.
 * Verify webhook signatures with App Secret-based `X-Hub-Signature-256` validation.
@@ -279,7 +279,7 @@ NXT Cloud Chat is designed for everyday WordPress users, business teams, agencie
 
 1. Install NXT Cloud Chat from **Plugins <span aria-hidden="true" class="wp-exclude-emoji">→</span> Add New**, or upload it to `/wp-content/plugins/`, then activate it.
 2. Open **NXT Cloud Chat <span aria-hidden="true" class="wp-exclude-emoji">→</span> Settings**.
-3. Enter the App ID, App Secret, Access Token, Phone Number ID, Business Account ID, and optional display number.
+3. Enter the App ID, App Secret, Access Token, Phone Number ID, Business / Messaging Account ID, and optional display number.
 4. Save and run the connection diagnostic.
 
 === WhatsApp Webhook Setup ===
@@ -303,7 +303,7 @@ NXT Cloud Chat connects WordPress with the official WhatsApp Business Platform /
 
 = Do I need a Meta developer account? =
 
-Yes. You need a Meta developer account and a WhatsApp Cloud API app to get your App ID, App Secret, Business Account ID, Phone Number ID, and Access Token. The documentation explains the setup process.
+Yes. You need a Meta developer account and a WhatsApp Cloud API app to get your App ID, App Secret, Business / Messaging Account ID, Phone Number ID, and Access Token. The documentation explains the setup process.
 
 = Do I need to pay NXT Cloud Chat per WhatsApp message? =
 
@@ -414,6 +414,13 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 17. **Settings** – WhatsApp Cloud API credentials, connection diagnostics, webhook URL, verify token, team access, retention tools, and support badge preferences.
 
 == Changelog ==
+
+= 1.2.1 =
+* Renamed the account identifier label to Business / Messaging Account ID across connection settings, validation messages, team access, and dashboard checks. Saved identifiers and API fields are unchanged.
+* Added inline and server-side digit-only validation for account and phone-number IDs without numeric conversion or silently removing invalid characters.
+* Improved connection diagnostics with readable missing-field errors, Meta error codes and subcodes, and explicit failures for invalid JSON responses.
+* Prevented overlapping webhook-token generation requests and stale token responses after account changes, preserved the current webhook setting during completion, and displayed server failure details and translated Meta error labels.
+* Removed an unused private Team Access helper and redundant connection dependency includes while preserving public integrations and tenant-scoped behavior.
 
 = 1.2.0 =
 * Prevented late or out-of-order WhatsApp receipts from downgrading confirmed Delivered or Read status; late acceptance no longer erases a recorded failure.
@@ -586,6 +593,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.2.1 =
+Back up before updating. 
 
 = 1.2.0 =
 Back up before updating. Improves receipt ordering and webhook retry handling. Update Pro to 1.1.8 for separate execution and delivery reporting. Existing messages do not need to be resent; historical status corrections are not bulk-backfilled.

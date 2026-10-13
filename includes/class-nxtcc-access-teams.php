@@ -54,15 +54,6 @@ final class NXTCC_Access_Teams {
 	}
 
 	/**
-	 * Return the raw table name.
-	 *
-	 * @return string
-	 */
-	private static function table(): string {
-		return NXTCC_DB_AdminSettings::prefix() . 'nxtcc_access_teams';
-	}
-
-	/**
 	 * Normalize an action level.
 	 *
 	 * @param string $value Raw value.

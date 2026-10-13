@@ -126,6 +126,18 @@ final class NXTCC_Admin_Settings {
 	}
 
 	/**
+	 * Read an identifier without removing malformed characters before validation.
+	 *
+	 * @param string $key POST key.
+	 * @return string Identifier candidate.
+	 */
+	private static function post_identifier( string $key ): string {
+		$value = filter_input( INPUT_POST, $key, FILTER_SANITIZE_FULL_SPECIAL_CHARS );
+		// filter_input reads the original request, not WordPress-slash-protected values.
+		return is_string( $value ) ? trim( $value ) : '';
+	}
+
+	/**
 	 * Read a positive integer from POST.
 	 *
 	 * @param string $key Key name.
@@ -888,11 +900,18 @@ final class NXTCC_Admin_Settings {
 
 		check_ajax_referer( 'nxtcc_admin_ajax', 'nonce' );
 
-		$baid = self::post_text( 'business_account_id' );
-		$pnid = self::post_text( 'phone_number_id' );
+		$baid = self::post_identifier( 'business_account_id' );
+		$pnid = self::post_identifier( 'phone_number_id' );
 
-		if ( '' === $baid || '' === $pnid ) {
-			wp_send_json_error( array( 'message' => 'Missing tenant identifiers' ), 400 );
+		$identifier_errors = NXTCC_API_Connection::validate_tenant_identifiers( $baid, $pnid );
+		if ( ! empty( $identifier_errors ) ) {
+			wp_send_json_error(
+				array(
+					'message'      => implode( ' ', $identifier_errors ),
+					'field_errors' => $identifier_errors,
+				),
+				400
+			);
 		}
 
 		$user_mailid = self::active_settings_owner_mailid( self::active_tenant_context(), self::current_user_mailid() );
@@ -952,22 +971,16 @@ final class NXTCC_Admin_Settings {
 				$app_id              = self::post_text( 'nxtcc_app_id' );
 				$access_token_plain  = self::post_secret( 'nxtcc_access_token' );
 				$app_secret_plain    = self::post_secret( 'nxtcc_app_secret' );
-				$business_account_id = self::post_text( 'nxtcc_whatsapp_business_account_id' );
-				$phone_number_id     = self::post_text( 'nxtcc_phone_number_id' );
+				$business_account_id = self::post_identifier( 'nxtcc_whatsapp_business_account_id' );
+				$phone_number_id     = self::post_identifier( 'nxtcc_phone_number_id' );
 				$phone_number        = self::post_text( 'nxtcc_phone_number' );
 				$verify_token_input  = self::post_secret( 'nxtcc_meta_webhook_verify_token' );
 
 				$webhook_subscribed = self::post_has( 'nxtcc_meta_webhook_subscribed' ) ? 1 : 0;
 
-				$errors = array();
+				$errors = array_values( NXTCC_API_Connection::validate_tenant_identifiers( $business_account_id, $phone_number_id ) );
 				if ( '' === $app_id ) {
 					$errors[] = 'App ID is required.';
-				}
-				if ( '' === $business_account_id ) {
-					$errors[] = 'Business Account ID is required.';
-				}
-				if ( '' === $phone_number_id ) {
-					$errors[] = 'Phone Number ID is required.';
 				}
 
 				if ( 1 === (int) $webhook_subscribed && '' !== $settings_owner_mailid ) {
@@ -1246,8 +1259,8 @@ final class NXTCC_Admin_Settings {
 		check_ajax_referer( 'nxtcc_admin_ajax', 'nonce' );
 
 		$app_id              = self::post_text( 'app_id' );
-		$business_account_id = self::post_text( 'business_account_id' );
-		$phone_number_id     = self::post_text( 'phone_number_id' );
+		$business_account_id = self::post_identifier( 'business_account_id' );
+		$phone_number_id     = self::post_identifier( 'phone_number_id' );
 		$test_number         = self::post_text( 'test_number' );
 		$test_template       = self::post_text( 'test_template' );
 		$test_language       = self::post_text( 'test_language' );
@@ -1256,14 +1269,21 @@ final class NXTCC_Admin_Settings {
 			$test_language = 'en_US';
 		}
 
-		if ( '' === $app_id || '' === $business_account_id || '' === $phone_number_id ) {
-			wp_send_json_error( array( 'message' => 'Missing credentials' ), 400 );
+		$identifier_errors = NXTCC_API_Connection::validate_tenant_identifiers( $business_account_id, $phone_number_id );
+		if ( ! empty( $identifier_errors ) ) {
+			wp_send_json_error(
+				array(
+					'message'      => implode( ' ', $identifier_errors ),
+					'field_errors' => $identifier_errors,
+				),
+				400
+			);
+		}
+		if ( '' === $app_id ) {
+			wp_send_json_error( array( 'message' => __( 'App ID is required.', 'nxt-cloud-chat' ) ), 400 );
 		}
 
 		self::load_helpers();
-
-		require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-user-settings-repo.php';
-		require_once NXTCC_PLUGIN_DIR . 'includes/class-nxtcc-api-connection.php';
 
 		$user_mailid = self::active_settings_owner_mailid( self::active_tenant_context(), self::current_user_mailid() );
 		if ( '' === $user_mailid ) {

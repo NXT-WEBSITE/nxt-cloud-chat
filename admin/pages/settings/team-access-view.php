@@ -385,7 +385,7 @@ $nxtcc_team_boot_json = is_string( $nxtcc_team_boot_json ) ? $nxtcc_team_boot_js
 			<?php endif; ?>
 		</div>
 		<div class="nxtcc-team-access-summary-item">
-			<span class="nxtcc-team-access-summary-label"><?php esc_html_e( 'Phone Number ID & Business Account ID', 'nxt-cloud-chat' ); ?></span>
+			<span class="nxtcc-team-access-summary-label"><?php esc_html_e( 'Phone Number ID & Business / Messaging Account ID', 'nxt-cloud-chat' ); ?></span>
 			<strong class="nxtcc-team-access-summary-value">
 				<?php echo esc_html( isset( $nxtcc_primary_tenant['phone_number_id'] ) ? (string) $nxtcc_primary_tenant['phone_number_id'] : '' ); ?>
 			</strong>
