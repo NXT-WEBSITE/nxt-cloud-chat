@@ -40,7 +40,7 @@
 }
 
 .nxtcc-inbox-header {
-	padding: 14px 16px;
+	padding: 8px 16px;
 	background: #f3f3f3;
 	border-bottom: 1px solid #eee;
 }
@@ -1333,6 +1333,38 @@
 .nxtcc-msg-sender-source {
 	color: #52645a;
 	font-size: 12px;
+}
+
+.nxtcc-inbox-message-filters {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	margin-top: 8px;
+}
+.nxtcc-inbox-message-filters button {
+	width: 28px;
+	height: 28px;
+	flex: 0 0 28px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	color: #757575;
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+}
+.nxtcc-inbox-message-filters button[aria-pressed="true"] {
+	color: #16833c;
+}
+.nxtcc-inbox-unread-filter { margin-right: auto; }
+.nxtcc-inbox-unread-filter .nxtcc-msg-sender-tooltip { left: 0; right: auto; }
+@media (pointer: coarse) {
+	.nxtcc-inbox-message-filters button { width: 36px; height: 36px; flex-basis: 36px; }
 }
 
 .nxtcc-msg-sender:focus-visible {

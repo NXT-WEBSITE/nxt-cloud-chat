@@ -1,5 +1,5 @@
 /**
- * Inbox multi-select ticket filters.
+ * Inbox ticket, message-source, and unread filters.
  *
  * @package NXTCC
  */
@@ -11,6 +11,56 @@ jQuery( function ( $ ) {
 		return;
 	}
 	Chat.filters = {
+		createMessages: function ( ctx, onChange ) {
+			const $root = ctx.$widget.find( '.nxtcc-inbox-message-filters' );
+			const sources = [ 'broadcast', 'workflow', 'system', 'integration' ];
+			const ns = '.nxtccMessageFilters' + String( ctx.instanceId || '' );
+			const userId = Number( ctx.$widget.attr( 'data-user-id' ) || 0 );
+			const storageKey = $root.length && Number.isSafeInteger( userId ) && userId > 0 && ctx.businessAccountId && ctx.phoneNumberId
+				? 'nxtcc:inbox-messages:' + JSON.stringify( [ Chat.cfg.ajaxurl, userId, ctx.businessAccountId, ctx.phoneNumberId ] ) : '';
+			let excluded = [];
+			let unreadOnly = false;
+			if ( storageKey ) {
+				try {
+					const saved = JSON.parse( window.localStorage.getItem( storageKey ) );
+					if ( saved && Array.isArray( saved.excluded_sources ) && saved.excluded_sources.length <= sources.length && typeof saved.unread_only === 'boolean' && saved.excluded_sources.every( function ( source ) { return sources.indexOf( source ) >= 0; } ) ) {
+						excluded = sources.filter( function ( source ) { return saved.excluded_sources.indexOf( source ) >= 0; } );
+						unreadOnly = saved.unread_only;
+					}
+				} catch ( error ) { /* Unavailable or corrupt browser storage keeps the defaults. */ }
+			}
+			function values() {
+				return { excluded_sources: excluded.slice(), unread_only: unreadOnly };
+			}
+			function update() {
+				$root.find( '.nxtcc-inbox-source-filter' ).each( function () {
+					const $button = $( this );
+					const enabled = excluded.indexOf( $button.attr( 'data-source' ) ) < 0;
+					const label = $button.attr( enabled ? 'data-shown-label' : 'data-hidden-label' );
+					$button.attr( { 'aria-pressed': String( enabled ), title: label, 'aria-label': label } );
+					$button.find( '.nxtcc-msg-sender-tooltip' ).text( label );
+				} );
+				$root.find( '.nxtcc-inbox-unread-filter' ).attr( 'aria-pressed', String( unreadOnly ) );
+			}
+			$root.off( ns ).on( 'click' + ns, 'button', function ( event ) {
+				event.preventDefault();
+				const $button = $( this );
+				if ( $button.hasClass( 'nxtcc-inbox-unread-filter' ) ) {
+					unreadOnly = ! unreadOnly;
+				} else {
+					const source = $button.attr( 'data-source' );
+					if ( sources.indexOf( source ) < 0 ) { return; }
+					excluded = excluded.indexOf( source ) >= 0 ? excluded.filter( function ( value ) { return value !== source; } ) : sources.filter( function ( value ) { return value === source || excluded.indexOf( value ) >= 0; } );
+				}
+				update();
+				if ( storageKey ) {
+					try { window.localStorage.setItem( storageKey, JSON.stringify( values() ) ); } catch ( error ) { /* Filters remain usable without storage. */ }
+				}
+				onChange();
+			} );
+			update();
+			return { values: values };
+		},
 		create: function ( ctx, onChange ) {
 			const $root = ctx.$widget.find( '.nxtcc-ticket-filters' );
 			const ns = '.nxtccFilters' + String( ctx.instanceId || '' );

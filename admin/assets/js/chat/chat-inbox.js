@@ -43,7 +43,14 @@ jQuery( function ( $ ) {
 		let pollInFlight         = false;
 		let pollPending          = false;
 		let searchDebounceTimer  = null;
-		const ticketFilters = Chat.filters.create( ctx, pollInbox );
+		let filterRevision = 0;
+		const ticketFilters = Chat.filters.create( ctx, filtersChanged );
+		const messageFilters = Chat.filters.createMessages( ctx, filtersChanged );
+
+		function filtersChanged() {
+			filterRevision += 1;
+			pollInbox();
+		}
 
 		/**
 		 * Render the missing/invalid connection notice with a settings link.
@@ -263,16 +270,25 @@ jQuery( function ( $ ) {
 
 			pollInFlight = true;
 			const requestedFilters = JSON.stringify( ticketFilters.values() );
+			const requestedMessages = JSON.stringify( messageFilters.values() );
+			const requestedRevision = filterRevision;
+			const requestedPhone = ctx.phoneNumberId;
+
+			function isCurrentRequest() {
+				return requestedRevision === filterRevision && requestedPhone === ctx.phoneNumberId &&
+					requestedFilters === JSON.stringify( ticketFilters.values() ) && requestedMessages === JSON.stringify( messageFilters.values() );
+			}
 
 			$.post( Chat.cfg.ajaxurl, {
 				action: 'nxtcc_fetch_inbox_summary',
 				business_account_id: ctx.businessAccountId,
 				phone_number_id: ctx.phoneNumberId,
 				ticket_filters: requestedFilters,
+				message_filters: requestedMessages,
 				nonce: ctx.nonce,
 			} )
 				.done( function ( resp ) {
-					if ( requestedFilters !== JSON.stringify( ticketFilters.values() ) ) {
+					if ( ! isCurrentRequest() ) {
 						return;
 					}
 					if ( resp && resp.success && resp.data && resp.data.contacts ) {
@@ -298,7 +314,7 @@ jQuery( function ( $ ) {
 					}
 				} )
 				.fail( function ( xhr ) {
-					if ( requestedFilters !== JSON.stringify( ticketFilters.values() ) ) {
+					if ( ! isCurrentRequest() ) {
 						return;
 					}
 					const listEl = $chatList.get( 0 );

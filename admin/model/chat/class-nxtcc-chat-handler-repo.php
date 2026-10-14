@@ -323,7 +323,7 @@ final class NXTCC_Chat_Handler_Repo {
 		// Inbox summary cache.
 		$inbox_key = 'inbox_summary:' . md5( $user_mailid . '|' . $phone_number_id );
 		wp_cache_delete( $inbox_key, self::CACHE_GROUP );
-		$this->runtime_delete( $inbox_key );
+		$this->runtime_delete_prefix( $inbox_key );
 
 		// Last incoming cache.
 		if ( $contact_id > 0 ) {
@@ -580,11 +580,13 @@ final class NXTCC_Chat_Handler_Repo {
 	 *
 	 * Returns each contact with last message preview + unread count.
 	 *
-	 * @param string $user_mailid     User email.
-	 * @param string $phone_number_id Phone number id.
+	 * @param string $user_mailid      User email.
+	 * @param string $phone_number_id  Phone number id.
+	 * @param array  $excluded_sources Automated last-message sources to hide.
+	 * @param bool   $unread_only      Limit results to unread incoming chats.
 	 * @return array Rows.
 	 */
-	public function get_inbox_summary_rows( string $user_mailid, string $phone_number_id ): array {
+	public function get_inbox_summary_rows( string $user_mailid, string $phone_number_id, array $excluded_sources = array(), bool $unread_only = false ): array {
 		$db        = $this->db();
 		$t_c       = $this->quote_table( $this->table( 'nxtcc_contacts' ) );
 		$t_h       = $this->quote_table( $this->table( 'nxtcc_message_history' ) );
@@ -593,7 +595,14 @@ final class NXTCC_Chat_Handler_Repo {
 			'history'  => $t_h,
 		);
 
-		$cache_key = 'inbox_summary:' . md5( $user_mailid . '|' . $phone_number_id );
+		$cache_key        = 'inbox_summary:' . md5( $user_mailid . '|' . $phone_number_id );
+		$excluded_sources = array_values( array_intersect( array( 'broadcast', 'workflow', 'system', 'integration' ), array_filter( $excluded_sources, 'is_string' ) ) );
+		if ( $unread_only ) {
+			$excluded_sources = array();
+		}
+		if ( ! empty( $excluded_sources ) || $unread_only ) {
+			$cache_key .= ':' . md5( wp_json_encode( array( $excluded_sources, $unread_only ) ) );
+		}
 
 		if ( $this->runtime_has( $cache_key ) ) {
 			$cached = $this->runtime_get( $cache_key );
@@ -602,8 +611,7 @@ final class NXTCC_Chat_Handler_Repo {
 			}
 		}
 
-		$query = $this->prepare_with_table_tokens(
-			"SELECT
+		$sql  = "SELECT
 				c.id AS contact_id,
 				c.name,
 				c.country_code,
@@ -619,6 +627,7 @@ final class NXTCC_Chat_Handler_Repo {
 				m.phone_number_id AS message_preview_phone_number_id,
 				m.created_at AS last_msg_time,
 				m.status,
+				m.origin_type AS last_message_source,
 				(
 					SELECT COUNT(*) FROM {history} im
 					 WHERE im.contact_id = c.id
@@ -637,17 +646,18 @@ final class NXTCC_Chat_Handler_Repo {
 				   AND phone_number_id = %s
 			 )
 			 WHERE c.user_mailid = %s
-			   AND m.id IS NOT NULL
-			 ORDER BY m.created_at DESC",
-			$table_map,
-			array(
-				$user_mailid,
-				$phone_number_id,
-				$user_mailid,
-				$phone_number_id,
-				$user_mailid,
-			)
-		);
+			   AND m.id IS NOT NULL";
+		$args = array( $user_mailid, $phone_number_id, $user_mailid, $phone_number_id, $user_mailid );
+		// Filter the actual latest row, never the history used to choose that row.
+		if ( $unread_only ) {
+			$sql = 'SELECT * FROM (' . $sql . ') inbox WHERE unread_count > 0';
+		} elseif ( ! empty( $excluded_sources ) ) {
+			$placeholders = $this->in_placeholders( count( $excluded_sources ), '%s' );
+			$sql          = 'SELECT * FROM (' . $sql . ") inbox WHERE (status = 'received' OR COALESCE(last_message_source, '') NOT IN (" . $placeholders . ') OR unread_count > 0)';
+			$args         = array_merge( $args, $excluded_sources );
+		}
+		$sql  .= ' ORDER BY last_msg_time DESC, last_msg_id DESC';
+		$query = $this->prepare_with_table_tokens( $sql, $table_map, $args );
 		if ( '' === $query ) {
 			return array();
 		}

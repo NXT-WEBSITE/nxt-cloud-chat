@@ -66,3 +66,39 @@ $nxtcc_filter_groups = array(
 		</div>
 	<?php endforeach; ?>
 </div>
+<?php
+$nxtcc_message_sources = array(
+	'broadcast'   => array(
+		'icon'   => 'fa-bullhorn',
+		'shown'  => __( 'Broadcast: shown', 'nxt-cloud-chat' ),
+		'hidden' => __( 'Broadcast: hidden', 'nxt-cloud-chat' ),
+	),
+	'workflow'    => array(
+		'icon'   => 'fa-gears',
+		'shown'  => __( 'Workflow: shown', 'nxt-cloud-chat' ),
+		'hidden' => __( 'Workflow: hidden', 'nxt-cloud-chat' ),
+	),
+	'system'      => array(
+		'icon'   => 'fa-robot',
+		'shown'  => __( 'System: shown', 'nxt-cloud-chat' ),
+		'hidden' => __( 'System: hidden', 'nxt-cloud-chat' ),
+	),
+	'integration' => array(
+		'icon'   => 'fa-plug',
+		'shown'  => __( 'Integration: shown', 'nxt-cloud-chat' ),
+		'hidden' => __( 'Integration: hidden', 'nxt-cloud-chat' ),
+	),
+);
+?>
+<div class="nxtcc-inbox-message-filters" role="group" aria-label="<?php echo esc_attr__( 'Message filters', 'nxt-cloud-chat' ); ?>">
+	<button type="button" class="nxtcc-msg-sender nxtcc-inbox-unread-filter" aria-pressed="false" title="<?php echo esc_attr__( 'Unread only', 'nxt-cloud-chat' ); ?>" aria-label="<?php echo esc_attr__( 'Unread only', 'nxt-cloud-chat' ); ?>">
+		<i class="fa-solid fa-envelope" aria-hidden="true"></i>
+		<span class="nxtcc-msg-sender-tooltip" aria-hidden="true"><?php esc_html_e( 'Unread only', 'nxt-cloud-chat' ); ?></span>
+	</button>
+	<?php foreach ( $nxtcc_message_sources as $nxtcc_source => $nxtcc_source_ui ) : ?>
+		<button type="button" class="nxtcc-msg-sender nxtcc-msg-sender-source nxtcc-inbox-source-filter" data-source="<?php echo esc_attr( $nxtcc_source ); ?>" data-shown-label="<?php echo esc_attr( $nxtcc_source_ui['shown'] ); ?>" data-hidden-label="<?php echo esc_attr( $nxtcc_source_ui['hidden'] ); ?>" aria-pressed="true" title="<?php echo esc_attr( $nxtcc_source_ui['shown'] ); ?>" aria-label="<?php echo esc_attr( $nxtcc_source_ui['shown'] ); ?>">
+			<i class="fa-solid <?php echo esc_attr( $nxtcc_source_ui['icon'] ); ?>" aria-hidden="true"></i>
+			<span class="nxtcc-msg-sender-tooltip" aria-hidden="true"><?php echo esc_html( $nxtcc_source_ui['shown'] ); ?></span>
+		</button>
+	<?php endforeach; ?>
+</div>

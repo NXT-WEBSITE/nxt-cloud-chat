@@ -89,6 +89,38 @@ if ( ! function_exists( 'nxtcc_chat_filter_contact_ids_by_conversation_access' )
 }
 
 /**
+ * Parse allowlisted inbox message filters without accepting ambiguous values.
+ *
+ * @param mixed $raw JSON request value, or null for default filters.
+ * @return array|WP_Error
+ */
+function nxtcc_chat_parse_inbox_message_filters( $raw ) {
+	$defaults = array(
+		'excluded_sources' => array(),
+		'unread_only'      => false,
+	);
+	if ( null === $raw ) {
+		return $defaults;
+	}
+	$filters = is_string( $raw ) && strlen( $raw ) <= 1024 ? json_decode( $raw, true ) : null;
+	if ( ! is_array( $filters ) || ! empty( array_diff( array_keys( $filters ), array_keys( $defaults ) ) ) ) {
+		return new WP_Error( 'nxtcc_invalid_inbox_filters', __( 'Invalid message filters.', 'nxt-cloud-chat' ) );
+	}
+	$filters = array_merge( $defaults, $filters );
+	if ( ! is_array( $filters['excluded_sources'] ) || count( $filters['excluded_sources'] ) > 4 || ! is_bool( $filters['unread_only'] ) ) {
+		return new WP_Error( 'nxtcc_invalid_inbox_filters', __( 'Invalid message filters.', 'nxt-cloud-chat' ) );
+	}
+	$sources = array( 'broadcast', 'workflow', 'system', 'integration' );
+	foreach ( $filters['excluded_sources'] as $source ) {
+		if ( ! is_string( $source ) || ! in_array( $source, $sources, true ) ) {
+			return new WP_Error( 'nxtcc_invalid_inbox_filters', __( 'Invalid message filters.', 'nxt-cloud-chat' ) );
+		}
+	}
+	$filters['excluded_sources'] = array_values( array_intersect( $sources, $filters['excluded_sources'] ) );
+	return $filters;
+}
+
+/**
  * AJAX handler: Fetch inbox summary.
  *
  * @return void
@@ -120,8 +152,15 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 		);
 	}
 
+	if ( isset( $_POST['message_filters'] ) && ! is_string( $_POST['message_filters'] ) ) {
+		wp_send_json_error( array( 'message' => __( 'Invalid message filters.', 'nxt-cloud-chat' ) ), 400 );
+	}
+	$message_filters = nxtcc_chat_parse_inbox_message_filters( isset( $_POST['message_filters'] ) ? sanitize_text_field( wp_unslash( $_POST['message_filters'] ) ) : null );
+	if ( is_wp_error( $message_filters ) ) {
+		wp_send_json_error( array( 'message' => $message_filters->get_error_message() ), 400 );
+	}
 	$repo             = nxtcc_chat_repo();
-	$rows             = $repo->get_inbox_summary_rows( $user_mailid, $phone_number_id );
+	$rows             = $repo->get_inbox_summary_rows( $user_mailid, $phone_number_id, $message_filters['excluded_sources'], $message_filters['unread_only'] );
 	$tenant           = NXTCC_Access_Control::get_current_tenant_context();
 	$policy           = NXTCC_CRM_Access_Policy::get_policy( 0, $tenant, 'nxtcc_access_chat' );
 	$conversation_map = NXTCC_Conversations::instance()->get_for_contacts(
@@ -298,6 +337,7 @@ function nxtcc_ajax_fetch_inbox_summary(): void {
 		}
 
 		unset(
+			$chat->last_message_source,
 			$chat->message_preview_json,
 			$chat->message_preview_template_name,
 			$chat->message_preview_template_type,

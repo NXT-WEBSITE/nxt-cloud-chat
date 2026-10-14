@@ -58,6 +58,7 @@ $nxtcc_instance_id         = isset( $instance_id ) ? (string) $instance_id : 'ad
 <div
 	class="nxtcc-whatsapp-widget<?php echo $nxtcc_can_manage_chat ? '' : ' is-view-only'; ?>"
 	data-instance="<?php echo esc_attr( $nxtcc_instance_id ); ?>"
+	data-user-id="<?php echo esc_attr( (string) get_current_user_id() ); ?>"
 	data-business-account-id="<?php echo esc_attr( $nxtcc_business_account_id ); ?>"
 	data-phone-number-id="<?php echo esc_attr( $nxtcc_phone_number_id ); ?>"
 >

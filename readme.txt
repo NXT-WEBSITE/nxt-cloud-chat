@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.2
+Stable tag: 1.2.3
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -113,6 +113,7 @@ A shared WhatsApp inbox for sales, support, and customer communication.
 * Manage multiple tickets per contact with subject, category, persistent issue descriptions, status, priority, followers, and shared handoff notes.
 * Keep private notes visible only to their author while they retain record access. The latest own note is prefilled without duplicating unchanged text.
 * Combine multi-select assignment, status, and priority filters, including Following and Overdue. Selected criteria match the same accessible ticket.
+* Filter the chat list by latest-message source with Broadcast, Workflow, System, and Integration icons, plus an Unread-only control. Source icons start enabled; green shows that source and gray hides it. Chats with unread incoming messages remain eligible regardless of source selection, subject to access and ticket filters.
 * Save a ticket without sending a message. Save & Send requires message content, an open reply window, and the required permissions, with a disabled-button tooltip explaining unmet requirements.
 * Open a ticket from its number in chat activity history and see a compact header count excluding closed and unassigned tickets.
 * Assign tickets to users, teams, or queues with manual or automated routing.
@@ -382,6 +383,14 @@ Yes. Incoming webhook payloads can be verified using App Secret-based `X-Hub-Sig
 
 Yes. With Pro 1.2.0, Send Template parameters can be hidden from every Chat Window user without changing the customer's message. License-key tokens are protected automatically. This applies to new sends only, not older history or sensitive text received from customers. Workflow configuration and direct database access are outside this privacy boundary.
 
+= What do the chat-list source icons filter? =
+
+Broadcast, Workflow, System, and Integration icons filter chats by their latest message source. Green shows a source; gray hides it. All sources start enabled, and Unread-only starts off. Choices are remembered in this browser per user and tenant. These controls filter the list only; they do not delete messages or close the selected chat.
+
+= Why can a chat remain visible when its source is hidden? =
+
+Chats with unread incoming messages remain eligible so customer replies are not missed. Incoming, manual, and unknown-source chats are not hidden by the automated-source icons. Search, ticket filters, and access permissions still apply; Unread-only narrows results to chats with unread incoming messages.
+
 = Where are WhatsApp messages stored? =
 
 Inbound and outbound WhatsApp messages, statuses, reactions, reply context, and related history are stored in custom database tables inside your WordPress installation.
@@ -419,6 +428,14 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 17. **Settings** – WhatsApp Cloud API credentials, connection diagnostics, webhook URL, verify token, team access, retention tools, and support badge preferences.
 
 == Changelog ==
+
+= 1.2.3 =
+* Added compact Broadcast, Workflow, System, and Integration source icons below the chat-list ticket filters. All sources start enabled, and each icon can independently hide chats whose latest message has that source.
+* Added an Unread-only filter and protected chats with unread incoming messages from source hiding, while retaining ticket, search, and access-scope restrictions. Incoming, manual, and unknown-source chats remain eligible when Unread-only is off.
+* Applied source and unread filtering in the server query against the actual latest message, with request-local cache separation and invalidation. Message history and the selected chat remain unchanged.
+* Remembered filter choices in browser storage per user and tenant, with safe defaults when storage is unavailable or corrupt, and prevented stale polling responses from replacing newer selections.
+* Simplified filtered-cache invalidation, reused identical Unread-only cache results, removed redundant focus styling and unused response metadata, and kept saved source preferences inactive when their controls are absent.
+* Kept the new filter icons borderless and background-free, removed the icon-row gap, and reduced the inbox header padding to 8px 16px. Existing messages, schema, and Pro 1.2.0 compatibility are unchanged.
 
 = 1.2.2 =
 * Added server-side redacted previews for protected workflow template parameters. Masked values and license keys are hidden from every Chat Window user, including administrators, and are not exposed through message history, replies, forwarding, or exports.
@@ -604,6 +621,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.2.3 =
+Back up before updating. Adds chat-list source icons and Unread-only filtering. All sources start enabled; unread customer chats remain eligible. Choices are saved per user and tenant in this browser. Message history is unchanged. No Pro update is required.
 
 = 1.2.2 =
 Back up before updating. Update Free to 1.2.2 before Pro 1.2.0 for protected workflow template previews. Existing messages are unchanged; masking does not backfill history or redact incoming customer text.
