@@ -7,6 +7,9 @@
 
 defined( 'ABSPATH' ) || exit;
 
+require_once __DIR__ . '/class-nxtcc-template-privacy.php';
+require_once __DIR__ . '/class-nxtcc-template-parameters.php';
+
 if ( ! class_exists( 'NXTCC_Template_Preview' ) ) {
 	/**
 	 * Build and normalize stable chat previews for outbound templates.
@@ -15,9 +18,9 @@ if ( ! class_exists( 'NXTCC_Template_Preview' ) ) {
 
 		private const MAX_COMPONENTS    = 20;
 		private const MAX_BUTTONS       = 10;
-		private const MAX_TEXT_LENGTH   = 12000;
+		private const MAX_TEXT_LENGTH   = 32768;
 		private const MAX_BUTTON_LENGTH = 160;
-		private const MAX_JSON_BYTES    = 131072;
+		private const MAX_JSON_BYTES    = 262144;
 
 		/**
 		 * Enrich a history row with a send-time template snapshot.
@@ -29,13 +32,16 @@ if ( ! class_exists( 'NXTCC_Template_Preview' ) ) {
 		 * @return array<string, mixed>
 		 */
 		public static function normalize_history_row( array $data ): array {
+			$data      = NXTCC_Template_Privacy::protect_history( $data );
+			$protected = ! empty( $data['_template_privacy_protected'] );
+			unset( $data['_template_privacy_protected'] );
 			$template_name = self::clean_text( $data['template_name'] ?? '', 255 );
 			$params        = self::normalize_params( $data['_template_preview_params'] ?? $data['template_data'] ?? array() );
 			$components    = self::normalize_components( $data['_template_preview_components'] ?? array() );
 
 			unset( $data['_template_preview_params'], $data['_template_preview_components'] );
 
-			if ( '' === $template_name || self::is_template_preview_content( $data['message_content'] ?? '' ) ) {
+			if ( '' === $template_name || ( ! $protected && self::is_template_preview_content( $data['message_content'] ?? '' ) ) ) {
 				return $data;
 			}
 
@@ -50,11 +56,12 @@ if ( ! class_exists( 'NXTCC_Template_Preview' ) ) {
 
 			$snapshot = self::build_snapshot(
 				array(
-					'template_name' => $template_name,
-					'template_type' => self::clean_text( $data['template_type'] ?? '', 50 ),
-					'language'      => self::read_language( $data['template_data'] ?? array() ),
-					'components'    => $components,
-					'params'        => $params,
+					'template_name'     => $template_name,
+					'template_type'     => self::clean_text( $data['template_type'] ?? '', 50 ),
+					'language'          => self::read_language( $data['template_data'] ?? array() ),
+					'components'        => $components,
+					'params'            => $params,
+					'privacy_protected' => $protected,
 				)
 			);
 
@@ -183,14 +190,15 @@ if ( ! class_exists( 'NXTCC_Template_Preview' ) ) {
 
 			return self::sanitize_snapshot(
 				array(
-					'kind'          => 'template_preview',
-					'template_name' => $template_name,
-					'template_type' => strtolower( $template_type ),
-					'language'      => $language,
-					'header'        => $header,
-					'body'          => $body,
-					'footer'        => $footer,
-					'buttons'       => $buttons,
+					'kind'              => 'template_preview',
+					'template_name'     => $template_name,
+					'template_type'     => strtolower( $template_type ),
+					'language'          => $language,
+					'header'            => $header,
+					'body'              => $body,
+					'footer'            => $footer,
+					'buttons'           => $buttons,
+					'privacy_protected' => ! empty( $args['privacy_protected'] ),
 				)
 			);
 		}
@@ -507,6 +515,9 @@ if ( ! class_exists( 'NXTCC_Template_Preview' ) ) {
 				);
 			}
 
+			if ( ! empty( $snapshot['privacy_protected'] ) ) {
+				$out['privacy_protected'] = true;
+			}
 			return $out;
 		}
 
@@ -602,7 +613,10 @@ if ( ! class_exists( 'NXTCC_Template_Preview' ) ) {
 				return (string) mb_substr( $value, 0, $length );
 			}
 
-			return substr( $value, 0, $length );
+			if ( false === preg_match_all( '/./us', $value, $characters ) ) {
+				return '';
+			}
+			return implode( '', array_slice( $characters[0], 0, $length ) );
 		}
 	}
 }

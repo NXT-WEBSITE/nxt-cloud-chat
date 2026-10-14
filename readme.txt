@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -119,6 +119,7 @@ A shared WhatsApp inbox for sales, support, and customer communication.
 * Use saved inbox views: All, Mine, Team Queue, Unassigned, Overdue, and Recently Resolved.
 * Track SLA targets for first response and resolution.
 * Store message history with timestamps, delivery status, reply context, reactions, and secure media access.
+* Display server-side redacted previews for protected workflow template parameters sent with Pro 1.2.0. Hidden values stay hidden for all Chat Window users, including administrators.
 
 = Contacts – CRM Contact Management =
 
@@ -377,6 +378,10 @@ No. API credentials are used server-side and are not printed into public JavaScr
 
 Yes. Incoming webhook payloads can be verified using App Secret-based `X-Hub-Signature-256` validation.
 
+= Can sensitive template variables be hidden from agents? =
+
+Yes. With Pro 1.2.0, Send Template parameters can be hidden from every Chat Window user without changing the customer's message. License-key tokens are protected automatically. This applies to new sends only, not older history or sensitive text received from customers. Workflow configuration and direct database access are outside this privacy boundary.
+
 = Where are WhatsApp messages stored? =
 
 Inbound and outbound WhatsApp messages, statuses, reactions, reply context, and related history are stored in custom database tables inside your WordPress installation.
@@ -414,6 +419,12 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 17. **Settings** – WhatsApp Cloud API credentials, connection diagnostics, webhook URL, verify token, team access, retention tools, and support badge preferences.
 
 == Changelog ==
+
+= 1.2.2 =
+* Added server-side redacted previews for protected workflow template parameters. Masked values and license keys are hidden from every Chat Window user, including administrators, and are not exposed through message history, replies, forwarding, or exports.
+* Added shared Unicode-aware template parameter validation and safe field-length errors for compatible Pro sends.
+* Added runtime capability discovery for template privacy and parameter validation. Use Pro 1.2.0 for workflow masking and order license-key tokens.
+* Privacy applies to newly sent messages only. Existing history and sensitive text received from customers are not retroactively redacted. Workflow configuration and direct database access are outside the Chat Window privacy boundary.
 
 = 1.2.1 =
 * Renamed the account identifier label to Business / Messaging Account ID across connection settings, validation messages, team access, and dashboard checks. Saved identifiers and API fields are unchanged.
@@ -593,6 +604,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.2.2 =
+Back up before updating. Update Free to 1.2.2 before Pro 1.2.0 for protected workflow template previews. Existing messages are unchanged; masking does not backfill history or redact incoming customer text.
 
 = 1.2.1 =
 Back up before updating. 

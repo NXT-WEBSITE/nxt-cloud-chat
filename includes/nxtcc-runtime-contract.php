@@ -151,6 +151,8 @@ if ( ! function_exists( 'nxtcc_get_runtime_contract' ) ) {
 				'history_flow_response_reader'        => function_exists( 'nxtcc_get_flow_response_from_history' ),
 				'template_preview_builder'            => function_exists( 'nxtcc_build_template_preview_snapshot' ),
 				'template_history_normalizer'         => function_exists( 'nxtcc_normalize_template_history_row' ),
+				'template_parameter_privacy'          => class_exists( 'NXTCC_Template_Privacy' ),
+				'template_parameter_validation'       => class_exists( 'NXTCC_Template_Parameters' ),
 				'history_template_preview_reader'     => function_exists( 'nxtcc_get_template_preview_from_history' ),
 			),
 			'hooks'            => array(
