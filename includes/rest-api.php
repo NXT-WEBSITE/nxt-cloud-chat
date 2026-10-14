@@ -708,7 +708,12 @@ function nxtcc_rest_update_message_history_status( NXTCC_DB $db, string $wamid, 
 			return true;
 		}
 
-		$id = (int) $row->id;
+		$id             = (int) $row->id;
+		$privacy_params = json_decode( (string) ( $row->template_data ?? '' ), true );
+		if ( class_exists( 'NXTCC_Template_Privacy' ) && is_array( $privacy_params ) && ! empty( NXTCC_Template_Privacy::read_policy( $privacy_params ) ) ) {
+			$status_obj = NXTCC_Template_Privacy::redact_status( $status_obj );
+			$err_msg    = '' !== $err_msg ? __( 'Protected message delivery failure.', 'nxt-cloud-chat' ) : '';
+		}
 
 		$existing_ts     = isset( $row->status_timestamps ) ? (string) $row->status_timestamps : '';
 		$merged_ts       = nxtcc_rest_merge_status_timestamp( $existing_ts, $new_status, $ts_mysql );
