@@ -581,7 +581,7 @@ jQuery( function ( $ ) {
 				return null;
 			}
 			const icons = {
-				workflow: 'fa-solid fa-gears',
+				workflow: 'fa-solid fa-diagram-project',
 				broadcast: 'fa-solid fa-bullhorn',
 				system: 'fa-solid fa-robot',
 				integration: 'fa-solid fa-plug'

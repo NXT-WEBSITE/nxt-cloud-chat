@@ -4,7 +4,7 @@ Tags: whatsapp, whatsapp business, crm, woocommerce, login
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.3
+Stable tag: 1.2.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -429,6 +429,10 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 
 == Changelog ==
 
+= 1.2.4 =
+* Updated the locally bundled Font Awesome Free library to 7.3.1, including matching webfonts and license notices. Versioned stylesheet and font URLs refresh cached assets without using an external CDN.
+* Updated workflow source icons in the inbox filters and message sender indicators to use the matching project-diagram symbol.
+
 = 1.2.3 =
 * Added compact Broadcast, Workflow, System, and Integration source icons below the chat-list ticket filters. All sources start enabled, and each icon can independently hide chats whose latest message has that source.
 * Added an Unread-only filter and protected chats with unread incoming messages from source hiding, while retaining ticket, search, and access-scope restrictions. Incoming, manual, and unknown-source chats remain eligible when Unread-only is off.
@@ -621,6 +625,9 @@ The full documentation is available at [NXT Cloud Chat User Guide](https://nxtcl
 * WhatsApp-based login/authentication widget for WordPress users.
 
 == Upgrade Notice ==
+
+= 1.2.4 =
+Back up before updating. Updates bundled Font Awesome Free to 7.3.1 and workflow source icons. Stylesheet and font URLs are versioned to refresh cached assets. Existing messages, settings, and workflows are unchanged. No Pro update is required.
 
 = 1.2.3 =
 Back up before updating. Adds chat-list source icons and Unread-only filtering. All sources start enabled; unread customer chats remain eligible. Choices are saved per user and tenant in this browser. Message history is unchanged. No Pro update is required.

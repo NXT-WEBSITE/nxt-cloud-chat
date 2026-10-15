@@ -74,7 +74,7 @@ $nxtcc_message_sources = array(
 		'hidden' => __( 'Broadcast: hidden', 'nxt-cloud-chat' ),
 	),
 	'workflow'    => array(
-		'icon'   => 'fa-gears',
+		'icon'   => 'fa-diagram-project',
 		'shown'  => __( 'Workflow: shown', 'nxt-cloud-chat' ),
 		'hidden' => __( 'Workflow: hidden', 'nxt-cloud-chat' ),
 	),
